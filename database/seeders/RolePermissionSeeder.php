@@ -45,6 +45,8 @@ class RolePermissionSeeder extends Seeder
             'organizations.create',
             'organizations.update',
             'organizations.delete',
+            'workspace_settings.view',
+            'workspace_settings.update',
             'organization_locations.view',
             'organization_locations.create',
             'organization_locations.update',
@@ -118,6 +120,8 @@ class RolePermissionSeeder extends Seeder
             'Organization Admin' => $all,
             'HR Director' => [
                 'organizations.view',
+                'workspace_settings.view',
+                'workspace_settings.update',
                 'organization_locations.view',
                 'organization_locations.create',
                 'organization_locations.update',
@@ -156,6 +160,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'HR Officer' => [
                 'organizations.view',
+                'workspace_settings.view',
                 'organization_locations.view',
                 'users.view',
                 'departments.view',
@@ -177,6 +182,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'Compliance Officer' => [
                 'organizations.view',
+                'workspace_settings.view',
                 'organization_locations.view',
                 'users.view',
                 'departments.view',
@@ -193,6 +199,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'ICT Admin' => [
                 'organizations.view',
+                'workspace_settings.view',
                 'users.view',
                 'users.create',
                 'users.update',
@@ -202,6 +209,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'Department Head' => [
                 'organizations.view',
+                'workspace_settings.view',
                 'organization_locations.view',
                 'departments.view',
                 'units.view',
@@ -217,6 +225,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'Supervisor' => [
                 'organizations.view',
+                'workspace_settings.view',
                 'organization_locations.view',
                 'departments.view',
                 'units.view',
@@ -230,6 +239,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'Employee' => [
                 'organizations.view',
+                'workspace_settings.view',
                 'leave_requests.create',
                 'leave_requests.cancel',
             ],

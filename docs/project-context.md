@@ -1,0 +1,328 @@
+# Valtireo Project Context
+
+Last updated: 2026-08-04
+
+## Reference Thread
+
+Primary planning/reference task:
+
+`codex://threads/019f7ff5-e5cd-7813-a92c-b0f41f6cb54b`
+
+Use that task as background context when a new Codex task needs to understand the earlier product direction, PRD discussions, timeline choices, and backend-first decision.
+
+## Product Direction
+
+Valtireo is a configurable Organizational OS. The first product focuses on people, structure, HR operations, documents, approvals, compliance, internal workflows, reporting, and AI-assisted administration.
+
+The product should not become a full Operational OS in the first build. Inventory, procurement, fleet, facilities, warehouse, logistics, vendors, and field operations belong to a later Operational OS product line or a future expansion after the Organizational OS foundation is stable.
+
+Financial/Admin workflows belong inside the Organizational OS roadmap, but not in the first MVP. Payroll, benefits, claims, reimbursements, loans, imprest, budget approvals, cost centers, and accounting integrations should be later-phase modules.
+
+## Current Build Strategy
+
+The current project is backend-first.
+
+- Backend: Laravel API
+- Frontend: handled separately by another team member
+- Database: MySQL
+- Authentication: Laravel Sanctum
+- Roles/permissions: Spatie Laravel Permission
+- Auditing: owen-it/laravel-auditing
+- Queue/cache/session tables: Laravel database driver for now
+
+Do not install Breeze, Inertia, or React in this backend project unless the architecture changes later.
+
+## Timeline Position
+
+The September 5 target should be treated as a strong Version 1 / demo-ready MVP target, not the completion date for every long-term phase.
+
+MVP should prioritize:
+
+- Organization setup
+- Locations/branches
+- Users, roles, permissions
+- Departments and units
+- Designations
+- Grade levels
+- Employment types
+- Employee records
+- Employee profiles
+- Employee documents
+- Document expiry and approval
+- Leave requests and approvals
+- Attendance records/imports
+- Deployment or location assignment
+- Basic reports
+- Audit logs
+
+Move these after the MVP:
+
+- Full payroll
+- Recruitment/ATS
+- Performance appraisal
+- Learning management
+- Service desk
+- Connect/messaging
+- Central/community layer
+- Advanced AI
+- Assets
+- Financial/Admin workflows
+- Operational OS modules
+
+## Current Repository State
+
+Project path:
+
+`C:\Users\USer\Desktop\valtireo`
+
+Current branch:
+
+`feature/sanctum-auth-api`
+
+Completed and committed work includes:
+
+- Laravel project scaffold
+- Git initialized
+- Sanctum installed
+- Spatie Permission installed
+- Laravel Auditing installed
+- API routes wired through `bootstrap/app.php`
+- `GET /api/health`
+- Auth endpoints:
+  - `POST /api/auth/register`
+  - `POST /api/auth/login`
+  - `GET /api/auth/me`
+  - `POST /api/auth/logout`
+- User model wired with Sanctum tokens, roles, and auditing
+- Auth request validation
+- User API resource
+- Auth feature tests
+- MySQL database migrated successfully through the package migrations
+
+Completed and verified foundation work includes:
+
+- `Organization` model
+- `OrganizationLocation` model
+- organization and location factories
+- `organizations` migration
+- `organization_locations` migration
+- `users.organization_id` migration
+- `User::organization()` relationship
+- `RolePermissionSeeder`
+- updated `DatabaseSeeder`
+- foundation seed test
+- `php artisan migrate --seed` completed successfully
+- `php artisan test --filter=OrganizationAndRoleSeedTest` passed
+- `Department` model, migration, factory
+- `Unit` model, migration, factory
+- `Designation` model, migration, factory
+- `GradeLevel` model, migration, factory
+- `EmploymentType` model, migration, factory
+- `OrganizationStructureSeeder`
+- updated structure-related role permissions
+- `OrganizationStructureSeedTest`
+- `php artisan test --filter=OrganizationStructureSeedTest` passed
+
+Completed and verified module entitlement work includes:
+
+- `PlatformModule` model, migration, factory
+- `OrganizationModule` model and migration
+- `PlatformModuleSeeder`
+- organization module subscription relationships
+- `ModuleEntitlementService`
+- login response now includes organization, roles, permissions, and modules
+- `/api/auth/me` now returns the same session bootstrap data
+- module entitlement feature tests
+- `php artisan migrate --seed` completed successfully for module tables
+- `php artisan test --filter=ModuleEntitlementTest` passed
+- `php artisan test --filter=AuthenticationTest` passed
+
+Completed and verified employee onboarding work includes:
+
+- `Employee` model, migration, factory
+- `EmployeeProfile` model and migration
+- `EmployeeInvitation` model and migration
+- `EmployeeOnboardingService`
+- `StoreEmployeeRequest`
+- `EmployeeResource`
+- `POST /api/employees`
+- HR/admin-created employee record flow
+- optional employee invitation token generation
+- employee user account creation/linking when invitation is sent
+- employee onboarding feature tests
+- `php artisan migrate` completed successfully for employee tables
+- `php artisan test --filter=EmployeeOnboardingTest` passed
+
+Completed employee records and setup API work includes:
+
+- employee invitation acceptance
+- employee profile completion/submission
+- HR approval of submitted employee onboarding
+- paginated employee listing
+- employee detail endpoint
+- filtered CSV employee export endpoint
+- setup lookup endpoints for departments, units, designations, grade levels, employment types, and locations
+- rich demo data seeder for realistic Postman/frontend testing
+- employee listing filters for search, status, profile status, organization structure fields, reporting manager, date ranges, sorting, and pagination
+
+Completed dashboard work includes:
+
+- `GET /api/dashboard/organization`
+- `GET /api/dashboard/manager`
+- `GET /api/dashboard/me`
+- organization-level employee totals, onboarding metrics, structure counts, module counts, breakdowns, recent employees/invitations, and setup completion
+- dashboard filters for date ranges, structure fields, status, search, sorting, and recent item limits
+- manager/department dashboard scope for HR/admin selected departments, Department Heads, Supervisors, and direct-report managers
+- manager dashboard people metrics including scoped employee counts, profile health, composition, recent joiners, profile updates, members, and direct reports
+- manager dashboard includes explicit leave and attendance placeholders until those modules are implemented
+- personal employee dashboard payload with work details, profile status, pending actions, organization, and entitled modules
+
+Completed workspace customization work includes:
+
+- `GET /api/workspace`
+- `PATCH /api/workspace/settings`
+- workspace settings included in `POST /api/auth/login` and `GET /api/auth/me`
+- organization-level identity settings such as welcome message, logo URL, login background URL, and support email
+- organization-level theme settings such as mode, primary color, accent color, sidebar color, button color, font family, radius, and density
+- localization settings such as timezone, date format, time format, currency, and country
+- employee experience settings such as dashboard widgets, onboarding checklist, required profile fields, profile correction access, directory access, and org chart visibility
+- workspace settings permissions:
+  - every normal workspace user can view workspace settings
+  - Super Admin, Organization Admin, and HR Director can update workspace settings
+
+Completed platform-led organization provisioning includes:
+
+- `POST /api/platform/organizations`
+- route is restricted to users with the `Super Admin` role
+- creates the customer organization with status `invited`
+- creates the primary `Main Office` location
+- creates default workspace settings, with optional branding/theme overrides
+- subscribes the organization to selected platform modules
+- creates the first `Organization Admin` user
+- returns a temporary password in the response for Postman/local testing until the mail provider and password setup email flow are implemented
+
+Important distinction:
+
+- Seed data is only the development/demo sandbox.
+- Platform provisioning is the real customer organization creation workflow.
+- After provisioning, the first Organization Admin logs in, lands inside their organization workspace, and completes setup/configuration from there.
+
+## Database
+
+Local MySQL database:
+
+- Database: `valtireo`
+- Username: `valtireo_user`
+- Password: stored in local `.env`
+
+The `.env` file is local-only and ignored by Git.
+
+Current migrations have run successfully:
+
+- users
+- cache
+- jobs
+- personal access tokens
+- audits
+- permissions/roles
+- organizations
+- organization locations
+- user organization relationship
+- departments
+- units
+- designations
+- grade levels
+- employment types
+- platform modules
+- organization module subscriptions
+- employees
+- employee profiles
+- employee invitations
+
+## Default Local Seed
+
+The foundation seed is intended to create:
+
+- Organization: `Valtireo Demo Organization`
+- Organization code: `VALTIREO`
+- Location: `Head Office`
+- Location code: `HQ`
+- Admin email: `admin@valtireo.test`
+- Admin password: `Password1!`
+- Admin role: `Super Admin`
+
+Default roles:
+
+- Super Admin
+- Organization Admin
+- HR Director
+- HR Officer
+- Compliance Officer
+- ICT Admin
+- Department Head
+- Supervisor
+- Employee
+
+## Next Implementation Order
+
+Next modules should be built in this order:
+
+OrangeHRM local review reference:
+
+- A local OrangeHRM Starter `v5.9` review was completed on 2026-08-06.
+- Review file: `docs/orangehrm-local-review-2026-08-06.md`
+- Main takeaway: do not copy OrangeHRM or chase its whole module breadth in MVP, but use its mature HR coverage to strengthen Valtireo's employee profile, documents, leave, attendance, approvals, and reporting definitions.
+- Valtireo differentiator: multi-tenant Organizational OS plus document compliance, approvals, audit trail, and configurable modules.
+
+Updated near-term implementation order:
+
+1. Add documents/compliance:
+   - document types
+   - required document rules
+   - employee documents
+   - expiry tracking
+   - approval status
+   - missing/expired/expiring document reports
+2. Add employee profile extensions needed by onboarding and compliance:
+   - multiple emergency contacts
+   - dependents
+   - employment status history
+   - reporting relationship history or explicit supervisor/subordinate support
+   - organization-defined custom fields
+   - profile activity timeline
+3. Add shared approval/action pattern:
+   - submit, approve, reject, request changes, cancel actions
+   - decision notes
+   - allowed actions by role/status
+   - activity/audit timeline per record
+4. Add leave:
+   - leave types
+   - leave periods, holidays, and work week
+   - leave balances
+   - leave requests
+   - approval workflow
+   - comments/decision notes
+   - overlap checks
+   - leave reports
+5. Add attendance:
+   - attendance settings
+   - work shifts
+   - manual attendance records
+   - import-ready structure
+   - overlap validation
+   - correction/approval state
+   - attendance reports
+6. Add report registry and MVP reports:
+   - employee list/profile completion
+   - document compliance
+   - leave summary
+   - attendance summary
+   - audit/activity summary
+
+## Working Rules
+
+- Keep the backend API clean and frontend-agnostic.
+- Prefer Laravel conventions unless the codebase establishes a stronger local pattern.
+- Keep MVP scope tight.
+- Add tests for each backend foundation slice.
+- Update this file after major decisions or completed modules.

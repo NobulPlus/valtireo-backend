@@ -35,6 +35,34 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        if (blank($organization->settings)) {
+            $organization->update([
+                'settings' => [
+                    'identity' => [
+                        'welcome_message' => 'Welcome to the Valtireo demo workspace.',
+                        'support_email' => 'support@valtireo.test',
+                    ],
+                    'theme' => [
+                        'mode' => 'light',
+                        'primary_color' => '#155EEF',
+                        'accent_color' => '#12B76A',
+                        'sidebar_color' => '#101828',
+                        'button_color' => '#155EEF',
+                        'font_family' => 'Inter',
+                        'radius' => 'soft',
+                        'density' => 'comfortable',
+                    ],
+                    'localization' => [
+                        'timezone' => 'Africa/Lagos',
+                        'date_format' => 'd/m/Y',
+                        'time_format' => '24h',
+                        'currency' => 'NGN',
+                        'country' => 'Nigeria',
+                    ],
+                ],
+            ]);
+        }
+
         $organization->locations()->firstOrCreate(
             ['code' => 'HQ'],
             [
@@ -68,5 +96,7 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $admin->assignRole('Super Admin');
+
+        $this->call(RichDemoDataSeeder::class);
     }
 }

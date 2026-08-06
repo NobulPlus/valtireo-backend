@@ -9,6 +9,7 @@ use App\Http\Resources\OrganizationResource;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\ModuleEntitlementService;
+use App\Services\WorkspaceSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -16,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request, ModuleEntitlementService $modules): JsonResponse
+    public function register(RegisterRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): JsonResponse
     {
         $user = User::query()->create([
             'name' => $request->string('name')->toString(),
@@ -28,10 +29,10 @@ class AuthController extends Controller
             $request->string('device_name', 'api')->toString()
         )->plainTextToken;
 
-        return response()->json($this->authPayload($user, $token, $modules), 201);
+        return response()->json($this->authPayload($user, $token, $modules, $workspace), 201);
     }
 
-    public function login(LoginRequest $request, ModuleEntitlementService $modules): JsonResponse
+    public function login(LoginRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): JsonResponse
     {
         $user = User::query()
             ->with('organization')
@@ -48,12 +49,12 @@ class AuthController extends Controller
             $request->string('device_name', 'api')->toString()
         )->plainTextToken;
 
-        return response()->json($this->authPayload($user, $token, $modules));
+        return response()->json($this->authPayload($user, $token, $modules, $workspace));
     }
 
-    public function me(Request $request, ModuleEntitlementService $modules): JsonResponse
+    public function me(Request $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): JsonResponse
     {
-        return response()->json($this->sessionPayload($request->user(), $modules));
+        return response()->json($this->sessionPayload($request->user(), $modules, $workspace));
     }
 
     public function logout(Request $request): JsonResponse
@@ -68,25 +69,26 @@ class AuthController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function authPayload(User $user, string $token, ModuleEntitlementService $modules): array
+    private function authPayload(User $user, string $token, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): array
     {
         return [
             'token' => $token,
             'token_type' => 'Bearer',
-            ...$this->sessionPayload($user, $modules),
+            ...$this->sessionPayload($user, $modules, $workspace),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function sessionPayload(User $user, ModuleEntitlementService $modules): array
+    private function sessionPayload(User $user, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): array
     {
         $user->loadMissing('organization', 'roles', 'permissions');
 
         return [
             'user' => new UserResource($user),
             'organization' => $user->organization ? new OrganizationResource($user->organization) : null,
+            'workspace' => $user->organization ? $workspace->forOrganization($user->organization) : null,
             'roles' => $user->getRoleNames()->values(),
             'permissions' => $user->getAllPermissions()->pluck('name')->values(),
             'modules' => $modules->forUser($user),

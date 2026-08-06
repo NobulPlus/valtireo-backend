@@ -79,4 +79,37 @@ class EmployeeOnboardingService
             ];
         });
     }
+
+    public function approve(Employee $employee): Employee
+    {
+        return DB::transaction(function () use ($employee): Employee {
+            $employee->loadMissing('profile');
+
+            if ($employee->status !== 'onboarding') {
+                throw ValidationException::withMessages([
+                    'employee' => ['This employee is not currently in onboarding.'],
+                ]);
+            }
+
+            if (! $employee->profile || $employee->profile->completion_status !== 'submitted') {
+                throw ValidationException::withMessages([
+                    'employee' => ['This employee has not submitted onboarding details.'],
+                ]);
+            }
+
+            $now = now();
+
+            $employee->profile->update([
+                'completion_status' => 'approved',
+            ]);
+
+            $employee->update([
+                'status' => 'active',
+                'onboarding_completed_at' => $now,
+                'activated_at' => $now,
+            ]);
+
+            return $employee->refresh()->load('profile');
+        });
+    }
 }

@@ -33,6 +33,53 @@ class EmployeeResource extends JsonResource
             'reporting_manager_id' => $this->reporting_manager_id,
             'start_date' => $this->start_date,
             'status' => $this->status,
+            'department' => $this->whenLoaded('department', fn () => [
+                'id' => $this->department->id,
+                'code' => $this->department->code,
+                'name' => $this->department->name,
+            ]),
+            'unit' => $this->whenLoaded('unit', fn () => $this->unit ? [
+                'id' => $this->unit->id,
+                'code' => $this->unit->code,
+                'name' => $this->unit->name,
+            ] : null),
+            'designation' => $this->whenLoaded('designation', fn () => [
+                'id' => $this->designation->id,
+                'code' => $this->designation->code,
+                'name' => $this->designation->name,
+            ]),
+            'grade_level' => $this->whenLoaded('gradeLevel', fn () => $this->gradeLevel ? [
+                'id' => $this->gradeLevel->id,
+                'code' => $this->gradeLevel->code,
+                'name' => $this->gradeLevel->name,
+            ] : null),
+            'employment_type' => $this->whenLoaded('employmentType', fn () => [
+                'id' => $this->employmentType->id,
+                'code' => $this->employmentType->code,
+                'name' => $this->employmentType->name,
+            ]),
+            'location' => $this->whenLoaded('location', fn () => [
+                'id' => $this->location->id,
+                'code' => $this->location->code,
+                'name' => $this->location->name,
+            ]),
+            'profile' => $this->whenLoaded('profile', fn () => $this->profile ? [
+                'id' => $this->profile->id,
+                'completion_status' => $this->profile->completion_status,
+            ] : null),
+            'user' => $this->whenLoaded('user', fn () => $this->user ? [
+                'id' => $this->user->id,
+                'name' => $this->user->name,
+                'email' => $this->user->email,
+            ] : null),
+            'invitations' => $this->whenLoaded('invitations', fn () => $this->invitations->map(fn ($invitation) => [
+                'id' => $invitation->id,
+                'email' => $invitation->email,
+                'status' => $invitation->status,
+                'expires_at' => $invitation->expires_at,
+                'accepted_at' => $invitation->accepted_at,
+                'created_at' => $invitation->created_at,
+            ])->values()),
             'invited_at' => $this->invited_at,
             'onboarding_completed_at' => $this->onboarding_completed_at,
             'activated_at' => $this->activated_at,
