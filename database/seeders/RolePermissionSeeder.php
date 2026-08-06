@@ -192,6 +192,8 @@ class RolePermissionSeeder extends Seeder
                 'employment_types.view',
                 'employees.view',
                 'employee_documents.view',
+                'employee_documents.create',
+                'employee_documents.update',
                 'leave_requests.view',
                 'attendance.view',
                 'reports.view',

@@ -224,6 +224,29 @@ Completed:
 - Creates first Organization Admin user
 - Returns temporary password for local/Postman testing
 
+### Documents and Compliance
+
+Completed:
+
+- `DocumentType`
+- `DocumentRequirement`
+- `EmployeeDocument`
+- `EmployeeDocumentReview`
+- Organization-created document types
+- Organization-defined document requirement rules
+- Requirement scoping by department, designation, grade level, employment type, and location
+- Employee/HR document submission metadata
+- Expiry date and reminder window support
+- Review actions:
+  - approve
+  - reject
+  - request changes
+- Review notes and review history
+- Document listing and filtering
+- Document compliance summary for missing, expired, expiring soon, submitted, approved, rejected, and changes requested documents
+- Demo compliance seed data
+- Document compliance feature tests
+
 ## OrangeHRM Review Completed
 
 A local OrangeHRM Starter review was completed on 2026-08-06.
@@ -327,30 +350,15 @@ Pending:
 
 ### P1: Documents and Compliance
 
-Build next.
+Foundation implemented.
 
-Minimum MVP scope:
+Remaining enhancements:
 
-- Document types
-- Required document rules
-- Employee documents
-- Upload metadata
-- Expiry date
-- Reminder window
-- Approval status
-- Reviewer/approver tracking
-- Decision notes
-- Missing document checks
-- Expired/expiring document reports
+- Actual file storage/upload integration
 - Dashboard widgets
-- Audit trail/activity timeline
-
-Recommended entities:
-
-- `DocumentType`
-- `DocumentRequirement`
-- `EmployeeDocument`
-- `EmployeeDocumentReview`
+- CSV/PDF export for compliance reports
+- Deeper activity timeline UI payloads
+- Requirement rule expansion if customer policy requires it
 
 ### P1: Employee Profile Extensions
 
@@ -551,13 +559,12 @@ Keep these outside the first Organizational OS MVP:
 ## Recommended Implementation Order
 
 1. Stabilize and verify current foundation.
-2. Build Documents/compliance.
-3. Add employee profile extensions needed by compliance.
-4. Add shared approval/action pattern.
-5. Build Leave with balances, holidays, workweek, and approvals.
-6. Build Attendance with settings, shifts, import-ready records, and summaries.
-7. Add report registry and MVP reports.
-8. Revisit recruitment, performance, claims, payroll, SSO, and mobile after MVP.
+2. Add employee profile extensions needed by compliance.
+3. Add shared approval/action pattern.
+4. Build Leave with balances, holidays, workweek, and approvals.
+5. Build Attendance with settings, shifts, import-ready records, and summaries.
+6. Add report registry and MVP reports.
+7. Revisit recruitment, performance, claims, payroll, SSO, and mobile after MVP.
 
 ## Strategic Decision
 

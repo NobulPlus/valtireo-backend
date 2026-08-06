@@ -4,7 +4,10 @@ namespace Database\Seeders;
 
 use App\Models\Department;
 use App\Models\Designation;
+use App\Models\DocumentRequirement;
+use App\Models\DocumentType;
 use App\Models\Employee;
+use App\Models\EmployeeDocument;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\Organization;
@@ -25,6 +28,7 @@ class RichDemoDataSeeder extends Seeder
         $this->seedLocations($organization);
         $this->seedUnits($organization);
         $this->seedEmployees($organization);
+        $this->seedDocumentCompliance($organization);
     }
 
     private function seedLocations(Organization $organization): void
@@ -170,6 +174,134 @@ class RichDemoDataSeeder extends Seeder
                 ]
             );
         }
+    }
+
+    private function seedDocumentCompliance(Organization $organization): void
+    {
+        $types = [
+            [
+                'name' => 'Government ID',
+                'code' => 'GOV-ID',
+                'description' => 'Government-issued identity document.',
+                'requires_expiry_date' => true,
+                'default_reminder_days' => 45,
+            ],
+            [
+                'name' => 'Employment Contract',
+                'code' => 'EMP-CONTRACT',
+                'description' => 'Signed employment contract or offer acceptance.',
+                'requires_expiry_date' => false,
+                'default_reminder_days' => 30,
+            ],
+            [
+                'name' => 'Guarantor Form',
+                'code' => 'GUARANTOR',
+                'description' => 'Completed guarantor form.',
+                'requires_expiry_date' => false,
+                'default_reminder_days' => 30,
+            ],
+            [
+                'name' => 'Professional License',
+                'code' => 'PRO-LICENSE',
+                'description' => 'Professional registration or practice license.',
+                'requires_expiry_date' => true,
+                'default_reminder_days' => 60,
+            ],
+        ];
+
+        foreach ($types as $type) {
+            $organization->documentTypes()->firstOrCreate(
+                ['code' => $type['code']],
+                [
+                    ...$type,
+                    'employee_upload_allowed' => true,
+                    'approval_required' => true,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        $permanent = $organization->employmentTypes()->where('code', 'PERM')->firstOrFail();
+        $contract = $organization->employmentTypes()->where('code', 'CONT')->firstOrFail();
+
+        foreach ([
+            [
+                'document_type_code' => 'GOV-ID',
+                'name' => 'Government ID for all employees',
+                'description' => 'Every employee must provide a valid government-issued ID.',
+                'reminder_days' => 45,
+            ],
+            [
+                'document_type_code' => 'EMP-CONTRACT',
+                'name' => 'Signed contract for permanent employees',
+                'description' => 'Permanent employees must have a signed employment contract.',
+                'employment_type_id' => $permanent->id,
+            ],
+            [
+                'document_type_code' => 'GUARANTOR',
+                'name' => 'Guarantor form for contract employees',
+                'description' => 'Contract employees must provide a guarantor form.',
+                'employment_type_id' => $contract->id,
+            ],
+        ] as $requirement) {
+            $type = DocumentType::query()
+                ->whereBelongsTo($organization)
+                ->where('code', $requirement['document_type_code'])
+                ->firstOrFail();
+
+            DocumentRequirement::query()->firstOrCreate(
+                [
+                    'organization_id' => $organization->id,
+                    'document_type_id' => $type->id,
+                    'name' => $requirement['name'],
+                ],
+                [
+                    'description' => $requirement['description'],
+                    'is_required' => true,
+                    'employee_upload_allowed' => true,
+                    'approval_required' => true,
+                    'reminder_days' => $requirement['reminder_days'] ?? $type->default_reminder_days,
+                    'employment_type_id' => $requirement['employment_type_id'] ?? null,
+                    'is_active' => true,
+                ]
+            );
+        }
+
+        $employee = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-HR-001')
+            ->firstOrFail();
+        $governmentId = DocumentType::query()
+            ->whereBelongsTo($organization)
+            ->where('code', 'GOV-ID')
+            ->firstOrFail();
+        $governmentIdRequirement = DocumentRequirement::query()
+            ->whereBelongsTo($organization)
+            ->where('document_type_id', $governmentId->id)
+            ->firstOrFail();
+
+        EmployeeDocument::query()->firstOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'employee_id' => $employee->id,
+                'document_requirement_id' => $governmentIdRequirement->id,
+            ],
+            [
+                'document_type_id' => $governmentId->id,
+                'uploaded_by_id' => $employee->user_id,
+                'reviewed_by_id' => null,
+                'title' => 'Government ID',
+                'file_name' => 'mariam-government-id.pdf',
+                'file_path' => 'demo/documents/mariam-government-id.pdf',
+                'mime_type' => 'application/pdf',
+                'file_size' => 125000,
+                'issued_at' => now()->subYear(),
+                'expires_at' => now()->addYear(),
+                'status' => 'approved',
+                'submitted_at' => now()->subDays(5),
+                'reviewed_at' => now()->subDays(4),
+            ]
+        );
     }
 
     /**

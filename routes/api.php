@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DocumentRequirementController;
+use App\Http\Controllers\Api\DocumentTypeController;
+use App\Http\Controllers\Api\EmployeeDocumentController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\SetupLookupController;
@@ -47,6 +50,23 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/grade-levels', [SetupLookupController::class, 'gradeLevels']);
         Route::get('/employment-types', [SetupLookupController::class, 'employmentTypes']);
         Route::get('/locations', [SetupLookupController::class, 'locations']);
+    });
+
+    Route::prefix('documents')->group(function () {
+        Route::get('/types', [DocumentTypeController::class, 'index']);
+        Route::post('/types', [DocumentTypeController::class, 'store']);
+        Route::get('/types/{documentType}', [DocumentTypeController::class, 'show']);
+        Route::patch('/types/{documentType}', [DocumentTypeController::class, 'update']);
+
+        Route::get('/requirements', [DocumentRequirementController::class, 'index']);
+        Route::post('/requirements', [DocumentRequirementController::class, 'store']);
+        Route::get('/requirements/{documentRequirement}', [DocumentRequirementController::class, 'show']);
+
+        Route::get('/compliance', [EmployeeDocumentController::class, 'compliance']);
+        Route::get('/', [EmployeeDocumentController::class, 'index']);
+        Route::post('/', [EmployeeDocumentController::class, 'store']);
+        Route::get('/{employeeDocument}', [EmployeeDocumentController::class, 'show']);
+        Route::patch('/{employeeDocument}/review', [EmployeeDocumentController::class, 'review']);
     });
 
     Route::get('/employees', [EmployeeController::class, 'index']);

@@ -207,6 +207,20 @@ Important distinction:
 - Platform provisioning is the real customer organization creation workflow.
 - After provisioning, the first Organization Admin logs in, lands inside their organization workspace, and completes setup/configuration from there.
 
+Completed documents/compliance foundation includes:
+
+- `DocumentType`, `DocumentRequirement`, `EmployeeDocument`, and `EmployeeDocumentReview`
+- organization-created document types
+- organization-defined document requirement rules
+- requirement scoping by department, designation, grade level, employment type, and location
+- employee/HR document submission metadata
+- expiry dates and reminder windows
+- review actions: approve, reject, request changes
+- review notes and review history
+- document compliance summary for missing, expired, expiring soon, submitted, approved, rejected, and changes requested documents
+- demo document types and requirements seeded for local/Postman testing
+- document compliance tests
+
 ## Database
 
 Local MySQL database:
@@ -276,26 +290,19 @@ OrangeHRM local review reference:
 
 Updated near-term implementation order:
 
-1. Add documents/compliance:
-   - document types
-   - required document rules
-   - employee documents
-   - expiry tracking
-   - approval status
-   - missing/expired/expiring document reports
-2. Add employee profile extensions needed by onboarding and compliance:
+1. Add employee profile extensions needed by onboarding and compliance:
    - multiple emergency contacts
    - dependents
    - employment status history
    - reporting relationship history or explicit supervisor/subordinate support
    - organization-defined custom fields
    - profile activity timeline
-3. Add shared approval/action pattern:
+2. Add shared approval/action pattern:
    - submit, approve, reject, request changes, cancel actions
    - decision notes
    - allowed actions by role/status
    - activity/audit timeline per record
-4. Add leave:
+3. Add leave:
    - leave types
    - leave periods, holidays, and work week
    - leave balances
@@ -304,7 +311,7 @@ Updated near-term implementation order:
    - comments/decision notes
    - overlap checks
    - leave reports
-5. Add attendance:
+4. Add attendance:
    - attendance settings
    - work shifts
    - manual attendance records
@@ -312,7 +319,7 @@ Updated near-term implementation order:
    - overlap validation
    - correction/approval state
    - attendance reports
-6. Add report registry and MVP reports:
+5. Add report registry and MVP reports:
    - employee list/profile completion
    - document compliance
    - leave summary

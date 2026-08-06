@@ -65,6 +65,21 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(Employee::class);
     }
 
+    public function documentTypes(): HasMany
+    {
+        return $this->hasMany(DocumentType::class);
+    }
+
+    public function documentRequirements(): HasMany
+    {
+        return $this->hasMany(DocumentRequirement::class);
+    }
+
+    public function employeeDocuments(): HasMany
+    {
+        return $this->hasMany(EmployeeDocument::class);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);

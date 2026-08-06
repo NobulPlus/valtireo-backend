@@ -2,41 +2,32 @@
 
 namespace App\Models;
 
-use Database\Factories\EmployeeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 #[Fillable([
     'organization_id',
-    'user_id',
-    'employee_number',
-    'first_name',
-    'middle_name',
-    'last_name',
-    'work_email',
-    'phone',
+    'document_type_id',
+    'name',
+    'description',
+    'is_required',
+    'employee_upload_allowed',
+    'approval_required',
+    'reminder_days',
     'department_id',
-    'unit_id',
     'designation_id',
     'grade_level_id',
     'employment_type_id',
     'organization_location_id',
-    'reporting_manager_id',
-    'start_date',
-    'status',
-    'invited_at',
-    'onboarding_completed_at',
-    'activated_at',
+    'is_active',
 ])]
-class Employee extends Model implements AuditableContract
+class DocumentRequirement extends Model implements AuditableContract
 {
-    /** @use HasFactory<EmployeeFactory> */
     use Auditable, HasFactory;
 
     public function organization(): BelongsTo
@@ -44,19 +35,14 @@ class Employee extends Model implements AuditableContract
         return $this->belongsTo(Organization::class);
     }
 
-    public function user(): BelongsTo
+    public function documentType(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(DocumentType::class);
     }
 
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
-    }
-
-    public function unit(): BelongsTo
-    {
-        return $this->belongsTo(Unit::class);
     }
 
     public function designation(): BelongsTo
@@ -79,27 +65,7 @@ class Employee extends Model implements AuditableContract
         return $this->belongsTo(OrganizationLocation::class, 'organization_location_id');
     }
 
-    public function reportingManager(): BelongsTo
-    {
-        return $this->belongsTo(Employee::class, 'reporting_manager_id');
-    }
-
-    public function directReports(): HasMany
-    {
-        return $this->hasMany(Employee::class, 'reporting_manager_id');
-    }
-
-    public function profile(): HasOne
-    {
-        return $this->hasOne(EmployeeProfile::class);
-    }
-
-    public function invitations(): HasMany
-    {
-        return $this->hasMany(EmployeeInvitation::class);
-    }
-
-    public function documents(): HasMany
+    public function employeeDocuments(): HasMany
     {
         return $this->hasMany(EmployeeDocument::class);
     }
@@ -110,10 +76,11 @@ class Employee extends Model implements AuditableContract
     protected function casts(): array
     {
         return [
-            'start_date' => 'date',
-            'invited_at' => 'datetime',
-            'onboarding_completed_at' => 'datetime',
-            'activated_at' => 'datetime',
+            'is_required' => 'boolean',
+            'employee_upload_allowed' => 'boolean',
+            'approval_required' => 'boolean',
+            'reminder_days' => 'integer',
+            'is_active' => 'boolean',
         ];
     }
 }
