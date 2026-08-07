@@ -80,6 +80,8 @@ class EmployeeResource extends JsonResource
                 'accepted_at' => $invitation->accepted_at,
                 'created_at' => $invitation->created_at,
             ])->values()),
+            'emergency_contacts' => EmployeeEmergencyContactResource::collection($this->whenLoaded('emergencyContacts')),
+            'dependents' => EmployeeDependentResource::collection($this->whenLoaded('dependents')),
             'invited_at' => $this->invited_at,
             'onboarding_completed_at' => $this->onboarding_completed_at,
             'activated_at' => $this->activated_at,

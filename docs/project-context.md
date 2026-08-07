@@ -221,6 +221,18 @@ Completed documents/compliance foundation includes:
 - demo document types and requirements seeded for local/Postman testing
 - document compliance tests
 
+Completed employee profile extension work includes:
+
+- multiple emergency contacts per employee
+- dependents per employee
+- HR/admin management of emergency contacts and dependents for employees in their organization
+- employee self-service management of their own emergency contacts and dependents
+- primary emergency contact support
+- dependent beneficiary flag
+- employee detail response includes loaded emergency contacts and dependents
+- demo profile extension data seeded for local/Postman testing
+- employee profile extension tests
+
 ## Database
 
 Local MySQL database:
@@ -290,9 +302,7 @@ OrangeHRM local review reference:
 
 Updated near-term implementation order:
 
-1. Add employee profile extensions needed by onboarding and compliance:
-   - multiple emergency contacts
-   - dependents
+1. Continue employee profile extensions needed by onboarding and compliance:
    - employment status history
    - reporting relationship history or explicit supervisor/subordinate support
    - organization-defined custom fields

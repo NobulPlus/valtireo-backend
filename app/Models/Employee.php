@@ -104,6 +104,16 @@ class Employee extends Model implements AuditableContract
         return $this->hasMany(EmployeeDocument::class);
     }
 
+    public function emergencyContacts(): HasMany
+    {
+        return $this->hasMany(EmployeeEmergencyContact::class);
+    }
+
+    public function dependents(): HasMany
+    {
+        return $this->hasMany(EmployeeDependent::class);
+    }
+
     /**
      * @return array<string, string>
      */

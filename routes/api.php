@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\DocumentRequirementController;
 use App\Http\Controllers\Api\DocumentTypeController;
 use App\Http\Controllers\Api\EmployeeDocumentController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EmployeeDependentController;
+use App\Http\Controllers\Api\EmployeeEmergencyContactController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\SetupLookupController;
 use App\Http\Controllers\Api\WorkspaceController;
@@ -75,6 +77,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
     Route::patch('/employees/{employee}/approve-onboarding', [EmployeeController::class, 'approveOnboarding']);
     Route::patch('/me/employee-profile', [EmployeeController::class, 'updateMyProfile']);
+
+    Route::prefix('employee-profile')->group(function () {
+        Route::get('/emergency-contacts', [EmployeeEmergencyContactController::class, 'index']);
+        Route::post('/emergency-contacts', [EmployeeEmergencyContactController::class, 'store']);
+        Route::patch('/emergency-contacts/{emergencyContact}', [EmployeeEmergencyContactController::class, 'update']);
+        Route::delete('/emergency-contacts/{emergencyContact}', [EmployeeEmergencyContactController::class, 'destroy']);
+
+        Route::get('/dependents', [EmployeeDependentController::class, 'index']);
+        Route::post('/dependents', [EmployeeDependentController::class, 'store']);
+        Route::patch('/dependents/{dependent}', [EmployeeDependentController::class, 'update']);
+        Route::delete('/dependents/{dependent}', [EmployeeDependentController::class, 'destroy']);
+    });
 });
 
 Route::post('/employee-invitations/{token}/accept', [EmployeeController::class, 'acceptInvitation']);

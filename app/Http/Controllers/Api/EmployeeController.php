@@ -143,6 +143,8 @@ class EmployeeController extends Controller
             'reportingManager',
             'profile',
             'invitations',
+            'emergencyContacts',
+            'dependents',
         ]);
 
         return new EmployeeResource($employee);

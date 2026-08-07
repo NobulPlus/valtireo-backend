@@ -8,6 +8,8 @@ use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeEmergencyContact;
+use App\Models\EmployeeDependent;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\Organization;
@@ -28,6 +30,7 @@ class RichDemoDataSeeder extends Seeder
         $this->seedLocations($organization);
         $this->seedUnits($organization);
         $this->seedEmployees($organization);
+        $this->seedProfileExtensions($organization);
         $this->seedDocumentCompliance($organization);
     }
 
@@ -300,6 +303,44 @@ class RichDemoDataSeeder extends Seeder
                 'status' => 'approved',
                 'submitted_at' => now()->subDays(5),
                 'reviewed_at' => now()->subDays(4),
+            ]
+        );
+    }
+
+    private function seedProfileExtensions(Organization $organization): void
+    {
+        $employee = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-FIN-001')
+            ->firstOrFail();
+
+        EmployeeEmergencyContact::query()->firstOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'employee_id' => $employee->id,
+                'phone' => '08030000901',
+            ],
+            [
+                'name' => 'Usman Bello',
+                'relationship' => 'Spouse',
+                'alternate_phone' => '08030000902',
+                'email' => 'usman.bello@example.com',
+                'address' => '8 Garki Crescent, Abuja',
+                'is_primary' => true,
+            ]
+        );
+
+        EmployeeDependent::query()->firstOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'employee_id' => $employee->id,
+                'name' => 'Amira Bello',
+            ],
+            [
+                'relationship' => 'Child',
+                'date_of_birth' => '2018-04-12',
+                'gender' => 'female',
+                'is_beneficiary' => true,
             ]
         );
     }

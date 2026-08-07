@@ -247,6 +247,20 @@ Completed:
 - Demo compliance seed data
 - Document compliance feature tests
 
+### Employee Profile Extensions
+
+Partially completed:
+
+- Multiple emergency contacts per employee
+- Dependents per employee
+- HR/admin management of employee emergency contacts and dependents
+- Employee self-service management of own emergency contacts and dependents
+- Primary emergency contact flag
+- Dependent beneficiary flag
+- Employee detail includes profile extension records when loaded
+- Demo profile extension seed data
+- Employee profile extension tests
+
 ## OrangeHRM Review Completed
 
 A local OrangeHRM Starter review was completed on 2026-08-06.
@@ -362,12 +376,15 @@ Remaining enhancements:
 
 ### P1: Employee Profile Extensions
 
-Build after or alongside Documents.
+Partially implemented.
 
-Minimum MVP scope:
+Completed:
 
 - Multiple emergency contacts
 - Dependents
+
+Remaining MVP scope:
+
 - Employment status history
 - Reporting relationship history or explicit supervisor/subordinate support
 - Organization-defined custom fields
