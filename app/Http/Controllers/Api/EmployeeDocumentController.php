@@ -20,7 +20,7 @@ class EmployeeDocumentController extends Controller
         abort_unless($request->user()->can('employee_documents.view'), 403);
 
         $documents = EmployeeDocument::query()
-            ->with(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy'])
+            ->with(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor'])
             ->where('organization_id', $request->user()->organization_id)
             ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employee_id', $id))
             ->when($request->integer('document_type_id'), fn (Builder $query, int $id) => $query->where('document_type_id', $id))
@@ -47,7 +47,7 @@ class EmployeeDocumentController extends Controller
         abort_unless($request->user()->can('employee_documents.view'), 403);
         abort_unless($employeeDocument->organization_id === $request->user()->organization_id, 404);
 
-        return new EmployeeDocumentResource($employeeDocument->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy']));
+        return new EmployeeDocumentResource($employeeDocument->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor']));
     }
 
     public function review(

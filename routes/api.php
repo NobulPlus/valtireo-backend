@@ -1,6 +1,11 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ApprovalRequestController;
+use App\Http\Controllers\Api\ApprovalWorkflowController;
+use App\Http\Controllers\Api\AttendanceCorrectionRequestController;
+use App\Http\Controllers\Api\AttendanceRecordController;
+use App\Http\Controllers\Api\AttendanceSettingController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DocumentRequirementController;
 use App\Http\Controllers\Api\DocumentTypeController;
@@ -13,9 +18,16 @@ use App\Http\Controllers\Api\EmployeeEmergencyContactController;
 use App\Http\Controllers\Api\EmployeeLifecycleController;
 use App\Http\Controllers\Api\EmployeeProfileActivityController;
 use App\Http\Controllers\Api\EmployeeProfileOverviewController;
+use App\Http\Controllers\Api\LeaveEntitlementController;
+use App\Http\Controllers\Api\LeaveHolidayController;
+use App\Http\Controllers\Api\LeavePeriodController;
+use App\Http\Controllers\Api\LeaveRequestController;
+use App\Http\Controllers\Api\LeaveTypeController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\SetupLookupController;
+use App\Http\Controllers\Api\TemplateController;
 use App\Http\Controllers\Api\WorkspaceController;
+use App\Http\Controllers\Api\WorkShiftController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -49,6 +61,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me', [DashboardController::class, 'me']);
     });
 
+    Route::get('/templates', [TemplateController::class, 'index']);
+    Route::get('/templates/{key}/download', [TemplateController::class, 'download']);
+    Route::post('/templates/{key}/preview', [TemplateController::class, 'preview']);
+    Route::post('/templates/{key}/import', [TemplateController::class, 'import']);
+
+    Route::prefix('approval-workflows')->group(function () {
+        Route::get('/', [ApprovalWorkflowController::class, 'index']);
+        Route::post('/', [ApprovalWorkflowController::class, 'store']);
+        Route::get('/{approvalWorkflow}', [ApprovalWorkflowController::class, 'show']);
+        Route::patch('/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update']);
+    });
+
+    Route::prefix('approvals')->group(function () {
+        Route::get('/', [ApprovalRequestController::class, 'index']);
+        Route::get('/{approvalRequest}', [ApprovalRequestController::class, 'show']);
+        Route::post('/{approvalRequest}/actions', [ApprovalRequestController::class, 'act']);
+    });
+
     Route::prefix('setup')->group(function () {
         Route::get('/lookups', [SetupLookupController::class, 'index']);
         Route::get('/departments', [SetupLookupController::class, 'departments']);
@@ -74,6 +104,34 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [EmployeeDocumentController::class, 'store']);
         Route::get('/{employeeDocument}', [EmployeeDocumentController::class, 'show']);
         Route::patch('/{employeeDocument}/review', [EmployeeDocumentController::class, 'review']);
+    });
+
+    Route::prefix('leave')->group(function () {
+        Route::get('/types', [LeaveTypeController::class, 'index']);
+        Route::post('/types', [LeaveTypeController::class, 'store']);
+        Route::get('/periods', [LeavePeriodController::class, 'index']);
+        Route::post('/periods', [LeavePeriodController::class, 'store']);
+        Route::get('/holidays', [LeaveHolidayController::class, 'index']);
+        Route::post('/holidays', [LeaveHolidayController::class, 'store']);
+        Route::get('/entitlements', [LeaveEntitlementController::class, 'index']);
+        Route::post('/entitlements', [LeaveEntitlementController::class, 'store']);
+        Route::get('/requests', [LeaveRequestController::class, 'index']);
+        Route::post('/requests', [LeaveRequestController::class, 'store']);
+        Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
+        Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
+    });
+
+    Route::prefix('attendance')->group(function () {
+        Route::get('/settings', [AttendanceSettingController::class, 'show']);
+        Route::patch('/settings', [AttendanceSettingController::class, 'update']);
+        Route::get('/shifts', [WorkShiftController::class, 'index']);
+        Route::post('/shifts', [WorkShiftController::class, 'store']);
+        Route::get('/records', [AttendanceRecordController::class, 'index']);
+        Route::post('/records', [AttendanceRecordController::class, 'store']);
+        Route::get('/records/{attendanceRecord}', [AttendanceRecordController::class, 'show']);
+        Route::get('/corrections', [AttendanceCorrectionRequestController::class, 'index']);
+        Route::post('/corrections', [AttendanceCorrectionRequestController::class, 'store']);
+        Route::get('/corrections/{attendanceCorrection}', [AttendanceCorrectionRequestController::class, 'show']);
     });
 
     Route::get('/employees', [EmployeeController::class, 'index']);

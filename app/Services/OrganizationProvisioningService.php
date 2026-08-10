@@ -56,6 +56,7 @@ class OrganizationProvisioningService
             ]);
 
             $workspace = app(WorkspaceSettingsService::class)->update($organization, $workspaceSettings);
+            app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
 
             $modules = PlatformModule::query()
                 ->whereIn('key', array_values(array_unique($moduleKeys)))

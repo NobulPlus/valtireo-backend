@@ -221,6 +221,77 @@ Completed documents/compliance foundation includes:
 - demo document types and requirements seeded for local/Postman testing
 - document compliance tests
 
+Completed shared approval/action foundation includes:
+
+- organization-configurable approval workflows
+- workflow steps with ordered approval sequence
+- approver strategies for permission, role, direct manager, and department head
+- approval request tracking for approvable records
+- decision history with action, actor, previous status, next status, note, and metadata
+- configurable note requirements for rejection and change requests
+- default employee document approval workflow for demo and newly provisioned organizations
+- document submissions now create approval requests when approval is required
+- existing document review endpoint now uses the shared approval engine
+- approval workflow and approval request APIs for Postman/frontend integration
+- approval workflow feature tests
+
+Completed multi-tenancy isolation coverage includes:
+
+- cross-organization access tests for employees, documents, custom fields, approval workflows, and approval requests
+- cross-organization write-protection tests for custom field values, document reviews, approval workflow updates, and approval decisions
+- organization-scoped validation tests for employee structure IDs
+- setup lookup scoping tests
+- workspace settings scoping tests
+- full backend suite confirms tenant isolation coverage remains green
+
+Completed leave foundation includes:
+
+- organization-owned leave types
+- leave periods
+- holidays
+- configurable work week/work days
+- employee leave entitlements and balances
+- employee/HR leave request submission
+- working-day calculation excluding non-working days and holidays
+- minimum notice and maximum days per request validation
+- overlap checks for submitted/approved leave
+- balance checks with pending and used days
+- shared approval request creation for submitted leave
+- approval decision syncing into leave request status and balances
+- leave request cancellation
+- manager and employee dashboard leave metrics
+- demo leave setup and entitlements seeded for local/Postman testing
+- leave feature tests
+
+Completed attendance foundation includes:
+
+- organization attendance settings
+- work shifts
+- manual, employee, and import-ready attendance records
+- check-in/check-out timestamps
+- duration calculation with shift break minutes
+- source tracking
+- present/late/absent/corrected status support
+- employee self-service attendance record creation
+- HR/admin attendance record creation for employees
+- attendance correction requests
+- shared approval request creation for attendance corrections
+- approval decision syncing into correction status and attendance record values
+- manager and employee dashboard attendance metrics
+- demo attendance settings, shifts, and records seeded for local/Postman testing
+- attendance feature tests
+
+Completed import template foundation includes:
+
+- permission-aware template registry
+- template listing endpoint
+- CSV download endpoint
+- attendance import template
+- employee import template
+- leave entitlement import template
+- document requirement import template
+- template download tests
+
 Completed employee profile extension work includes:
 
 - multiple emergency contacts per employee
@@ -321,29 +392,7 @@ OrangeHRM local review reference:
 
 Updated near-term implementation order:
 
-1. Add shared approval/action pattern:
-   - submit, approve, reject, request changes, cancel actions
-   - decision notes
-   - allowed actions by role/status
-   - activity/audit timeline per record
-2. Add leave:
-   - leave types
-   - leave periods, holidays, and work week
-   - leave balances
-   - leave requests
-   - approval workflow
-   - comments/decision notes
-   - overlap checks
-   - leave reports
-4. Add attendance:
-   - attendance settings
-   - work shifts
-   - manual attendance records
-   - import-ready structure
-   - overlap validation
-   - correction/approval state
-   - attendance reports
-5. Add report registry and MVP reports:
+1. Add report registry and MVP reports:
    - employee list/profile completion
    - document compliance
    - leave summary

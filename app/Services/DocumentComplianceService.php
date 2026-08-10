@@ -13,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class DocumentComplianceService
 {
-    public function __construct(private readonly EmployeeProfileActivityService $activities)
+    public function __construct(
+        private readonly EmployeeProfileActivityService $activities,
+        private readonly ApprovalRequestService $approvals
+    )
     {
     }
 
@@ -85,7 +88,19 @@ class DocumentComplianceService
                 ['status' => $document->status, 'document_type_id' => $document->document_type_id]
             );
 
-            return $document;
+            if ($approvalRequired) {
+                $this->approvals->submit(
+                    $actor,
+                    $document,
+                    'employee_documents',
+                    'submit',
+                    "Review {$document->title}",
+                    $employee,
+                    ['document_type_id' => $document->document_type_id, 'document_requirement_id' => $document->document_requirement_id]
+                );
+            }
+
+            return $document->refresh()->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor']);
         });
     }
 
@@ -95,41 +110,39 @@ class DocumentComplianceService
             abort(404);
         }
 
-        $nextStatus = match ($action) {
-            'approve' => 'approved',
-            'reject' => 'rejected',
-            'request_changes' => 'changes_requested',
-        };
-
-        return DB::transaction(function () use ($actor, $document, $action, $note, $nextStatus): EmployeeDocument {
+        return DB::transaction(function () use ($actor, $document, $action, $note): EmployeeDocument {
             $previousStatus = $document->status;
+            $approvalRequest = $document->approvalRequests()
+                ->where('status', 'pending')
+                ->latest()
+                ->first();
 
-            $document->update([
-                'status' => $nextStatus,
-                'reviewed_by_id' => $actor->id,
-                'review_note' => $note,
-                'reviewed_at' => now(),
-            ]);
+            if (! $approvalRequest) {
+                $approvalRequest = $this->approvals->submit(
+                    $actor,
+                    $document,
+                    'employee_documents',
+                    'submit',
+                    "Review {$document->title}",
+                    $document->employee,
+                    ['document_type_id' => $document->document_type_id, 'document_requirement_id' => $document->document_requirement_id]
+                );
+            }
 
-            $document->reviews()->create([
-                'reviewed_by_id' => $actor->id,
-                'action' => $action,
-                'previous_status' => $previousStatus,
-                'next_status' => $nextStatus,
-                'note' => $note,
-            ]);
+            $this->approvals->act($actor, $approvalRequest, $action, $note);
+            $document = $document->refresh()->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor']);
 
             $this->activities->record(
                 $document->employee,
                 $actor,
                 'document_reviewed',
                 'Document reviewed',
-                "{$document->title} was {$nextStatus}.",
+                "{$document->title} was {$document->status}.",
                 $document,
-                ['previous_status' => $previousStatus, 'next_status' => $nextStatus]
+                ['previous_status' => $previousStatus, 'next_status' => $document->status]
             );
 
-            return $document->refresh()->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy']);
+            return $document;
         });
     }
 

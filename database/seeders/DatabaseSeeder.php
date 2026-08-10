@@ -81,6 +81,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call(OrganizationStructureSeeder::class);
         $this->call(PlatformModuleSeeder::class);
+        $this->call(ApprovalWorkflowSeeder::class);
 
         $admin = User::query()->firstOrCreate(
             ['email' => 'admin@valtireo.test'],
@@ -98,5 +99,7 @@ class DatabaseSeeder extends Seeder
         $admin->assignRole('Super Admin');
 
         $this->call(RichDemoDataSeeder::class);
+        $this->call(LeaveSeeder::class);
+        $this->call(AttendanceSeeder::class);
     }
 }

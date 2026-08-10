@@ -131,8 +131,10 @@ class DashboardTest extends TestCase
             ->assertJsonPath('employees.total', 1)
             ->assertJsonPath('employees.draft', 1)
             ->assertJsonPath('people.members.0.employee_number', 'EMP-OPS-002')
-            ->assertJsonPath('leave.available', false)
-            ->assertJsonPath('attendance.available', false);
+            ->assertJsonPath('leave.available', true)
+            ->assertJsonStructure(['leave' => ['pending_requests', 'approved_requests', 'rejected_requests', 'days_pending', 'days_approved']])
+            ->assertJsonPath('attendance.available', true)
+            ->assertJsonStructure(['attendance' => ['present', 'late', 'absent', 'corrections_pending', 'duration_minutes']]);
     }
 
     public function test_employee_without_team_scope_cannot_view_manager_dashboard(): void

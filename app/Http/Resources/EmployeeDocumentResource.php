@@ -59,6 +59,7 @@ class EmployeeDocumentResource extends JsonResource
                 'email' => $this->reviewedBy->email,
             ] : null),
             'reviews' => EmployeeDocumentReviewResource::collection($this->whenLoaded('reviews')),
+            'approval_requests' => ApprovalRequestResource::collection($this->whenLoaded('approvalRequests')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

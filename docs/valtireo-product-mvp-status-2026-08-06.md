@@ -246,6 +246,70 @@ Completed:
 - Document compliance summary for missing, expired, expiring soon, submitted, approved, rejected, and changes requested documents
 - Demo compliance seed data
 - Document compliance feature tests
+- Document submissions create shared approval requests when approval is required
+- Document review uses the shared approval/action engine
+
+### Shared Approval and Action Pattern
+
+Foundation implemented:
+
+- `ApprovalWorkflow`
+- `ApprovalWorkflowStep`
+- `ApprovalRequest`
+- `ApprovalDecision`
+- Organization-configurable workflows by module and action
+- Ordered workflow steps
+- Approver strategies:
+  - permission
+  - role
+  - direct manager
+  - department head
+- Decision actions:
+  - approve
+  - reject
+  - request changes
+  - cancel
+- Decision notes
+- Actor tracking
+- Status transition tracking
+- Per-request decision history
+- Default employee document approval workflow seeded for demo and provisioned organizations
+- Approval workflow and approval request APIs
+- Approval workflow tests
+
+### Multi-Tenancy Isolation
+
+Foundation verified:
+
+- Company records are scoped by `organization_id`
+- Cross-organization read attempts return not found or scoped empty lists
+- Cross-organization write attempts are blocked
+- Employee creation rejects structure IDs from another organization
+- Setup lookup APIs only return the logged-in user's organization data
+- Workspace settings update only the logged-in user's organization
+- Isolation tests cover employees, documents, custom fields, approval workflows, approval requests, setup lookups, and workspace settings
+
+### Import Templates
+
+Foundation implemented:
+
+- Permission-aware template registry
+- `GET /api/templates`
+- `GET /api/templates/{key}/download`
+- `POST /api/templates/{key}/preview`
+- `POST /api/templates/{key}/import`
+- Attendance import CSV template
+- Employee import CSV template
+- Leave entitlement CSV template
+- Document requirement CSV template
+- Row-level validation for preview/import
+- Partial imports: valid rows are processed while failed rows return errors
+- Template download and import tests
+
+Remaining enhancements:
+
+- Failed-row error exports
+- Organization-custom import mappings
 
 ### Employee Profile Extensions
 
@@ -415,42 +479,16 @@ Keep post-MVP unless required:
 
 ### P1: Shared Approval and Action Pattern
 
-Build before Leave and Attendance become too complex.
+Foundation implemented.
 
-Minimum MVP scope:
+Remaining enhancements:
 
-- Shared action naming:
-  - submit
-  - approve
-  - reject
-  - request changes
-  - cancel
-- Decision notes
-- Actor/role tracking
-- Status transition validation
-- Allowed actions by role/status
-- Per-record activity timeline
-- Audit trail integration
+- Module-specific allowed action payloads for frontend buttons
+- Workflow scoping by document type, leave type, department, grade, or location
+- Approval request activity widgets for dashboards
+- SLA/escalation fields after Leave and Attendance stabilize
 
-Organization-owned customization:
-
-- Enable/disable approval per module
-- Configure one to three approval steps
-- Choose role-based approvers
-- Support direct-manager approval
-- Support department-head approval
-- Require decision notes per policy
-- Apply different approval policies by document type, leave type, department, grade, or location over time
-
-Potential use cases:
-
-- Employee onboarding approval
-- Document approval
-- Leave approval
-- Attendance correction approval
-- Future claims/reimbursements
-
-Avoid in MVP:
+Keep post-MVP unless required:
 
 - Visual drag-and-drop workflow builder
 - Complex branching workflow designer
@@ -459,19 +497,35 @@ Avoid in MVP:
 
 ### P1: Leave Module
 
-Minimum MVP scope:
+Foundation implemented:
 
-- Leave types
-- Leave period
-- Holidays
-- Work week
-- Leave entitlement/balance
-- Employee leave request
-- Manager/HR approval
-- Comments/decision notes
+- `LeaveType`
+- `LeavePeriod`
+- `LeaveHoliday`
+- `LeaveWorkDay`
+- `LeaveEntitlement`
+- `LeaveRequest`
+- `LeaveRequestComment`
+- Organization-owned leave setup
+- Employee leave entitlements and balances
+- Working-day calculation using configured work week and holidays
+- Employee and HR leave request submission
+- Minimum notice and maximum request-day validation
 - Overlap checks
-- Leave dashboard counters
-- Leave reports
+- Balance checks
+- Shared approval workflow integration
+- Approval decision syncing into leave status and balances
+- Leave request cancellation
+- Manager and employee dashboard leave metrics
+- Demo leave setup and entitlements
+- Leave feature tests
+
+Remaining enhancements:
+
+- Leave summary report/export
+- Leave calendar/team availability view
+- Attachment enforcement for leave types that require evidence
+- Policy scoping by department, grade, employment type, and location
 
 Avoid in MVP:
 
@@ -481,19 +535,30 @@ Avoid in MVP:
 
 ### P1: Attendance Module
 
-Minimum MVP scope:
+Foundation implemented:
 
 - Attendance settings
 - Work shifts
-- Manual attendance records
-- CSV import-ready model
+- Manual, employee, and import-ready attendance records
 - Check-in/check-out fields
 - Attendance source
 - Duration calculation
-- Overlap validation
-- Correction/approval state
+- Present/late/absent/corrected status support
 - Notes
-- Attendance summary report
+- Attendance correction requests
+- Shared approval workflow integration for corrections
+- Approval decision syncing into attendance records
+- Manager and employee dashboard attendance metrics
+- Demo attendance settings, shift, and records
+- Attendance feature tests
+
+Remaining enhancements:
+
+- Failed-row export for attendance imports
+- Attendance summary report/export
+- Shift assignment by employee/department/location
+- Absence generation for missing clock-ins
+- Richer validation for overnight shifts
 
 Avoid in MVP:
 
@@ -595,6 +660,8 @@ Keep these outside the first Organizational OS MVP:
 5. Build Attendance with settings, shifts, import-ready records, and summaries.
 6. Add report registry and MVP reports.
 7. Revisit recruitment, performance, claims, payroll, SSO, and mobile after MVP.
+
+Current next implementation step: Report registry and MVP reports.
 
 ## Strategic Decision
 

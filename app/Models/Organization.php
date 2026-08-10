@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
@@ -93,6 +94,66 @@ class Organization extends Model implements AuditableContract
     public function employeeProfileActivities(): HasMany
     {
         return $this->hasMany(EmployeeProfileActivity::class);
+    }
+
+    public function approvalWorkflows(): HasMany
+    {
+        return $this->hasMany(ApprovalWorkflow::class);
+    }
+
+    public function approvalRequests(): HasMany
+    {
+        return $this->hasMany(ApprovalRequest::class);
+    }
+
+    public function leaveTypes(): HasMany
+    {
+        return $this->hasMany(LeaveType::class);
+    }
+
+    public function leavePeriods(): HasMany
+    {
+        return $this->hasMany(LeavePeriod::class);
+    }
+
+    public function leaveHolidays(): HasMany
+    {
+        return $this->hasMany(LeaveHoliday::class);
+    }
+
+    public function leaveWorkDays(): HasMany
+    {
+        return $this->hasMany(LeaveWorkDay::class);
+    }
+
+    public function leaveEntitlements(): HasMany
+    {
+        return $this->hasMany(LeaveEntitlement::class);
+    }
+
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class);
+    }
+
+    public function attendanceSetting(): HasOne
+    {
+        return $this->hasOne(AttendanceSetting::class);
+    }
+
+    public function workShifts(): HasMany
+    {
+        return $this->hasMany(WorkShift::class);
+    }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
+    }
+
+    public function attendanceCorrectionRequests(): HasMany
+    {
+        return $this->hasMany(AttendanceCorrectionRequest::class);
     }
 
     public function users(): HasMany

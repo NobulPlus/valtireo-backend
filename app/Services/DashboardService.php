@@ -7,8 +7,12 @@ use App\Models\Designation;
 use App\Models\Employee;
 use App\Models\EmployeeInvitation;
 use App\Models\EmployeeProfile;
+use App\Models\AttendanceCorrectionRequest;
+use App\Models\AttendanceRecord;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
+use App\Models\LeaveEntitlement;
+use App\Models\LeaveRequest;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
 use App\Models\PlatformModule;
@@ -138,14 +142,8 @@ class DashboardService
                     ->map(fn (Employee $employee) => $this->employeeSummary($employee))
                     ->all() : [],
             ],
-            'leave' => [
-                'available' => false,
-                'message' => 'Leave metrics will be populated when the Leave module is implemented.',
-            ],
-            'attendance' => [
-                'available' => false,
-                'message' => 'Attendance metrics will be populated when the Attendance module is implemented.',
-            ],
+            'leave' => $this->leaveMetricsForEmployees($employeeIds),
+            'attendance' => $this->attendanceMetricsForEmployees($employeeIds),
         ];
     }
 
@@ -191,6 +189,8 @@ class DashboardService
                 'updated_at' => $employee->profile->updated_at,
             ] : null,
             'pending_actions' => $employee ? $this->pendingActions($employee) : [],
+            'leave' => $employee ? $this->leaveSummaryForEmployee($employee) : null,
+            'attendance' => $employee ? $this->attendanceSummaryForEmployee($employee) : null,
             'modules' => app(ModuleEntitlementService::class)->forUser($user),
         ];
     }
@@ -543,7 +543,79 @@ class DashboardService
             ];
         }
 
+        if ($employee->leaveRequests()->where('status', 'submitted')->exists()) {
+            $actions[] = [
+                'key' => 'leave_approval',
+                'label' => 'Your leave request is awaiting approval.',
+            ];
+        }
+
         return $actions;
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, int> $employeeIds
+     *
+     * @return array<string, mixed>
+     */
+    private function leaveMetricsForEmployees($employeeIds): array
+    {
+        return [
+            'available' => true,
+            'pending_requests' => LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'submitted')->count(),
+            'approved_requests' => LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'approved')->count(),
+            'rejected_requests' => LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'rejected')->count(),
+            'days_pending' => (float) LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'submitted')->sum('total_days'),
+            'days_approved' => (float) LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'approved')->sum('total_days'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function leaveSummaryForEmployee(Employee $employee): array
+    {
+        return [
+            'pending_requests' => $employee->leaveRequests()->where('status', 'submitted')->count(),
+            'approved_requests' => $employee->leaveRequests()->where('status', 'approved')->count(),
+            'balances' => LeaveEntitlement::query()
+                ->with('leaveType:id,name,code')
+                ->where('employee_id', $employee->id)
+                ->get()
+                ->map(fn (LeaveEntitlement $entitlement) => [
+                    'leave_type' => $this->lookupPayload($entitlement->leaveType),
+                    'days_allocated' => (float) $entitlement->days_allocated,
+                    'days_used' => (float) $entitlement->days_used,
+                    'days_pending' => (float) $entitlement->days_pending,
+                    'days_available' => max((float) $entitlement->days_allocated - (float) $entitlement->days_used - (float) $entitlement->days_pending, 0),
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    private function attendanceMetricsForEmployees($employeeIds): array
+    {
+        return [
+            'available' => true,
+            'present' => AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->where('status', 'present')->count(),
+            'late' => AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->where('status', 'late')->count(),
+            'absent' => AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->where('status', 'absent')->count(),
+            'corrections_pending' => AttendanceCorrectionRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'submitted')->count(),
+            'duration_minutes' => (int) AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->sum('duration_minutes'),
+        ];
+    }
+
+    private function attendanceSummaryForEmployee(Employee $employee): array
+    {
+        return [
+            'recent_records' => $employee->attendanceRecords()
+                ->latest('attendance_date')
+                ->limit(5)
+                ->get(['id', 'attendance_date', 'check_in_at', 'check_out_at', 'duration_minutes', 'source', 'status'])
+                ->all(),
+            'corrections_pending' => $employee->attendanceCorrectionRequests()->where('status', 'submitted')->count(),
+        ];
     }
 
     /**
