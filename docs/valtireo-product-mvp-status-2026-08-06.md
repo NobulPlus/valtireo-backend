@@ -249,14 +249,24 @@ Completed:
 
 ### Employee Profile Extensions
 
-Partially completed:
+Completed:
 
 - Multiple emergency contacts per employee
 - Dependents per employee
+- Employment status history
+- Reporting relationship history
 - HR/admin management of employee emergency contacts and dependents
 - Employee self-service management of own emergency contacts and dependents
 - Primary emergency contact flag
 - Dependent beneficiary flag
+- Lifecycle status changes with effective date, reason, note, and actor tracking
+- Reporting manager changes with previous/new manager history
+- Organization-defined custom fields
+- Custom field values per employee
+- HR/admin updates for employee custom field values
+- Employee self-service custom field updates when fields are visible and employee-editable
+- Employee profile activity timeline
+- Employee profile overview payload linking core employee data, profile, contacts, dependents, documents, custom fields, lifecycle history, reporting history, and activities
 - Employee detail includes profile extension records when loaded
 - Demo profile extension seed data
 - Employee profile extension tests
@@ -376,20 +386,23 @@ Remaining enhancements:
 
 ### P1: Employee Profile Extensions
 
-Partially implemented.
+Foundation implemented.
 
 Completed:
 
 - Multiple emergency contacts
 - Dependents
-
-Remaining MVP scope:
-
 - Employment status history
 - Reporting relationship history or explicit supervisor/subordinate support
 - Organization-defined custom fields
 - Profile activity timeline
-- Link employee documents into the employee profile view
+- Employee profile overview with linked documents and extension records
+
+Remaining enhancements:
+
+- Field-level approval workflow for sensitive employee-submitted updates
+- Profile completion rules based on required custom fields
+- CSV/PDF profile export
 
 Keep post-MVP unless required:
 

@@ -80,6 +80,21 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(EmployeeDocument::class);
     }
 
+    public function employeeCustomFields(): HasMany
+    {
+        return $this->hasMany(EmployeeCustomField::class);
+    }
+
+    public function employeeCustomFieldValues(): HasMany
+    {
+        return $this->hasMany(EmployeeCustomFieldValue::class);
+    }
+
+    public function employeeProfileActivities(): HasMany
+    {
+        return $this->hasMany(EmployeeProfileActivity::class);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);

@@ -114,6 +114,26 @@ class Employee extends Model implements AuditableContract
         return $this->hasMany(EmployeeDependent::class);
     }
 
+    public function customFieldValues(): HasMany
+    {
+        return $this->hasMany(EmployeeCustomFieldValue::class);
+    }
+
+    public function profileActivities(): HasMany
+    {
+        return $this->hasMany(EmployeeProfileActivity::class)->latest();
+    }
+
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(EmployeeStatusHistory::class);
+    }
+
+    public function reportingHistories(): HasMany
+    {
+        return $this->hasMany(EmployeeReportingHistory::class);
+    }
+
     /**
      * @return array<string, string>
      */

@@ -13,6 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class DocumentComplianceService
 {
+    public function __construct(private readonly EmployeeProfileActivityService $activities)
+    {
+    }
+
     /**
      * @param array<string, mixed> $data
      */
@@ -52,7 +56,7 @@ class DocumentComplianceService
 
             $approvalRequired = $requirement?->approval_required ?? $documentType->approval_required;
 
-            return EmployeeDocument::query()->create([
+            $document = EmployeeDocument::query()->create([
                 'organization_id' => $actor->organization_id,
                 'employee_id' => $employee->id,
                 'document_type_id' => $documentType->id,
@@ -70,6 +74,18 @@ class DocumentComplianceService
                 'submitted_at' => now(),
                 'reviewed_at' => $approvalRequired ? null : now(),
             ])->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy']);
+
+            $this->activities->record(
+                $employee,
+                $actor,
+                'document_submitted',
+                'Document submitted',
+                "{$document->title} was submitted.",
+                $document,
+                ['status' => $document->status, 'document_type_id' => $document->document_type_id]
+            );
+
+            return $document;
         });
     }
 
@@ -102,6 +118,16 @@ class DocumentComplianceService
                 'next_status' => $nextStatus,
                 'note' => $note,
             ]);
+
+            $this->activities->record(
+                $document->employee,
+                $actor,
+                'document_reviewed',
+                'Document reviewed',
+                "{$document->title} was {$nextStatus}.",
+                $document,
+                ['previous_status' => $previousStatus, 'next_status' => $nextStatus]
+            );
 
             return $document->refresh()->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy']);
         });

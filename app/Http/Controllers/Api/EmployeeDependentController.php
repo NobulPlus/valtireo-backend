@@ -8,6 +8,7 @@ use App\Http\Requests\Employees\UpdateEmployeeDependentRequest;
 use App\Http\Resources\EmployeeDependentResource;
 use App\Models\Employee;
 use App\Models\EmployeeDependent;
+use App\Services\EmployeeProfileActivityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -23,7 +24,7 @@ class EmployeeDependentController extends Controller
         );
     }
 
-    public function store(StoreEmployeeDependentRequest $request): JsonResponse
+    public function store(StoreEmployeeDependentRequest $request, EmployeeProfileActivityService $activities): JsonResponse
     {
         $employee = $this->targetEmployee($request, $request->integer('employee_id') ?: null, 'employees.update');
 
@@ -32,25 +33,31 @@ class EmployeeDependentController extends Controller
             ...$request->safe()->except('employee_id'),
         ]);
 
+        $activities->record($employee, $request->user(), 'dependent_created', 'Dependent added', "{$dependent->name} was added as a dependent.", $dependent);
+
         return response()->json([
             'dependent' => new EmployeeDependentResource($dependent),
         ], 201);
     }
 
-    public function update(UpdateEmployeeDependentRequest $request, EmployeeDependent $dependent): JsonResponse
+    public function update(UpdateEmployeeDependentRequest $request, EmployeeDependent $dependent, EmployeeProfileActivityService $activities): JsonResponse
     {
         $this->authorizeRecord($request, $dependent);
 
         $dependent->update($request->validated());
+
+        $activities->record($dependent->employee, $request->user(), 'dependent_updated', 'Dependent updated', "{$dependent->name} was updated.", $dependent);
 
         return response()->json([
             'dependent' => new EmployeeDependentResource($dependent->refresh()),
         ]);
     }
 
-    public function destroy(Request $request, EmployeeDependent $dependent): JsonResponse
+    public function destroy(Request $request, EmployeeDependent $dependent, EmployeeProfileActivityService $activities): JsonResponse
     {
         $this->authorizeRecord($request, $dependent);
+
+        $activities->record($dependent->employee, $request->user(), 'dependent_deleted', 'Dependent deleted', "{$dependent->name} was deleted.", $dependent);
 
         $dependent->delete();
 

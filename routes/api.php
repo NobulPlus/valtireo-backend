@@ -6,8 +6,13 @@ use App\Http\Controllers\Api\DocumentRequirementController;
 use App\Http\Controllers\Api\DocumentTypeController;
 use App\Http\Controllers\Api\EmployeeDocumentController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EmployeeCustomFieldController;
+use App\Http\Controllers\Api\EmployeeCustomFieldValueController;
 use App\Http\Controllers\Api\EmployeeDependentController;
 use App\Http\Controllers\Api\EmployeeEmergencyContactController;
+use App\Http\Controllers\Api\EmployeeLifecycleController;
+use App\Http\Controllers\Api\EmployeeProfileActivityController;
+use App\Http\Controllers\Api\EmployeeProfileOverviewController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\SetupLookupController;
 use App\Http\Controllers\Api\WorkspaceController;
@@ -75,10 +80,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/employees/export', [EmployeeController::class, 'export']);
     Route::post('/employees', [EmployeeController::class, 'store']);
     Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+    Route::get('/employees/{employee}/profile-overview', [EmployeeProfileOverviewController::class, 'show']);
+    Route::get('/employees/{employee}/profile-activities', [EmployeeProfileActivityController::class, 'index']);
+    Route::get('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'index']);
+    Route::put('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'upsert']);
+    Route::get('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'statusHistory']);
+    Route::post('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'storeStatusHistory']);
+    Route::get('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'reportingHistory']);
+    Route::post('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'storeReportingHistory']);
     Route::patch('/employees/{employee}/approve-onboarding', [EmployeeController::class, 'approveOnboarding']);
     Route::patch('/me/employee-profile', [EmployeeController::class, 'updateMyProfile']);
 
     Route::prefix('employee-profile')->group(function () {
+        Route::get('/overview', [EmployeeProfileOverviewController::class, 'me']);
+        Route::get('/activities', [EmployeeProfileActivityController::class, 'myIndex']);
+
+        Route::get('/custom-fields', [EmployeeCustomFieldController::class, 'index']);
+        Route::post('/custom-fields', [EmployeeCustomFieldController::class, 'store']);
+        Route::get('/custom-fields/{customField}', [EmployeeCustomFieldController::class, 'show']);
+        Route::patch('/custom-fields/{customField}', [EmployeeCustomFieldController::class, 'update']);
+
+        Route::get('/custom-field-values', [EmployeeCustomFieldValueController::class, 'myIndex']);
+        Route::put('/custom-field-values', [EmployeeCustomFieldValueController::class, 'myUpsert']);
+
         Route::get('/emergency-contacts', [EmployeeEmergencyContactController::class, 'index']);
         Route::post('/emergency-contacts', [EmployeeEmergencyContactController::class, 'store']);
         Route::patch('/emergency-contacts/{emergencyContact}', [EmployeeEmergencyContactController::class, 'update']);

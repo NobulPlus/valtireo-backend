@@ -8,6 +8,7 @@ use App\Http\Requests\Employees\UpdateEmployeeEmergencyContactRequest;
 use App\Http\Resources\EmployeeEmergencyContactResource;
 use App\Models\Employee;
 use App\Models\EmployeeEmergencyContact;
+use App\Services\EmployeeProfileActivityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -23,7 +24,7 @@ class EmployeeEmergencyContactController extends Controller
         );
     }
 
-    public function store(StoreEmployeeEmergencyContactRequest $request): JsonResponse
+    public function store(StoreEmployeeEmergencyContactRequest $request, EmployeeProfileActivityService $activities): JsonResponse
     {
         $employee = $this->targetEmployee($request, $request->integer('employee_id') ?: null, 'employees.update');
 
@@ -36,12 +37,14 @@ class EmployeeEmergencyContactController extends Controller
             ...$request->safe()->except('employee_id'),
         ]);
 
+        $activities->record($employee, $request->user(), 'emergency_contact_created', 'Emergency contact added', "{$contact->name} was added as an emergency contact.", $contact);
+
         return response()->json([
             'emergency_contact' => new EmployeeEmergencyContactResource($contact),
         ], 201);
     }
 
-    public function update(UpdateEmployeeEmergencyContactRequest $request, EmployeeEmergencyContact $emergencyContact): JsonResponse
+    public function update(UpdateEmployeeEmergencyContactRequest $request, EmployeeEmergencyContact $emergencyContact, EmployeeProfileActivityService $activities): JsonResponse
     {
         $this->authorizeRecord($request, $emergencyContact);
 
@@ -53,14 +56,18 @@ class EmployeeEmergencyContactController extends Controller
 
         $emergencyContact->update($request->validated());
 
+        $activities->record($emergencyContact->employee, $request->user(), 'emergency_contact_updated', 'Emergency contact updated', "{$emergencyContact->name} was updated.", $emergencyContact);
+
         return response()->json([
             'emergency_contact' => new EmployeeEmergencyContactResource($emergencyContact->refresh()),
         ]);
     }
 
-    public function destroy(Request $request, EmployeeEmergencyContact $emergencyContact): JsonResponse
+    public function destroy(Request $request, EmployeeEmergencyContact $emergencyContact, EmployeeProfileActivityService $activities): JsonResponse
     {
         $this->authorizeRecord($request, $emergencyContact);
+
+        $activities->record($emergencyContact->employee, $request->user(), 'emergency_contact_deleted', 'Emergency contact deleted', "{$emergencyContact->name} was deleted.", $emergencyContact);
 
         $emergencyContact->delete();
 

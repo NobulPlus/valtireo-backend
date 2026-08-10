@@ -225,11 +225,22 @@ Completed employee profile extension work includes:
 
 - multiple emergency contacts per employee
 - dependents per employee
+- employment status history
+- reporting relationship history
+- organization-defined employee custom fields
+- custom field values per employee
+- HR/admin updates for employee custom field values
+- employee self-service updates for visible and employee-editable custom fields
+- employee profile activity timeline
+- complete employee profile overview payload combining core employee, profile, contacts, dependents, documents, custom fields, lifecycle history, reporting history, and activities
 - HR/admin management of emergency contacts and dependents for employees in their organization
 - employee self-service management of their own emergency contacts and dependents
 - primary emergency contact support
 - dependent beneficiary flag
-- employee detail response includes loaded emergency contacts and dependents
+- HR/admin lifecycle status changes with effective dates, reasons, notes, and actor tracking
+- HR/admin reporting manager changes with previous/new manager history
+- employee detail response includes loaded emergency contacts, dependents, documents, and custom field values
+- employee detail response includes loaded status and reporting history
 - demo profile extension data seeded for local/Postman testing
 - employee profile extension tests
 
@@ -264,6 +275,14 @@ Current migrations have run successfully:
 - employees
 - employee profiles
 - employee invitations
+- employee emergency contacts
+- employee dependents
+- employee status histories
+- employee reporting histories
+- employee custom fields
+- employee custom field values
+- employee profile activities
+- document types, requirements, employee documents, and document reviews
 
 ## Default Local Seed
 
@@ -302,17 +321,12 @@ OrangeHRM local review reference:
 
 Updated near-term implementation order:
 
-1. Continue employee profile extensions needed by onboarding and compliance:
-   - employment status history
-   - reporting relationship history or explicit supervisor/subordinate support
-   - organization-defined custom fields
-   - profile activity timeline
-2. Add shared approval/action pattern:
+1. Add shared approval/action pattern:
    - submit, approve, reject, request changes, cancel actions
    - decision notes
    - allowed actions by role/status
    - activity/audit timeline per record
-3. Add leave:
+2. Add leave:
    - leave types
    - leave periods, holidays, and work week
    - leave balances

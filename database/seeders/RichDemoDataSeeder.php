@@ -7,9 +7,14 @@ use App\Models\Designation;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
 use App\Models\Employee;
+use App\Models\EmployeeCustomField;
+use App\Models\EmployeeCustomFieldValue;
 use App\Models\EmployeeDocument;
 use App\Models\EmployeeEmergencyContact;
 use App\Models\EmployeeDependent;
+use App\Models\EmployeeProfileActivity;
+use App\Models\EmployeeReportingHistory;
+use App\Models\EmployeeStatusHistory;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\Organization;
@@ -30,6 +35,7 @@ class RichDemoDataSeeder extends Seeder
         $this->seedLocations($organization);
         $this->seedUnits($organization);
         $this->seedEmployees($organization);
+        $this->seedLifecycleHistory($organization);
         $this->seedProfileExtensions($organization);
         $this->seedDocumentCompliance($organization);
     }
@@ -309,6 +315,49 @@ class RichDemoDataSeeder extends Seeder
 
     private function seedProfileExtensions(Organization $organization): void
     {
+        $admin = User::query()->where('email', 'admin@valtireo.test')->first();
+        $customFields = [
+            [
+                'name' => 'Pension Number',
+                'key' => 'pension_number',
+                'type' => 'text',
+                'is_required' => false,
+                'visible_to_employee' => true,
+                'editable_by_employee' => false,
+                'sort_order' => 10,
+            ],
+            [
+                'name' => 'T-Shirt Size',
+                'key' => 'shirt_size',
+                'type' => 'select',
+                'options' => ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+                'is_required' => false,
+                'visible_to_employee' => true,
+                'editable_by_employee' => true,
+                'sort_order' => 20,
+            ],
+            [
+                'name' => 'Preferred Work Mode',
+                'key' => 'preferred_work_mode',
+                'type' => 'select',
+                'options' => ['onsite', 'hybrid', 'remote'],
+                'is_required' => false,
+                'visible_to_employee' => true,
+                'editable_by_employee' => true,
+                'sort_order' => 30,
+            ],
+        ];
+
+        foreach ($customFields as $field) {
+            $organization->employeeCustomFields()->firstOrCreate(
+                ['key' => $field['key']],
+                [
+                    ...$field,
+                    'is_active' => true,
+                ]
+            );
+        }
+
         $employee = Employee::query()
             ->whereBelongsTo($organization)
             ->where('employee_number', 'EMP-FIN-001')
@@ -343,6 +392,103 @@ class RichDemoDataSeeder extends Seeder
                 'is_beneficiary' => true,
             ]
         );
+
+        foreach ([
+            'pension_number' => 'PEN-VAL-1003',
+            'shirt_size' => 'M',
+            'preferred_work_mode' => 'hybrid',
+        ] as $key => $value) {
+            $field = EmployeeCustomField::query()
+                ->whereBelongsTo($organization)
+                ->where('key', $key)
+                ->firstOrFail();
+
+            EmployeeCustomFieldValue::query()->updateOrCreate(
+                [
+                    'employee_id' => $employee->id,
+                    'employee_custom_field_id' => $field->id,
+                ],
+                [
+                    'organization_id' => $organization->id,
+                    'updated_by_id' => $admin?->id,
+                    'value' => $value,
+                ]
+            );
+        }
+
+        EmployeeProfileActivity::query()->firstOrCreate(
+            [
+                'organization_id' => $organization->id,
+                'employee_id' => $employee->id,
+                'event' => 'profile_seeded',
+                'title' => 'Profile extension data added',
+            ],
+            [
+                'actor_id' => $admin?->id,
+                'description' => 'Demo emergency contacts, dependents, and custom fields were prepared.',
+                'metadata' => ['source' => 'rich_demo_data'],
+            ]
+        );
+    }
+
+    private function seedLifecycleHistory(Organization $organization): void
+    {
+        $admin = User::query()->where('email', 'admin@valtireo.test')->first();
+        $hrDirector = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-HR-001')
+            ->firstOrFail();
+        $hrOfficer = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-HR-002')
+            ->firstOrFail();
+        $opsSupervisor = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-OPS-001')
+            ->firstOrFail();
+        $opsEmployee = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-OPS-002')
+            ->firstOrFail();
+
+        foreach (Employee::query()->whereBelongsTo($organization)->get() as $employee) {
+            EmployeeStatusHistory::query()->firstOrCreate(
+                [
+                    'organization_id' => $organization->id,
+                    'employee_id' => $employee->id,
+                    'new_status' => $employee->status,
+                    'effective_date' => $employee->start_date?->toDateString() ?? now()->toDateString(),
+                ],
+                [
+                    'changed_by_id' => $admin?->id,
+                    'previous_status' => null,
+                    'reason' => 'Initial demo employment status.',
+                    'note' => 'Seeded for lifecycle testing.',
+                ]
+            );
+        }
+
+        foreach ([
+            [$hrOfficer, $hrDirector],
+            [$opsEmployee, $opsSupervisor],
+        ] as [$employee, $manager]) {
+            EmployeeReportingHistory::query()->firstOrCreate(
+                [
+                    'organization_id' => $organization->id,
+                    'employee_id' => $employee->id,
+                    'new_manager_id' => $manager->id,
+                    'effective_date' => $employee->start_date?->toDateString() ?? now()->toDateString(),
+                ],
+                [
+                    'previous_manager_id' => null,
+                    'changed_by_id' => $admin?->id,
+                    'reason' => 'Initial reporting assignment.',
+                    'note' => 'Seeded for reporting history testing.',
+                ]
+            );
+
+            $employee->update(['reporting_manager_id' => $manager->id]);
+        }
     }
 
     /**

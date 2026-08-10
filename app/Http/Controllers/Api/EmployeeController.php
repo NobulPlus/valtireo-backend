@@ -13,6 +13,7 @@ use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\UserResource;
 use App\Services\EmployeeInvitationService;
 use App\Services\EmployeeOnboardingService;
+use App\Services\EmployeeProfileActivityService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -145,6 +146,15 @@ class EmployeeController extends Controller
             'invitations',
             'emergencyContacts',
             'dependents',
+            'documents.documentType',
+            'documents.requirement',
+            'customFieldValues.field',
+            'customFieldValues.updatedBy',
+            'statusHistories.changedBy',
+            'reportingHistories.previousManager',
+            'reportingHistories.newManager',
+            'reportingHistories.changedBy',
+            'profileActivities.actor',
         ]);
 
         return new EmployeeResource($employee);
@@ -173,7 +183,7 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function updateMyProfile(UpdateEmployeeProfileRequest $request): JsonResponse
+    public function updateMyProfile(UpdateEmployeeProfileRequest $request, EmployeeProfileActivityService $activities): JsonResponse
     {
         $employee = $request->user()->employee()->with('profile')->firstOrFail();
         $profile = $employee->profile()->firstOrCreate([
@@ -184,6 +194,8 @@ class EmployeeController extends Controller
             ...$request->validated(),
             'completion_status' => 'submitted',
         ]);
+
+        $activities->record($employee, $request->user(), 'profile_updated', 'Profile information updated', 'Employee submitted profile information.', $profile);
 
         return response()->json([
             'employee' => new EmployeeResource($employee->refresh()),
