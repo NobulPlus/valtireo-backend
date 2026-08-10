@@ -8,6 +8,10 @@ use Illuminate\Validation\ValidationException;
 
 class EmployeeInvitationService
 {
+    public function __construct(private readonly NotificationDispatchService $notifications)
+    {
+    }
+
     /**
      * @return array{invitation: EmployeeInvitation, token: string}
      */
@@ -60,6 +64,8 @@ class EmployeeInvitationService
             $employee->update([
                 'status' => 'onboarding',
             ]);
+
+            $this->notifications->employeeInvitationAccepted($invitation->refresh());
 
             return [
                 'invitation' => $invitation->refresh(),

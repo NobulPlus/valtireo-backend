@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ApprovalWorkflowController;
 use App\Http\Controllers\Api\AttendanceCorrectionRequestController;
 use App\Http\Controllers\Api\AttendanceRecordController;
 use App\Http\Controllers\Api\AttendanceSettingController;
+use App\Http\Controllers\Api\AuditVisibilityController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DocumentRequirementController;
 use App\Http\Controllers\Api\DocumentTypeController;
@@ -23,7 +24,10 @@ use App\Http\Controllers\Api\LeaveHolidayController;
 use App\Http\Controllers\Api\LeavePeriodController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\LeaveTypeController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SetupChecklistController;
 use App\Http\Controllers\Api\SetupLookupController;
 use App\Http\Controllers\Api\TemplateController;
 use App\Http\Controllers\Api\WorkspaceController;
@@ -66,6 +70,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/templates/{key}/preview', [TemplateController::class, 'preview']);
     Route::post('/templates/{key}/import', [TemplateController::class, 'import']);
 
+    Route::get('/reports', [ReportController::class, 'index']);
+    Route::get('/reports/{key}', [ReportController::class, 'show']);
+    Route::get('/reports/{key}/export', [ReportController::class, 'export']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+
+    Route::get('/audit-logs', [AuditVisibilityController::class, 'auditLogs']);
+    Route::get('/activity-feed', [AuditVisibilityController::class, 'activityFeed']);
+
     Route::prefix('approval-workflows')->group(function () {
         Route::get('/', [ApprovalWorkflowController::class, 'index']);
         Route::post('/', [ApprovalWorkflowController::class, 'store']);
@@ -80,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('setup')->group(function () {
+        Route::get('/checklist', [SetupChecklistController::class, 'show']);
         Route::get('/lookups', [SetupLookupController::class, 'index']);
         Route::get('/departments', [SetupLookupController::class, 'departments']);
         Route::get('/units', [SetupLookupController::class, 'units']);

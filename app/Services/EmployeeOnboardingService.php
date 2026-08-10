@@ -11,6 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class EmployeeOnboardingService
 {
+    public function __construct(private readonly NotificationDispatchService $notifications)
+    {
+    }
+
     /**
      * @param array<string, mixed> $data
      *
@@ -70,6 +74,8 @@ class EmployeeOnboardingService
                     'status' => 'pending',
                     'expires_at' => now()->addDays(7),
                 ]);
+
+                $this->notifications->employeeInvited($invitation, $plainToken);
             }
 
             return [

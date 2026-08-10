@@ -181,6 +181,7 @@ Completed:
 
 - `GET /api/workspace`
 - `PATCH /api/workspace/settings`
+- `GET /api/setup/checklist`
 - Workspace settings included in login and `/api/auth/me`
 - Organization identity settings:
   - welcome message
@@ -209,6 +210,13 @@ Completed:
   - profile correction access
   - directory access
   - org chart visibility
+- Guided setup checklist:
+  - required and recommended setup items
+  - readiness status
+  - completion percentages
+  - section grouping
+  - next actions for organization admins
+  - module-aware checks for documents, approvals, leave, attendance, and reports
 
 ### Platform-Led Organization Provisioning
 
@@ -444,7 +452,7 @@ Remaining enhancements:
 
 - Actual file storage/upload integration
 - Dashboard widgets
-- CSV/PDF export for compliance reports
+- PDF export for compliance reports after report layouts stabilize
 - Deeper activity timeline UI payloads
 - Requirement rule expansion if customer policy requires it
 
@@ -522,7 +530,6 @@ Foundation implemented:
 
 Remaining enhancements:
 
-- Leave summary report/export
 - Leave calendar/team availability view
 - Attachment enforcement for leave types that require evidence
 - Policy scoping by department, grade, employment type, and location
@@ -555,7 +562,6 @@ Foundation implemented:
 Remaining enhancements:
 
 - Failed-row export for attendance imports
-- Attendance summary report/export
 - Shift assignment by employee/department/location
 - Absence generation for missing clock-ins
 - Richer validation for overnight shifts
@@ -578,14 +584,104 @@ Minimum MVP scope:
 - Export support
 - Handler/service class
 
-MVP reports:
+### Report Registry and Exports
 
-- Employee list
-- Profile completion
-- Missing/expired/expiring documents
-- Leave balance/request summary
-- Attendance summary
-- Audit/activity summary
+Foundation implemented:
+
+- Permission-aware report registry
+- `GET /api/reports`
+- `GET /api/reports/{key}`
+- `GET /api/reports/{key}/export`
+- Employee directory report
+- Document compliance report
+- Leave balances report
+- Leave requests report
+- Attendance summary report
+- Attendance exceptions report
+- Pagination for report views
+- CSV export using the active filters/sorting
+- Report feature tests
+
+Remaining enhancements:
+
+- Failed-row import error exports
+- Audit/activity summary report after audit visibility endpoints are added
+- PDF export after frontend/report layouts stabilize
+- Scheduled reports
+
+### Notification Infrastructure
+
+Foundation implemented:
+
+- Database-backed in-app notifications
+- Mail-ready notification class
+- Mail delivery guarded by `VALTIREO_MAIL_NOTIFICATIONS`
+- `GET /api/notifications`
+- `GET /api/notifications/unread-count`
+- `PATCH /api/notifications/{notification}/read`
+- `PATCH /api/notifications/read-all`
+- Notification filters:
+  - read/unread status
+  - category
+  - event
+- Employee invitation notification
+- Employee invitation accepted notification
+- Approval submitted notification
+- Approval decision notification
+- `php artisan valtireo:send-reminders`
+- Document expiry reminder notifications
+- Employee onboarding follow-up reminder notifications
+- Pending approval reminder notifications
+- Duplicate reminder prevention using reminder metadata keys
+- User-scoped read protection
+- Notification feature tests
+
+Remaining enhancements:
+
+- Mail provider connection and branded mail templates
+- Leave request reminder nudges
+- Attendance correction reminder nudges
+- Notification preferences per user/organization
+
+### Audit and Activity Visibility
+
+Foundation implemented:
+
+- `GET /api/audit-logs`
+- `GET /api/activity-feed`
+- Permission-gated by `audit_logs.view`
+- Organization-scoped audit visibility
+- Audit filters:
+  - event
+  - auditable type
+  - user
+  - date range
+- Activity feed filters:
+  - event
+  - employee
+  - actor
+  - department
+  - subject type
+  - date range
+- Audit payloads include old values, new values, actor, URL, IP address, user agent, and timestamp
+- Activity payloads include employee, actor, subject, metadata, and timestamp
+- Audit visibility feature tests
+
+### Postman and Backend Handoff
+
+Foundation implemented:
+
+- `docs/postman/valtireo-api.postman_collection.json`
+- `docs/postman/valtireo-local.postman_environment.json`
+- `docs/postman/README.md`
+- Import instructions
+- Testing order
+- Environment variable guide
+- CSV import testing guide
+- Report key guide
+- Notification testing guide
+- Audit testing guide
+- Complete endpoint matrix
 
 ## Future/Post-MVP Modules
 
@@ -659,9 +755,10 @@ Keep these outside the first Organizational OS MVP:
 4. Build Leave with balances, holidays, workweek, and approvals.
 5. Build Attendance with settings, shifts, import-ready records, and summaries.
 6. Add report registry and MVP reports.
-7. Revisit recruitment, performance, claims, payroll, SSO, and mobile after MVP.
+7. Commit and push the backend HR MVP checkpoint.
+8. Revisit recruitment, performance, claims, payroll, SSO, and mobile after MVP.
 
-Current next implementation step: Report registry and MVP reports.
+Current next implementation step: Commit and push the backend HR MVP checkpoint.
 
 ## Strategic Decision
 

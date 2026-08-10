@@ -181,11 +181,13 @@ Completed workspace customization work includes:
 
 - `GET /api/workspace`
 - `PATCH /api/workspace/settings`
+- `GET /api/setup/checklist`
 - workspace settings included in `POST /api/auth/login` and `GET /api/auth/me`
 - organization-level identity settings such as welcome message, logo URL, login background URL, and support email
 - organization-level theme settings such as mode, primary color, accent color, sidebar color, button color, font family, radius, and density
 - localization settings such as timezone, date format, time format, currency, and country
 - employee experience settings such as dashboard widgets, onboarding checklist, required profile fields, profile correction access, directory access, and org chart visibility
+- guided setup checklist with required and recommended items across core workspace, structure, employees, documents, approvals, leave, attendance, and reports
 - workspace settings permissions:
   - every normal workspace user can view workspace settings
   - Super Admin, Organization Admin, and HR Director can update workspace settings
@@ -286,11 +288,72 @@ Completed import template foundation includes:
 - permission-aware template registry
 - template listing endpoint
 - CSV download endpoint
+- CSV preview endpoint
+- CSV import endpoint
 - attendance import template
 - employee import template
 - leave entitlement import template
 - document requirement import template
-- template download tests
+- row-level validation and partial import handling
+- template download/import tests
+
+Completed report foundation includes:
+
+- permission-aware report registry
+- report listing endpoint
+- report detail endpoint with pagination
+- filtered CSV export endpoint per report
+- employee directory report
+- document compliance report
+- leave balances report
+- leave requests report
+- attendance summary report
+- attendance exceptions report
+- report feature tests
+
+Completed notification foundation includes:
+
+- database-backed in-app notifications
+- mail-ready notification payloads controlled by `VALTIREO_MAIL_NOTIFICATIONS`
+- `GET /api/notifications`
+- `GET /api/notifications/unread-count`
+- `PATCH /api/notifications/{notification}/read`
+- `PATCH /api/notifications/read-all`
+- notification filtering by read status, category, and event
+- employee invitation notifications
+- employee invitation accepted notifications
+- approval submitted notifications
+- approval decided notifications
+- reminder command: `php artisan valtireo:send-reminders`
+- document expiry reminder notifications
+- employee onboarding follow-up reminder notifications
+- pending approval reminder notifications
+- duplicate reminder prevention using notification metadata keys
+- user-scoped notification read protection
+- notification feature tests
+
+Completed audit/activity visibility foundation includes:
+
+- `GET /api/audit-logs`
+- `GET /api/activity-feed`
+- permission-gated with `audit_logs.view`
+- organization-scoped audit log visibility
+- filters for event, auditable type, user, employee, actor, department, subject type, and date ranges where applicable
+- low-level audit payloads with old/new values, actor, IP, URL, and user agent
+- human-readable employee activity feed payloads
+- audit visibility feature tests
+
+Completed Postman/backend handoff documentation includes:
+
+- importable Postman collection at `docs/postman/valtireo-api.postman_collection.json`
+- importable local Postman environment at `docs/postman/valtireo-local.postman_environment.json`
+- Postman handoff README at `docs/postman/README.md`
+- recommended testing order
+- local auth variables
+- CSV import instructions
+- report key list
+- notification and audit testing notes
+- complete endpoint matrix for FE/backend handoff
 
 Completed employee profile extension work includes:
 
@@ -392,12 +455,8 @@ OrangeHRM local review reference:
 
 Updated near-term implementation order:
 
-1. Add report registry and MVP reports:
-   - employee list/profile completion
-   - document compliance
-   - leave summary
-   - attendance summary
-   - audit/activity summary
+1. Commit and push the backend HR MVP checkpoint.
+2. Start frontend implementation after backend HR MVP stabilizes.
 
 ## Working Rules
 

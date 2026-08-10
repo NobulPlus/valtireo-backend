@@ -17,6 +17,10 @@ use Illuminate\Validation\ValidationException;
 
 class ApprovalRequestService
 {
+    public function __construct(private readonly NotificationDispatchService $notifications)
+    {
+    }
+
     /**
      * @param array<string, mixed> $metadata
      */
@@ -40,7 +44,7 @@ class ApprovalRequestService
             $firstStep = $workflow?->steps->where('is_active', true)->sortBy('step_order')->first();
             $status = $firstStep ? 'pending' : (($workflow?->auto_approve_when_no_steps ?? false) ? 'approved' : 'pending');
 
-            return ApprovalRequest::query()->create([
+            $approvalRequest = ApprovalRequest::query()->create([
                 'organization_id' => $actor->organization_id,
                 'approval_workflow_id' => $workflow?->id,
                 'requester_id' => $actor->id,
@@ -56,6 +60,12 @@ class ApprovalRequestService
                 'completed_at' => $status === 'approved' ? now() : null,
                 'metadata' => $metadata,
             ]);
+
+            if ($approvalRequest->status === 'pending') {
+                $this->notifications->approvalSubmitted($approvalRequest);
+            }
+
+            return $approvalRequest;
         });
     }
 
@@ -104,7 +114,9 @@ class ApprovalRequestService
                 'completed_at' => $nextStatus === 'pending' ? null : now(),
             ]);
 
-            $this->syncApprovableStatus($approvalRequest->refresh(), $actor, $action, $note);
+            $approvalRequest = $approvalRequest->refresh();
+            $this->syncApprovableStatus($approvalRequest, $actor, $action, $note);
+            $this->notifications->approvalDecided($approvalRequest->refresh(), $actor);
 
             return $approvalRequest->load(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor']);
         });

@@ -1,0 +1,1165 @@
+{
+  "info": {
+    "_postman_id": "d3b2a0ab-3c4b-4ef5-8e5d-valtireo-api",
+    "name": "Valtireo API",
+    "description": "Backend API collection for the Valtireo HR MVP. Import with the Valtireo Local environment and run Auth > Login Admin first.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test.user@example.test\",\n  \"password\": \"Password1!\",\n  \"password_confirmation\": \"Password1!\"\n}"
+            },
+            "url": "{{base_url}}/auth/register"
+          }
+        },
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.environment.set('auth_token', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Login Employee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.token) pm.environment.set('auth_token', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{employee_email}}\",\n  \"password\": \"{{employee_password}}\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/auth/me"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workspace and Setup",
+      "item": [
+        {
+          "name": "Workspace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/workspace"
+          }
+        },
+        {
+          "name": "Update Workspace Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identity\": {\n    \"welcome_message\": \"Welcome to your Valtireo workspace.\",\n    \"support_email\": \"support@valtireo.test\"\n  },\n  \"theme\": {\n    \"mode\": \"light\",\n    \"primary_color\": \"#155EEF\",\n    \"accent_color\": \"#12B76A\",\n    \"font_family\": \"Inter\"\n  }\n}"
+            },
+            "url": "{{base_url}}/workspace/settings"
+          }
+        },
+        {
+          "name": "Setup Checklist",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/checklist"
+          }
+        },
+        {
+          "name": "All Setup Lookups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/lookups"
+          }
+        },
+        {
+          "name": "Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/departments"
+          }
+        },
+        {
+          "name": "Units",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/units?department_id={{department_id}}"
+          }
+        },
+        {
+          "name": "Designations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/designations"
+          }
+        },
+        {
+          "name": "Grade Levels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/grade-levels"
+          }
+        },
+        {
+          "name": "Employment Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/employment-types"
+          }
+        },
+        {
+          "name": "Locations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/setup/locations"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Platform",
+      "item": [
+        {
+          "name": "Provision Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization\": {\n    \"name\": \"Northstar Limited\",\n    \"code\": \"NORTHSTAR\",\n    \"email\": \"admin@northstar.test\",\n    \"country\": \"Nigeria\",\n    \"city\": \"Lagos\",\n    \"state\": \"Lagos\",\n    \"address\": \"1 Demo Street\"\n  },\n  \"admin\": {\n    \"name\": \"Northstar Admin\",\n    \"email\": \"admin@northstar.test\"\n  },\n  \"modules\": [\"organization_setup\", \"users_roles\", \"organization_structure\", \"employees\", \"documents\", \"leave\", \"attendance\", \"reports\"],\n  \"workspace\": {\n    \"identity\": {\n      \"welcome_message\": \"Welcome to Northstar.\"\n    }\n  }\n}"
+            },
+            "url": "{{base_url}}/platform/organizations"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboards",
+      "item": [
+        {
+          "name": "Organization Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/dashboard/organization?date_from=2026-08-01&date_to=2026-08-31"
+          }
+        },
+        {
+          "name": "Manager Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/dashboard/manager"
+          }
+        },
+        {
+          "name": "My Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/dashboard/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "item": [
+        {
+          "name": "List Employees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employees?search={{employee_number}}&per_page=15"
+          }
+        },
+        {
+          "name": "Export Employees CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employees/export?format=csv&search={{employee_number}}"
+          }
+        },
+        {
+          "name": "Create Draft Employee",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_number\": \"EMP-POST-001\",\n  \"first_name\": \"Ada\",\n  \"middle_name\": null,\n  \"last_name\": \"Lovelace\",\n  \"work_email\": \"ada.postman@example.test\",\n  \"phone\": \"08012345678\",\n  \"department_id\": {{department_id}},\n  \"unit_id\": {{unit_id}},\n  \"designation_id\": {{designation_id}},\n  \"grade_level_id\": {{grade_level_id}},\n  \"employment_type_id\": {{employment_type_id}},\n  \"organization_location_id\": {{organization_location_id}},\n  \"reporting_manager_id\": null,\n  \"start_date\": \"2026-08-20\",\n  \"send_invitation\": false\n}"
+            },
+            "url": "{{base_url}}/employees"
+          }
+        },
+        {
+          "name": "Invite Employee",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_number\": \"EMP-POST-002\",\n  \"first_name\": \"Grace\",\n  \"last_name\": \"Hopper\",\n  \"work_email\": \"grace.postman@example.test\",\n  \"department_id\": {{department_id}},\n  \"designation_id\": {{designation_id}},\n  \"employment_type_id\": {{employment_type_id}},\n  \"organization_location_id\": {{organization_location_id}},\n  \"send_invitation\": true\n}"
+            },
+            "url": "{{base_url}}/employees"
+          }
+        },
+        {
+          "name": "Show Employee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employees/{{employee_id}}"
+          }
+        },
+        {
+          "name": "Approve Employee Onboarding",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/employees/{{employee_id}}/approve-onboarding"
+          }
+        },
+        {
+          "name": "Employee Profile Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employees/{{employee_id}}/profile-overview"
+          }
+        },
+        {
+          "name": "Employee Activities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employees/{{employee_id}}/profile-activities"
+          }
+        },
+        {
+          "name": "Employee Status History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employees/{{employee_id}}/status-history"
+          }
+        },
+        {
+          "name": "Create Employee Status History",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_status\": \"confirmed\",\n  \"effective_date\": \"2026-08-20\",\n  \"reason\": \"Probation completed.\",\n  \"note\": \"Confirmed from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/employees/{{employee_id}}/status-history"
+          }
+        },
+        {
+          "name": "Accept Employee Invitation",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"Password1!\",\n  \"password_confirmation\": \"Password1!\"\n}"
+            },
+            "url": "{{base_url}}/employee-invitations/{{invitation_token}}/accept"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Employee Self-Service",
+      "item": [
+        {
+          "name": "My Profile Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employee-profile/overview"
+          }
+        },
+        {
+          "name": "Update My Employee Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date_of_birth\": \"1995-01-01\",\n  \"gender\": \"female\",\n  \"personal_email\": \"employee.personal@example.test\",\n  \"residential_address\": \"16 Demo Street, Lagos\",\n  \"next_of_kin_name\": \"Grace Contact\",\n  \"next_of_kin_phone\": \"08098765432\",\n  \"emergency_contact_name\": \"Grace Contact\",\n  \"emergency_contact_phone\": \"08098765432\"\n}"
+            },
+            "url": "{{base_url}}/me/employee-profile"
+          }
+        },
+        {
+          "name": "My Emergency Contacts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employee-profile/emergency-contacts"
+          }
+        },
+        {
+          "name": "Create Emergency Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Contact\",\n  \"relationship\": \"Sibling\",\n  \"phone\": \"08011112222\",\n  \"email\": \"jane.contact@example.test\",\n  \"address\": \"Lagos\",\n  \"is_primary\": true\n}"
+            },
+            "url": "{{base_url}}/employee-profile/emergency-contacts"
+          }
+        },
+        {
+          "name": "My Dependents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employee-profile/dependents"
+          }
+        },
+        {
+          "name": "Create Dependent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Child One\",\n  \"relationship\": \"Child\",\n  \"date_of_birth\": \"2015-01-01\",\n  \"is_beneficiary\": true\n}"
+            },
+            "url": "{{base_url}}/employee-profile/dependents"
+          }
+        },
+        {
+          "name": "Custom Fields",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employee-profile/custom-fields"
+          }
+        },
+        {
+          "name": "My Custom Field Values",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employee-profile/custom-field-values"
+          }
+        },
+        {
+          "name": "My Activities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/employee-profile/activities"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents and Compliance",
+      "item": [
+        {
+          "name": "Document Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/documents/types"
+          }
+        },
+        {
+          "name": "Create Document Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Professional Certificate\",\n  \"code\": \"PRO-CERT\",\n  \"description\": \"Professional certificate or license.\",\n  \"requires_expiry_date\": true,\n  \"default_reminder_days\": 30,\n  \"employee_upload_allowed\": true,\n  \"approval_required\": true,\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/documents/types"
+          }
+        },
+        {
+          "name": "Document Requirements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/documents/requirements"
+          }
+        },
+        {
+          "name": "Create Document Requirement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"document_type_id\": {{document_type_id}},\n  \"name\": \"Government ID for all employees\",\n  \"description\": \"Every employee must submit a government ID.\",\n  \"is_required\": true,\n  \"employee_upload_allowed\": true,\n  \"approval_required\": true,\n  \"reminder_days\": 45,\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/documents/requirements"
+          }
+        },
+        {
+          "name": "List Employee Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/documents?status=submitted"
+          }
+        },
+        {
+          "name": "Submit Employee Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": {{employee_id}},\n  \"document_type_id\": {{document_type_id}},\n  \"document_requirement_id\": {{document_requirement_id}},\n  \"title\": \"Government ID\",\n  \"file_name\": \"government-id.pdf\",\n  \"file_path\": \"demo/documents/government-id.pdf\",\n  \"mime_type\": \"application/pdf\",\n  \"file_size\": 125000,\n  \"issued_at\": \"2026-01-01\",\n  \"expires_at\": \"2027-01-01\",\n  \"notes\": \"Submitted from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/documents"
+          }
+        },
+        {
+          "name": "Document Compliance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/documents/compliance"
+          }
+        },
+        {
+          "name": "Review Document",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"Approved from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/documents/1/review"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Approvals",
+      "item": [
+        {
+          "name": "Approval Workflows",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/approval-workflows"
+          }
+        },
+        {
+          "name": "Create Approval Workflow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Document Review Flow\",\n  \"module\": \"employee_documents\",\n  \"action\": \"submit\",\n  \"description\": \"Postman-created approval flow.\",\n  \"is_active\": true,\n  \"require_note_on_reject\": true,\n  \"require_note_on_request_changes\": true,\n  \"auto_approve_when_no_steps\": false,\n  \"steps\": [\n    {\n      \"step_order\": 1,\n      \"name\": \"HR Review\",\n      \"approver_type\": \"permission\",\n      \"approver_permission\": \"employee_documents.update\",\n      \"note_required\": false,\n      \"is_active\": true\n    }\n  ]\n}"
+            },
+            "url": "{{base_url}}/approval-workflows"
+          }
+        },
+        {
+          "name": "Approval Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/approvals?status=pending"
+          }
+        },
+        {
+          "name": "Show Approval Request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/approvals/{{approval_request_id}}"
+          }
+        },
+        {
+          "name": "Act On Approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"Approved from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/approvals/{{approval_request_id}}/actions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leave",
+      "item": [
+        {
+          "name": "Leave Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/leave/types"
+          }
+        },
+        {
+          "name": "Create Leave Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Study Leave\",\n  \"code\": \"study\",\n  \"description\": \"Study or exam leave.\",\n  \"is_paid\": true,\n  \"requires_attachment\": false,\n  \"minimum_notice_days\": 5,\n  \"maximum_days_per_request\": 10,\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/leave/types"
+          }
+        },
+        {
+          "name": "Leave Periods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/leave/periods"
+          }
+        },
+        {
+          "name": "Create Leave Period",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"2027 Leave Year\",\n  \"starts_on\": \"2027-01-01\",\n  \"ends_on\": \"2027-12-31\",\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/leave/periods"
+          }
+        },
+        {
+          "name": "Leave Entitlements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/leave/entitlements?employee_id={{employee_id}}"
+          }
+        },
+        {
+          "name": "Create Leave Entitlement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": {{employee_id}},\n  \"leave_type_id\": {{leave_type_id}},\n  \"leave_period_id\": {{leave_period_id}},\n  \"days_allocated\": 20,\n  \"notes\": \"Annual allocation.\"\n}"
+            },
+            "url": "{{base_url}}/leave/entitlements"
+          }
+        },
+        {
+          "name": "Leave Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/leave/requests?status=submitted"
+          }
+        },
+        {
+          "name": "Create Leave Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": {{employee_id}},\n  \"leave_type_id\": {{leave_type_id}},\n  \"starts_on\": \"2026-09-07\",\n  \"ends_on\": \"2026-09-09\",\n  \"reason\": \"Family travel.\"\n}"
+            },
+            "url": "{{base_url}}/leave/requests"
+          }
+        },
+        {
+          "name": "Cancel Leave Request",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/leave/requests/1/cancel"
+          }
+        },
+        {
+          "name": "Leave Holidays",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/leave/holidays"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Attendance Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/attendance/settings"
+          }
+        },
+        {
+          "name": "Update Attendance Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"timezone\": \"Africa/Lagos\",\n  \"late_grace_minutes\": 15,\n  \"early_checkout_grace_minutes\": 10,\n  \"allow_employee_clock_in\": true,\n  \"allow_employee_corrections\": true,\n  \"require_approval_for_corrections\": true,\n  \"allowed_sources\": [\"manual\", \"employee\", \"import\"]\n}"
+            },
+            "url": "{{base_url}}/attendance/settings"
+          }
+        },
+        {
+          "name": "Work Shifts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/attendance/shifts"
+          }
+        },
+        {
+          "name": "Create Work Shift",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Regular Shift\",\n  \"code\": \"REGULAR-POST\",\n  \"starts_at\": \"09:00\",\n  \"ends_at\": \"17:00\",\n  \"break_minutes\": 60,\n  \"is_overnight\": false,\n  \"is_default\": false,\n  \"is_active\": true\n}"
+            },
+            "url": "{{base_url}}/attendance/shifts"
+          }
+        },
+        {
+          "name": "Attendance Records",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/attendance/records?date_from=2026-08-01&date_to=2026-08-31"
+          }
+        },
+        {
+          "name": "Create Attendance Record",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": {{employee_id}},\n  \"work_shift_id\": {{work_shift_id}},\n  \"attendance_date\": \"2026-08-20\",\n  \"check_in_at\": \"2026-08-20 09:00:00\",\n  \"check_out_at\": \"2026-08-20 17:00:00\",\n  \"source\": \"manual\",\n  \"status\": \"present\",\n  \"notes\": \"Created from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/attendance/records"
+          }
+        },
+        {
+          "name": "Attendance Corrections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/attendance/corrections?status=submitted"
+          }
+        },
+        {
+          "name": "Create Attendance Correction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendance_record_id\": 1,\n  \"requested_check_in_at\": \"2026-08-20 08:55:00\",\n  \"requested_check_out_at\": \"2026-08-20 17:05:00\",\n  \"reason\": \"Clock-in device delay.\"\n}"
+            },
+            "url": "{{base_url}}/attendance/corrections"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Templates and Imports",
+      "item": [
+        {
+          "name": "Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/templates"
+          }
+        },
+        {
+          "name": "Download Attendance Template",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/templates/attendance_import/download"
+          }
+        },
+        {
+          "name": "Preview Attendance Import",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/templates/attendance_import/preview"
+          }
+        },
+        {
+          "name": "Import Attendance CSV",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/templates/attendance_import/import"
+          }
+        },
+        {
+          "name": "Import Employee CSV",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/templates/employee_import/import"
+          }
+        },
+        {
+          "name": "Import Leave Entitlement CSV",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/templates/leave_entitlement_import/import"
+          }
+        },
+        {
+          "name": "Import Document Requirement CSV",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/templates/document_requirement_import/import"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Reports Registry",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports"
+          }
+        },
+        {
+          "name": "Employee Directory Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/employee_directory?search={{employee_number}}"
+          }
+        },
+        {
+          "name": "Document Compliance Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/document_compliance?status=submitted"
+          }
+        },
+        {
+          "name": "Leave Balances Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/leave_balances?employee_id={{employee_id}}"
+          }
+        },
+        {
+          "name": "Leave Requests Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/leave_requests?status=submitted"
+          }
+        },
+        {
+          "name": "Attendance Summary Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/attendance_summary?employee_id={{employee_id}}"
+          }
+        },
+        {
+          "name": "Attendance Exceptions Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/attendance_exceptions?status=late"
+          }
+        },
+        {
+          "name": "Export Employee Directory Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/employee_directory/export?search={{employee_number}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/notifications?status=unread"
+          }
+        },
+        {
+          "name": "Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/notifications/unread-count"
+          }
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/notifications/{{notification_id}}/read"
+          }
+        },
+        {
+          "name": "Mark All Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/notifications/read-all"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit and Activity",
+      "item": [
+        {
+          "name": "Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/audit-logs?event=updated&per_page=15"
+          }
+        },
+        {
+          "name": "Activity Feed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/activity-feed?per_page=15"
+          }
+        }
+      ]
+    }
+  ]
+}
