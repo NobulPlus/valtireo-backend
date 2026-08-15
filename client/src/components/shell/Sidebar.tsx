@@ -1,0 +1,79 @@
+import { NavLink } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { NAV_GROUPS } from '@/components/shell/navConfig';
+import { Logomark } from '@/components/ui/Logomark';
+import { cn } from '@/lib/cn';
+
+export function Sidebar() {
+  const { hasAnyRole, hasPermission, moduleByKey, session } = useAuth();
+
+  return (
+    <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-border bg-[var(--workspace-sidebar,var(--color-pine))] text-white lg:flex">
+      <div className="flex h-14 items-center gap-2.5 px-5">
+        <Logomark size={18} withBackground={false} />
+        <span className="font-display text-[15px] font-semibold tracking-tight">
+          Valtireo
+        </span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-3 pb-6">
+        {NAV_GROUPS.map((group) => {
+          const visibleItems = group.items.filter((item) => {
+            if (item.roles && !hasAnyRole(item.roles)) return false;
+            if (item.permission && !hasPermission(item.permission)) return false;
+            if (item.moduleKey) {
+              const module = moduleByKey(item.moduleKey);
+              if (!module || module.visibility !== 'enabled') return false;
+            }
+            return true;
+          });
+
+          if (visibleItems.length === 0) return null;
+
+          return (
+            <div key={group.label} className="mb-5">
+              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                {group.label}
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {visibleItems.map((item) =>
+                  item.comingSoon ? (
+                    <div
+                      key={item.label}
+                      className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-white/40"
+                      title="Coming soon"
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <item.icon className="h-4 w-4" />
+                        {item.label}
+                      </span>
+                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
+                    </div>
+                  ) : (
+                    <NavLink
+                      key={item.label}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white',
+                          isActive && 'bg-white/15 text-white',
+                        )
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </NavLink>
+                  ),
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+
+      {session?.organization && (
+        <div className="border-t border-white/10 px-5 py-3 text-xs text-white/50">{session.organization.name}</div>
+      )}
+    </aside>
+  );
+}

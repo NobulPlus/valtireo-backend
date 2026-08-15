@@ -1,0 +1,225 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/cn';
+
+interface DatePickerProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+}
+
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const YEAR_RANGE_BEFORE = 90;
+const YEAR_RANGE_AFTER = 10;
+
+function toInputDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function fromInputDate(value: string): Date | null {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function monthLabel(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date);
+}
+
+function calendarDays(cursor: Date): Date[] {
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+}
+
+export function DatePicker({ value, onChange, placeholder = 'Select date', className }: DatePickerProps) {
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(() => fromInputDate(value) ?? new Date());
+  const [yearPickerOpen, setYearPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const selected = fromInputDate(value);
+  const days = useMemo(() => calendarDays(cursor), [cursor]);
+  const years = useMemo(() => {
+    const selectedYear = selected?.getFullYear() ?? new Date().getFullYear();
+    const start = Math.min(selectedYear, new Date().getFullYear()) - YEAR_RANGE_BEFORE;
+    const end = Math.max(selectedYear, new Date().getFullYear()) + YEAR_RANGE_AFTER;
+
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [selected]);
+
+  function moveMonth(direction: number) {
+    setCursor((current) => new Date(current.getFullYear(), current.getMonth() + direction, 1));
+  }
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setYearPickerOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        setYearPickerOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  function selectDay(day: Date) {
+    onChange(toInputDate(day));
+    setOpen(false);
+  }
+
+  function selectYear(year: number) {
+    setCursor((current) => new Date(year, current.getMonth(), 1));
+    setYearPickerOpen(false);
+  }
+
+  return (
+    <div ref={pickerRef} className={cn('relative', className)}>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-white px-3 text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
+      >
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <CalendarDays className="h-4 w-4 flex-shrink-0 text-teal" />
+          <span className={cn('truncate', !value && 'text-muted')}>{value || placeholder}</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 z-50 mt-2 w-[320px] rounded-lg border border-border bg-white p-4 shadow-xl">
+          <div className="mb-4 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => moveMonth(-1)}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-strong"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setYearPickerOpen((current) => !current)}
+              className="rounded-md px-2 py-1 text-sm font-semibold text-strong hover:bg-surface-soft"
+            >
+              {monthLabel(cursor)}
+            </button>
+            <button
+              type="button"
+              onClick={() => moveMonth(1)}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-strong"
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          {yearPickerOpen ? (
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-surface-soft p-2">
+              <div className="grid grid-cols-4 gap-1">
+                {years.map((year) => {
+                  const isCursorYear = year === cursor.getFullYear();
+                  const isSelectedYear = year === selected?.getFullYear();
+
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => selectYear(year)}
+                      className={cn(
+                        'h-8 rounded-md text-sm transition-colors hover:bg-white',
+                        isCursorYear && 'bg-white font-semibold text-teal shadow-sm',
+                        isSelectedYear && 'ring-1 ring-teal',
+                      )}
+                    >
+                      {year}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-muted">
+                {WEEKDAYS.map((day) => (
+                  <span key={day}>{day}</span>
+                ))}
+              </div>
+
+              <div className="mt-2 grid grid-cols-7 gap-1">
+                {days.map((day) => {
+                  const dateValue = toInputDate(day);
+                  const isCurrentMonth = day.getMonth() === cursor.getMonth();
+                  const isSelected = selected && toInputDate(selected) === dateValue;
+
+                  return (
+                    <button
+                      key={dateValue}
+                      type="button"
+                      onClick={() => selectDay(day)}
+                      className={cn(
+                        'h-9 rounded-md text-sm transition-colors',
+                        isCurrentMonth ? 'text-strong' : 'text-muted/45',
+                        isSelected && 'bg-teal text-white hover:bg-teal',
+                        !isSelected && 'hover:bg-surface-soft',
+                      )}
+                    >
+                      {day.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-muted">
+            <button type="button" onClick={() => onChange('')} className="font-medium text-muted hover:text-strong">
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (yearPickerOpen) {
+                  setYearPickerOpen(false);
+                  return;
+                }
+
+                setOpen(false);
+              }}
+              className="font-medium text-teal hover:underline"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

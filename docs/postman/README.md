@@ -2,6 +2,14 @@
 
 This folder contains importable Postman assets for the Valtireo backend HR MVP.
 
+The Laravel backend now lives in:
+
+```text
+server/
+```
+
+Run backend commands from that directory.
+
 ## Files
 
 - `valtireo-api.postman_collection.json`
@@ -55,6 +63,7 @@ Update these from API responses while testing:
 | Variable | Meaning |
 | --- | --- |
 | `auth_token` | Bearer token from login |
+| `organization_id` | Organization primary key for platform drill-down |
 | `employee_id` | Employee primary key |
 | `employee_number` | Employee number such as `EMP-FIN-001` |
 | `department_id` | Department primary key |
@@ -90,6 +99,7 @@ Use:
 - `GET /templates/{key}/download`
 - `POST /templates/{key}/preview`
 - `POST /templates/{key}/import`
+- `POST /templates/{key}/failed-rows`
 
 Supported template keys:
 
@@ -103,6 +113,8 @@ For preview/import requests, use form-data:
 | Key | Type |
 | --- | --- |
 | `file` | File |
+
+`POST /templates/{key}/failed-rows` accepts the same CSV upload and returns a CSV containing only invalid rows with an appended `errors` column.
 
 ## Report Keys
 
@@ -144,12 +156,14 @@ Notification filters:
 Reminder command:
 
 ```bash
+cd server
 php artisan valtireo:send-reminders
 ```
 
 Options:
 
 ```bash
+cd server
 php artisan valtireo:send-reminders --document-days=30 --onboarding-days=2 --approval-days=1
 ```
 
@@ -183,7 +197,12 @@ GET /activity-feed?department_id={{department_id}}
 
 ### Platform
 
+- `GET /platform/dashboard`
+- `GET /platform/organizations`
+- `GET /platform/organizations/export`
 - `POST /platform/organizations`
+- `GET /platform/organizations/{organization}`
+- `PATCH /platform/organizations/{organization}/status`
 
 ### Workspace and Setup
 
@@ -224,6 +243,7 @@ GET /activity-feed?department_id={{department_id}}
 
 ### Employee Self-Service
 
+- `PATCH /me/employee-profile` accepts normal profile fields as JSON, or `multipart/form-data` when uploading `passport_photo` (`jpg`, `jpeg`, `png`, or `webp`, max 2MB).
 - `GET /employee-profile/overview`
 - `GET /employee-profile/activities`
 - `GET /employee-profile/custom-fields`
@@ -254,6 +274,8 @@ GET /activity-feed?department_id={{department_id}}
 - `GET /documents`
 - `POST /documents`
 - `GET /documents/{employeeDocument}`
+- `GET /documents/{employeeDocument}/download`
+- `GET /documents/{employeeDocument}/view`
 - `PATCH /documents/{employeeDocument}/review`
 
 ### Approvals
@@ -300,6 +322,7 @@ GET /activity-feed?department_id={{department_id}}
 - `GET /templates/{key}/download`
 - `POST /templates/{key}/preview`
 - `POST /templates/{key}/import`
+- `POST /templates/{key}/failed-rows`
 
 ### Reports
 
@@ -318,4 +341,3 @@ GET /activity-feed?department_id={{department_id}}
 
 - `GET /audit-logs`
 - `GET /activity-feed`
-

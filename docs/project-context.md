@@ -1,6 +1,6 @@
 # Valtireo Project Context
 
-Last updated: 2026-08-04
+Last updated: 2026-08-11
 
 ## Reference Thread
 
@@ -23,7 +23,9 @@ Financial/Admin workflows belong inside the Organizational OS roadmap, but not i
 The current project is backend-first.
 
 - Backend: Laravel API
-- Frontend: handled separately by another team member
+- Backend path: `server/`
+- Frontend path: `client/`
+- Frontend: handled separately by another team member/agent
 - Database: MySQL
 - Authentication: Laravel Sanctum
 - Roles/permissions: Spatie Laravel Permission
@@ -74,6 +76,15 @@ Move these after the MVP:
 Project path:
 
 `C:\Users\USer\Desktop\valtireo`
+
+Repository layout:
+
+```text
+valtireo/
+  client/   # frontend application
+  server/   # Laravel API backend
+  docs/     # shared product, API, Postman, and handoff docs
+```
 
 Current branch:
 
@@ -194,8 +205,19 @@ Completed workspace customization work includes:
 
 Completed platform-led organization provisioning includes:
 
+- `GET /api/platform/dashboard`
+- `GET /api/platform/organizations`
 - `POST /api/platform/organizations`
+- `GET /api/platform/organizations/{organization}`
+- `PATCH /api/platform/organizations/{organization}/status`
 - route is restricted to users with the `Super Admin` role
+- product-wide Super Admin dashboard metrics across customer organizations
+- searchable/filterable organization list for product administration
+- CSV organization report export that respects the current reporting window, search, status filter, and table sort
+- organization drill-down payload with workspace settings, metrics, modules, admins, and locations
+- Super Admin can suspend or reactivate customer organizations
+- suspension blocks new login, blocks authenticated API/session bootstrap, and revokes existing organization user tokens
+- Super Admin cannot suspend the current platform organization they belong to
 - creates the customer organization with status `invited`
 - creates the primary `Main Office` location
 - creates default workspace settings, with optional branding/theme overrides
@@ -207,6 +229,7 @@ Important distinction:
 
 - Seed data is only the development/demo sandbox.
 - Platform provisioning is the real customer organization creation workflow.
+- Super Admin lands in the Platform Console to monitor and manage customer workspaces.
 - After provisioning, the first Organization Admin logs in, lands inside their organization workspace, and completes setup/configuration from there.
 
 Completed documents/compliance foundation includes:
@@ -216,6 +239,8 @@ Completed documents/compliance foundation includes:
 - organization-defined document requirement rules
 - requirement scoping by department, designation, grade level, employment type, and location
 - employee/HR document submission metadata
+- multipart employee/HR document file upload to private local storage
+- authenticated organization-scoped document download and inline view endpoints
 - expiry dates and reminder windows
 - review actions: approve, reject, request changes
 - review notes and review history
@@ -290,6 +315,7 @@ Completed import template foundation includes:
 - CSV download endpoint
 - CSV preview endpoint
 - CSV import endpoint
+- failed-row CSV export endpoint for invalid import rows
 - attendance import template
 - employee import template
 - leave entitlement import template
@@ -355,6 +381,21 @@ Completed Postman/backend handoff documentation includes:
 - notification and audit testing notes
 - complete endpoint matrix for FE/backend handoff
 
+Completed frontend design-system normalization includes:
+
+- living frontend design-system reference at `docs/valtireo-frontend-design-system.md`
+- reusable chart primitives in `client/src/components/ui/Charts.tsx`
+- reusable date range picker in `client/src/components/ui/DateRangePicker.tsx`
+- sortable table header support in `client/src/components/ui/DataTable.tsx`
+- normalized `DonutChart`, `ColumnChart`, and `ChartLegend` dashboard patterns
+- company dashboard uses doughnut chart for employees by department
+- company dashboard uses column chart for employees by employment type
+- company dashboard uses column chart for employees by location
+- Platform Console organization status chart uses the shared doughnut chart primitive
+- Platform Console module adoption uses the shared column chart primitive
+- Platform Console uses a single reporting-window calendar field for console metrics
+- Platform Console organization list keeps search/status filters in the table toolbar and sorts through table headers
+
 Completed employee profile extension work includes:
 
 - multiple emergency contacts per employee
@@ -366,6 +407,8 @@ Completed employee profile extension work includes:
 - HR/admin updates for employee custom field values
 - employee self-service updates for visible and employee-editable custom fields
 - employee profile activity timeline
+- employee passport/profile photo upload via `PATCH /api/me/employee-profile` using multipart `passport_photo`
+- employee detail and profile payloads expose passport photo path/url for dashboard display
 - complete employee profile overview payload combining core employee, profile, contacts, dependents, documents, custom fields, lifecycle history, reporting history, and activities
 - HR/admin management of emergency contacts and dependents for employees in their organization
 - employee self-service management of their own emergency contacts and dependents
@@ -455,8 +498,10 @@ OrangeHRM local review reference:
 
 Updated near-term implementation order:
 
-1. Commit and push the backend HR MVP checkpoint.
-2. Start frontend implementation after backend HR MVP stabilizes.
+1. Use the monorepo layout: `client/`, `server/`, and `docs/`.
+2. Start frontend implementation in `client/`.
+3. Run backend commands from `server/`.
+4. Commit and push the backend HR MVP checkpoint after final verification.
 
 ## Working Rules
 

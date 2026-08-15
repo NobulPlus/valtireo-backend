@@ -1,0 +1,407 @@
+@import 'tailwindcss';
+
+/*
+ * Valtireo design tokens.
+ * Source of truth: docs/valtireo-brand-guide-v1.pdf
+ *                   docs/valtireo-design-system-foundations-v1.pdf
+ *
+ * The palette intentionally stays muted and institutional: pine/teal/blue
+ * for identity and navigation, calm status colors, generous neutrals.
+ * Bridge Teal, Decision Gold, and AI Cyan are narrow-purpose accents, not
+ * general-purpose colors — see the usage notes next to each token.
+ */
+@theme {
+  --font-sans: 'Inter', 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Manrope', 'Inter', system-ui, sans-serif;
+
+  /* Brand */
+  --color-pine: #123f3a;
+  --color-pine-dark: #0c2c28;
+  --color-teal: #2f8f8a;
+  --color-teal-light: #e4f2f1;
+  --color-blue: #244f7a;
+  --color-ink: #101828;
+
+  /* Accents — narrow purpose only. Bridge Teal is the Leading Digitals
+     parent-brand link and is confined to the login/entry screen. Gold marks
+     decision/approval/governance moments (it is the logomark's gold node).
+     Cyan marks AI/automation moments (the logomark's cyan node). None of
+     these three should appear as default UI colors inside product screens. */
+  --color-bridge-teal: #65c7c4;
+  --color-gold: #ffcc29;
+  --color-cyan: #16b6c9;
+
+  /* Neutrals */
+  --color-canvas: #f7faf9;
+  --color-surface: #ffffff;
+  --color-surface-soft: #eef5f4;
+  --color-border: #d7e2e0;
+  --color-border-strong: #c3d1ce;
+  --color-muted: #667085;
+  --color-strong: #101828;
+
+  /* Status */
+  --color-success: #168a5b;
+  --color-success-bg: #e7f6ee;
+  --color-warning: #c47a00;
+  --color-warning-bg: #fdf1de;
+  --color-danger: #c2413d;
+  --color-danger-bg: #fbeaea;
+  --color-info: #2563a8;
+  --color-info-bg: #eaf2fa;
+  --color-pending: #8a6d1f;
+  --color-pending-bg: #f7f0dc;
+  --color-draft: #667085;
+  --color-draft-bg: #eef1f3;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* Type scale — docs/valtireo-design-system-foundations-v1.pdf.
+     Weight is applied separately via font-bold/font-extrabold utilities:
+     Display + Page Title = extrabold (800); Section + Label = bold (700,
+     rounded down from the deck's 750 — Manrope's static build ships in
+     steps of 100); Body = regular (400). */
+  --text-display: 1.875rem;
+  --text-display--line-height: 2.25rem;
+  --text-page-title: 1.5rem;
+  --text-page-title--line-height: 2rem;
+  --text-section: 1.125rem;
+  --text-section--line-height: 1.625rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--workspace-font, var(--font-sans)), var(--font-sans);
+  background: var(--color-canvas);
+  color: var(--color-strong);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--color-teal-light);
+  color: var(--color-pine-dark);
+}
+
+/* Compact, dense scrollbars fit the operational tone of the product. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+  border: 2px solid var(--color-canvas);
+}
+
+/* ==========================================================================
+   Login — brand panel
+   The one surface in the product where Bridge Teal (the Leading Digitals
+   parent-brand link) is allowed. Everyday app screens stay on Pine/Teal/Blue.
+   ========================================================================== */
+
+.login-brand-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 14%, rgba(101, 199, 196, 0.16), transparent 30%),
+    radial-gradient(circle at 84% 86%, rgba(36, 79, 122, 0.4), transparent 34%),
+    linear-gradient(150deg, rgba(8, 25, 24, 0.94), rgba(18, 63, 58, 1) 60%);
+}
+
+.login-brand-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(90deg, transparent 0, black 16%, black 76%, transparent 100%);
+}
+
+/* Entrance — the brand and form panels fade up on load, staggered via
+   inline animation-delay. Disabled entirely under reduced motion below. */
+
+.login-fade-in {
+  animation: login-fade-up 0.8s cubic-bezier(0.16, 0.8, 0.24, 1) both;
+}
+
+.login-footer-sequence {
+  position: relative;
+  min-height: 1.5rem;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+}
+
+.login-footer-word {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: login-word-cycle 9.6s cubic-bezier(0.16, 0.8, 0.24, 1) infinite;
+}
+
+@keyframes login-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Orbit — the module network visual. Six operating-layer nodes around a
+   central hub, matching the sidebar's module groups, connected by spokes
+   that carry a slow traveling pulse — a quiet nod to workflow routing
+   rather than decoration for its own sake. No fake metrics.
+
+   Sized at 100% of its grid column (capped by max-width) rather than
+   viewport width, so it scales with the available space instead of
+   overflowing narrower desktop windows. */
+
+.login-orbit {
+  position: relative;
+  width: 100%;
+  max-width: 330px;
+  margin-inline: auto;
+  aspect-ratio: 1;
+}
+
+.login-orbit-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  background-image:
+    radial-gradient(circle, rgba(255, 255, 255, 0.34) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px, 70px 70px, 70px 70px;
+  border-radius: 50%;
+  mask-image: radial-gradient(circle, black 0%, black 62%, transparent 78%);
+}
+
+.login-orbit-sweep {
+  position: absolute;
+  inset: 6%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 10%,
+    rgba(101, 199, 196, 0.18) 12%,
+    transparent 15% 45%,
+    rgba(47, 143, 138, 0.2) 48%,
+    transparent 52% 82%,
+    rgba(36, 79, 122, 0.2) 85%,
+    transparent 89% 100%
+  );
+  opacity: 0.6;
+  animation: login-orbit-spin 22s linear infinite;
+}
+
+.login-orbit-ring {
+  position: absolute;
+  border: 1px solid rgba(101, 199, 196, 0.18);
+  border-radius: 50%;
+}
+
+.login-orbit-ring-outer {
+  inset: 4%;
+}
+
+.login-orbit-ring-inner {
+  inset: 24%;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.login-orbit-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  width: 104px;
+  height: 104px;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  border: 1px solid rgba(101, 199, 196, 0.4);
+  background: linear-gradient(180deg, rgba(12, 44, 40, 0.97), rgba(6, 20, 19, 0.97));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translate(-50%, -50%);
+  animation: login-orbit-hub-pulse 5s ease-in-out infinite;
+}
+
+.login-orbit-hub span {
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.login-orbit-node {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  min-width: 88px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(101, 199, 196, 0.26);
+  border-radius: 999px;
+  background: rgba(6, 20, 19, 0.58);
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: login-orbit-node-float 6.4s ease-in-out infinite;
+}
+
+.login-orbit-node-governance {
+  border-color: rgba(101, 199, 196, 0.26);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.login-orbit-spoke {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  height: 1px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(101, 199, 196, 0.38), rgba(101, 199, 196, 0));
+}
+
+.login-orbit-pulse {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #7fd7d3;
+  box-shadow: 0 0 9px 1px rgba(101, 199, 196, 0.75);
+  transform: translate(0, -50%);
+  animation: login-orbit-pulse-travel 3.6s ease-in-out infinite;
+}
+
+@keyframes login-word-cycle {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  14%,
+  34% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  42%,
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes login-orbit-pulse-travel {
+  0% {
+    transform: translate(0, -50%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(100% - 5px), -50%);
+    opacity: 0;
+  }
+}
+
+@keyframes login-orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes login-orbit-hub-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 rgba(22, 182, 201, 0);
+  }
+  50% {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 26px rgba(22, 182, 201, 0.22);
+  }
+}
+
+@keyframes login-orbit-node-float {
+  0%,
+  100% {
+    border-color: rgba(101, 199, 196, 0.2);
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    border-color: rgba(101, 199, 196, 0.48);
+    transform: translate(-50%, -50%) translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-fade-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .login-footer-word {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .login-orbit-sweep,
+  .login-orbit-hub,
+  .login-orbit-node,
+  .login-orbit-pulse {
+    animation: none;
+  }
+
+  .login-orbit-pulse {
+    display: none;
+  }
+}

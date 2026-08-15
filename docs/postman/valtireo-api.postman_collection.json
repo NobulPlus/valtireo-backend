@@ -246,6 +246,72 @@
       "name": "Platform",
       "item": [
         {
+          "name": "Platform Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/platform/dashboard"
+          }
+        },
+        {
+          "name": "List Organizations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/platform/organizations?search=&status=&sort_by=created_at&sort_direction=desc&per_page=15"
+          }
+        },
+        {
+          "name": "Export Organizations CSV",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/platform/organizations/export?search=&status=&sort_by=created_at&sort_direction=desc&date_from=&date_to="
+          }
+        },
+        {
+          "name": "Show Organization",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/platform/organizations/{{organization_id}}"
+          }
+        },
+        {
+          "name": "Suspend Organization",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\",\n  \"reason\": \"Temporary account suspension from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/platform/organizations/{{organization_id}}/status"
+          }
+        },
+        {
+          "name": "Reactivate Organization",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\",\n  \"reason\": \"Account reactivated from Postman.\"\n}"
+            },
+            "url": "{{base_url}}/platform/organizations/{{organization_id}}/status"
+          }
+        },
+        {
           "name": "Provision Organization",
           "request": {
             "method": "POST",
@@ -605,6 +671,75 @@
               "raw": "{\n  \"employee_id\": {{employee_id}},\n  \"document_type_id\": {{document_type_id}},\n  \"document_requirement_id\": {{document_requirement_id}},\n  \"title\": \"Government ID\",\n  \"file_name\": \"government-id.pdf\",\n  \"file_path\": \"demo/documents/government-id.pdf\",\n  \"mime_type\": \"application/pdf\",\n  \"file_size\": 125000,\n  \"issued_at\": \"2026-01-01\",\n  \"expires_at\": \"2027-01-01\",\n  \"notes\": \"Submitted from Postman.\"\n}"
             },
             "url": "{{base_url}}/documents"
+          }
+        },
+        {
+          "name": "Submit Employee Document File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "employee_id",
+                  "value": "{{employee_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "document_type_id",
+                  "value": "{{document_type_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "document_requirement_id",
+                  "value": "{{document_requirement_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "title",
+                  "value": "Government ID Upload",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "issued_at",
+                  "value": "2026-01-01",
+                  "type": "text"
+                },
+                {
+                  "key": "expires_at",
+                  "value": "2027-01-01",
+                  "type": "text"
+                },
+                {
+                  "key": "notes",
+                  "value": "Uploaded from Postman.",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{base_url}}/documents"
+          }
+        },
+        {
+          "name": "Download Employee Document File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/documents/{{employee_document_id}}/download"
+          }
+        },
+        {
+          "name": "View Employee Document File",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/documents/{{employee_document_id}}/view"
           }
         },
         {
@@ -976,6 +1111,24 @@
               ]
             },
             "url": "{{base_url}}/templates/attendance_import/import"
+          }
+        },
+        {
+          "name": "Export Failed Attendance Rows",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": "{{base_url}}/templates/attendance_import/failed-rows"
           }
         },
         {
