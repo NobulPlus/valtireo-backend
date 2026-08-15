@@ -2,24 +2,41 @@
 
 namespace App\Services;
 
+use App\Models\ApprovalDecision;
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflow;
+use App\Models\ApprovalWorkflowStep;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\AttendanceRecord;
+use App\Models\AttendanceSetting;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\EmployeeCustomField;
+use App\Models\EmployeeCustomFieldValue;
+use App\Models\EmployeeDependent;
 use App\Models\EmployeeDocument;
+use App\Models\EmployeeDocumentReview;
+use App\Models\EmployeeEmergencyContact;
+use App\Models\EmployeeInvitation;
+use App\Models\EmployeeProfile;
 use App\Models\EmployeeProfileActivity;
+use App\Models\EmployeeReportingHistory;
+use App\Models\EmployeeStatusHistory;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\LeaveEntitlement;
+use App\Models\LeaveHoliday;
+use App\Models\LeavePeriod;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestComment;
+use App\Models\LeaveType;
+use App\Models\LeaveWorkDay;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
+use App\Models\OrganizationStatusHistory;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkShift;
@@ -109,6 +126,19 @@ class AuditVisibilityService
                 });
             }
 
+            foreach ($this->nestedAuditableTables() as $model => $mapping) {
+                $query->orWhere(function (Builder $query) use ($user, $model, $mapping): void {
+                    $query->where('auditable_type', $model)
+                        ->whereExists(function ($subQuery) use ($user, $mapping): void {
+                            $subQuery->select(DB::raw(1))
+                                ->from($mapping['table'])
+                                ->join($mapping['parent_table'], "{$mapping['parent_table']}.id", '=', "{$mapping['table']}.{$mapping['foreign_key']}")
+                                ->whereColumn("{$mapping['table']}.id", 'audits.auditable_id')
+                                ->where("{$mapping['parent_table']}.organization_id", $user->organization_id);
+                        });
+                });
+            }
+
             $query->orWhere(function (Builder $query) use ($user): void {
                 $query->where('auditable_type', User::class)
                     ->whereExists(function ($subQuery) use ($user): void {
@@ -136,21 +166,50 @@ class AuditVisibilityService
             ApprovalWorkflow::class => 'approval_workflows',
             AttendanceCorrectionRequest::class => 'attendance_correction_requests',
             AttendanceRecord::class => 'attendance_records',
+            AttendanceSetting::class => 'attendance_settings',
             Department::class => 'departments',
             Designation::class => 'designations',
             DocumentRequirement::class => 'document_requirements',
             DocumentType::class => 'document_types',
             Employee::class => 'employees',
             EmployeeCustomField::class => 'employee_custom_fields',
+            EmployeeCustomFieldValue::class => 'employee_custom_field_values',
+            EmployeeDependent::class => 'employee_dependents',
             EmployeeDocument::class => 'employee_documents',
+            EmployeeEmergencyContact::class => 'employee_emergency_contacts',
+            EmployeeInvitation::class => 'employee_invitations',
             EmployeeProfileActivity::class => 'employee_profile_activities',
+            EmployeeReportingHistory::class => 'employee_reporting_histories',
+            EmployeeStatusHistory::class => 'employee_status_histories',
             EmploymentType::class => 'employment_types',
             GradeLevel::class => 'grade_levels',
             LeaveEntitlement::class => 'leave_entitlements',
+            LeaveHoliday::class => 'leave_holidays',
+            LeavePeriod::class => 'leave_periods',
             LeaveRequest::class => 'leave_requests',
+            LeaveType::class => 'leave_types',
+            LeaveWorkDay::class => 'leave_work_days',
             OrganizationLocation::class => 'organization_locations',
+            OrganizationStatusHistory::class => 'organization_status_histories',
             Unit::class => 'units',
             WorkShift::class => 'work_shifts',
+        ];
+    }
+
+    /**
+     * Auditable models that don't carry organization_id directly and are
+     * instead scoped through a parent relation.
+     *
+     * @return array<class-string, array{table: string, parent_table: string, foreign_key: string}>
+     */
+    private function nestedAuditableTables(): array
+    {
+        return [
+            ApprovalDecision::class => ['table' => 'approval_decisions', 'parent_table' => 'approval_requests', 'foreign_key' => 'approval_request_id'],
+            ApprovalWorkflowStep::class => ['table' => 'approval_workflow_steps', 'parent_table' => 'approval_workflows', 'foreign_key' => 'approval_workflow_id'],
+            EmployeeDocumentReview::class => ['table' => 'employee_document_reviews', 'parent_table' => 'employee_documents', 'foreign_key' => 'employee_document_id'],
+            EmployeeProfile::class => ['table' => 'employee_profiles', 'parent_table' => 'employees', 'foreign_key' => 'employee_id'],
+            LeaveRequestComment::class => ['table' => 'leave_request_comments', 'parent_table' => 'leave_requests', 'foreign_key' => 'leave_request_id'],
         ];
     }
 
@@ -159,7 +218,12 @@ class AuditVisibilityService
      */
     private function modelAliases(): array
     {
-        return collect([...array_keys($this->auditableTables()), User::class, Organization::class])
+        return collect([
+            ...array_keys($this->auditableTables()),
+            ...array_keys($this->nestedAuditableTables()),
+            User::class,
+            Organization::class,
+        ])
             ->mapWithKeys(fn (string $model) => [
                 str($model)->afterLast('\\')->snake()->toString() => $model,
                 $model => $model,

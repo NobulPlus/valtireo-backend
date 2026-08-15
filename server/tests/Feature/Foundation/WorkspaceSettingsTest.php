@@ -5,6 +5,8 @@ namespace Tests\Feature\Foundation;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -120,5 +122,62 @@ class WorkspaceSettingsTest extends TestCase
                 'theme.primary_color',
                 'theme.font_family',
             ]);
+    }
+
+    public function test_admin_can_upload_and_remove_workspace_logo(): void
+    {
+        Storage::fake('public');
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $response = $this->post('/api/workspace/identity/logo', [
+            'logo' => UploadedFile::fake()->image('logo.png', 200, 200),
+        ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $logoUrl = $response->json('workspace.identity.logo_url');
+        $this->assertNotNull($logoUrl);
+        $this->assertStringContainsString('/storage/organizations/'.$organization->id.'/branding/', $logoUrl);
+
+        $path = "organizations/{$organization->id}/branding/".basename(parse_url($logoUrl, PHP_URL_PATH));
+        Storage::disk('public')->assertExists($path);
+
+        $this->deleteJson('/api/workspace/identity/logo')
+            ->assertOk()
+            ->assertJsonPath('workspace.identity.logo_url', null);
+
+        Storage::disk('public')->assertMissing($path);
+    }
+
+    public function test_workspace_logo_upload_rejects_non_image_files(): void
+    {
+        Storage::fake('public');
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->post('/api/workspace/identity/logo', [
+            'logo' => UploadedFile::fake()->create('logo.svg', 10, 'image/svg+xml'),
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['logo']);
+    }
+
+    public function test_employee_cannot_upload_workspace_logo(): void
+    {
+        Storage::fake('public');
+        $this->seed();
+
+        $employee = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($employee);
+
+        $this->post('/api/workspace/identity/logo', [
+            'logo' => UploadedFile::fake()->image('logo.png'),
+        ], ['Accept' => 'application/json'])
+            ->assertForbidden();
     }
 }

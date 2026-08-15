@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Audit;
 
+use App\Models\ApprovalDecision;
+use App\Models\ApprovalRequest;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\EmployeeProfileActivity;
+use App\Models\LeaveType;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -123,5 +126,110 @@ class AuditVisibilityTest extends TestCase
         $this->getJson('/api/audit-logs?auditable_type=department')
             ->assertOk()
             ->assertJsonMissing(['auditable_id' => $otherDepartment->id]);
+    }
+
+    public function test_organization_scoped_reference_data_audits_are_visible(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $leaveType = LeaveType::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Sabbatical',
+            'code' => 'SABBATICAL',
+            'is_paid' => false,
+            'is_active' => true,
+        ]);
+
+        Audit::query()->create([
+            'user_type' => User::class,
+            'user_id' => null,
+            'event' => 'created',
+            'auditable_type' => LeaveType::class,
+            'auditable_id' => $leaveType->id,
+            'old_values' => [],
+            'new_values' => ['code' => 'SABBATICAL'],
+            'url' => null,
+            'ip_address' => null,
+            'user_agent' => null,
+            'tags' => null,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/audit-logs?auditable_type=leave_type')
+            ->assertOk()
+            ->assertJsonFragment(['auditable_id' => $leaveType->id]);
+    }
+
+    public function test_nested_scope_audits_are_visible_and_isolated_by_organization(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $approvalRequest = ApprovalRequest::query()->create([
+            'organization_id' => $admin->organization_id,
+            'approvable_type' => Department::class,
+            'approvable_id' => Department::query()->where('organization_id', $admin->organization_id)->firstOrFail()->id,
+            'module' => 'audit_visibility_test',
+            'action' => 'submit',
+            'title' => 'Nested audit visibility test',
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+        $decision = ApprovalDecision::query()->create([
+            'approval_request_id' => $approvalRequest->id,
+            'actor_id' => $admin->id,
+            'action' => 'approve',
+            'previous_status' => 'pending',
+            'next_status' => 'approved',
+        ]);
+
+        $otherOrganization = Organization::query()->create([
+            'name' => 'Nested Other Tenant',
+            'code' => 'NESTEDOTHER',
+            'status' => 'active',
+            'country' => 'Nigeria',
+            'settings' => [],
+        ]);
+        $otherApprovalRequest = ApprovalRequest::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'approvable_type' => Department::class,
+            'approvable_id' => 0,
+            'module' => 'audit_visibility_test',
+            'action' => 'submit',
+            'title' => 'Other org nested audit visibility test',
+            'status' => 'pending',
+            'submitted_at' => now(),
+        ]);
+        $otherDecision = ApprovalDecision::query()->create([
+            'approval_request_id' => $otherApprovalRequest->id,
+            'action' => 'approve',
+            'previous_status' => 'pending',
+            'next_status' => 'approved',
+        ]);
+
+        foreach ([$decision, $otherDecision] as $record) {
+            Audit::query()->create([
+                'user_type' => User::class,
+                'user_id' => null,
+                'event' => 'created',
+                'auditable_type' => ApprovalDecision::class,
+                'auditable_id' => $record->id,
+                'old_values' => [],
+                'new_values' => ['action' => 'approve'],
+                'url' => null,
+                'ip_address' => null,
+                'user_agent' => null,
+                'tags' => null,
+            ]);
+        }
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/audit-logs?auditable_type=approval_decision')
+            ->assertOk()
+            ->assertJsonFragment(['auditable_id' => $decision->id])
+            ->assertJsonMissing(['auditable_id' => $otherDecision->id]);
     }
 }

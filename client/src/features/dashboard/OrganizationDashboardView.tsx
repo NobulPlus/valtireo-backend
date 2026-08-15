@@ -97,7 +97,7 @@ export function OrganizationDashboardView() {
     [],
   );
 
-  if (isLoading) return <LoadingState label="Loading organization dashboard..." />;
+  if (isLoading) return <LoadingState label="Loading organization dashboard..." fill />;
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
   if (!data) return null;
   const dashboardData = data;

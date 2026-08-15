@@ -24,6 +24,9 @@ use Illuminate\Validation\ValidationException;
 
 class TemplateImportService
 {
+    /** @var array<string, Model|null> Per-request lookup cache so repeated codes/numbers across rows don't re-query. */
+    private array $lookupCache = [];
+
     public function __construct(
         private readonly TemplateRegistryService $templates,
         private readonly EmployeeOnboardingService $employees,
@@ -562,10 +565,16 @@ class TemplateImportService
             return null;
         }
 
-        return Employee::query()
-            ->where('organization_id', $user->organization_id)
-            ->where('employee_number', $number)
-            ->first();
+        $cacheKey = 'employee_number:'.$user->organization_id.':'.$number;
+
+        if (! array_key_exists($cacheKey, $this->lookupCache)) {
+            $this->lookupCache[$cacheKey] = Employee::query()
+                ->where('organization_id', $user->organization_id)
+                ->where('employee_number', $number)
+                ->first();
+        }
+
+        return $this->lookupCache[$cacheKey];
     }
 
     /**
@@ -579,10 +588,16 @@ class TemplateImportService
             return null;
         }
 
-        return $model::query()
-            ->where('organization_id', $user->organization_id)
-            ->where('code', $code)
-            ->first();
+        $cacheKey = 'code:'.$model.':'.$user->organization_id.':'.$code;
+
+        if (! array_key_exists($cacheKey, $this->lookupCache)) {
+            $this->lookupCache[$cacheKey] = $model::query()
+                ->where('organization_id', $user->organization_id)
+                ->where('code', $code)
+                ->first();
+        }
+
+        return $this->lookupCache[$cacheKey];
     }
 
     private function leavePeriodByName(User $user, ?string $name): ?LeavePeriod
@@ -591,10 +606,16 @@ class TemplateImportService
             return null;
         }
 
-        return LeavePeriod::query()
-            ->where('organization_id', $user->organization_id)
-            ->where('name', $name)
-            ->first();
+        $cacheKey = 'leave_period_name:'.$user->organization_id.':'.$name;
+
+        if (! array_key_exists($cacheKey, $this->lookupCache)) {
+            $this->lookupCache[$cacheKey] = LeavePeriod::query()
+                ->where('organization_id', $user->organization_id)
+                ->where('name', $name)
+                ->first();
+        }
+
+        return $this->lookupCache[$cacheKey];
     }
 
     /**

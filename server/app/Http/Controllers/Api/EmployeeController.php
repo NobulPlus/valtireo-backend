@@ -172,7 +172,12 @@ class EmployeeController extends Controller
             'first_name' => ['sometimes', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['sometimes', 'string', 'max:255'],
-            'work_email' => ['sometimes', 'email', 'max:255', Rule::unique('employees', 'work_email')->ignore($employee->id)],
+            'work_email' => [
+                'sometimes',
+                'email',
+                'max:255',
+                Rule::unique('employees', 'work_email')->where('organization_id', $organizationId)->ignore($employee->id),
+            ],
             'phone' => ['nullable', 'string', 'max:50'],
             'department_id' => ['nullable', Rule::exists('departments', 'id')->where('organization_id', $organizationId)],
             'unit_id' => ['nullable', Rule::exists('units', 'id')->where('organization_id', $organizationId)],

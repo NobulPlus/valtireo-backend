@@ -179,17 +179,21 @@ class DocumentComplianceService
             'changes_requested' => 0,
         ];
 
+        $latestDocuments = EmployeeDocument::query()
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->whereIn('document_requirement_id', $requirements->pluck('id'))
+            ->orderByDesc('id')
+            ->get()
+            ->unique(fn (EmployeeDocument $document) => "{$document->employee_id}:{$document->document_requirement_id}")
+            ->keyBy(fn (EmployeeDocument $document) => "{$document->employee_id}:{$document->document_requirement_id}");
+
         foreach ($employees as $employee) {
             foreach ($requirements as $requirement) {
                 if (! $this->requirementAppliesToEmployee($requirement, $employee)) {
                     continue;
                 }
 
-                $document = EmployeeDocument::query()
-                    ->where('employee_id', $employee->id)
-                    ->where('document_requirement_id', $requirement->id)
-                    ->latest('id')
-                    ->first();
+                $document = $latestDocuments->get("{$employee->id}:{$requirement->id}");
 
                 $state = $this->complianceState($document, $requirement->reminder_days);
                 $summary[$state]++;

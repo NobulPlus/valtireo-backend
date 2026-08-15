@@ -117,7 +117,7 @@ const toneClasses = {
 function ControlCenterContent() {
   const checklistQuery = useSetupChecklist();
 
-  if (checklistQuery.isLoading) return <LoadingState label="Loading workspace controls..." />;
+  if (checklistQuery.isLoading) return <LoadingState label="Loading workspace controls..." fill />;
   if (checklistQuery.isError) {
     return <ErrorState error={checklistQuery.error} onRetry={() => checklistQuery.refetch()} />;
   }

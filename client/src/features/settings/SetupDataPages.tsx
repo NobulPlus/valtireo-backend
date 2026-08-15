@@ -1,25 +1,27 @@
 import { Fragment, type ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { BarChart3, Building2, ClipboardCheck, FileCheck2, FileClock, FileText, Pencil, Plus, Power, Settings, ShieldCheck, Trash2 } from 'lucide-react';
+import { BarChart3, Building2, ClipboardCheck, FileCheck2, FileClock, FileText, Pencil, Plus, Power, Settings, ShieldCheck } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/StatTile';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
-import { Input } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
+import { ModalCancelAction, ModalConfirmAction, ModalSaveAction, ModalSendAction } from '@/components/ui/ModalActions';
 import { SelectMenu } from '@/components/ui/SelectMenu';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
+import { useAuth } from '@/context/AuthContext';
+import { useActOnApprovalRequest, useApprovalRequests, type ApprovalDecisionAction } from '@/features/approvals/api';
 import { useSetupLookups } from '@/features/workspace/api';
 import { api, ApiError } from '@/lib/apiClient';
-import type { AllSetupLookups, Paginated } from '@/types/api';
+import type { AllSetupLookups, ApprovalRequest, Paginated } from '@/types/api';
 
 type Row = Record<string, unknown>;
 
@@ -155,12 +157,11 @@ function ActionFields({
         <Field key={field.name} label={field.label}>
           {field.type === 'textarea' ? (
             <>
-              <textarea
+              <Textarea
                 value={String(form[field.name] ?? '')}
                 onChange={(event) => setForm((current) => ({ ...current, [field.name]: event.target.value }))}
                 required={field.required}
                 placeholder={field.placeholder}
-                className="min-h-24 w-full rounded-md border border-border bg-white px-3 py-2 text-sm outline-none focus:border-teal focus:ring-2 focus:ring-teal/15"
               />
               {field.help && <p className="mt-1 text-xs leading-5 text-muted">{field.help}</p>}
             </>
@@ -320,8 +321,8 @@ function InlineRowAction({
 
   if (!isOpen && variant === 'deactivate') {
     return (
-      <Button type="button" size="sm" variant="danger" onClick={() => setIsOpen(true)} title="Delete">
-        <Trash2 className="h-3.5 w-3.5" />
+      <Button type="button" size="sm" variant="danger" onClick={() => setIsOpen(true)} title="Deactivate" aria-label="Deactivate">
+        <Power className="h-3.5 w-3.5" />
       </Button>
     );
   }
@@ -672,7 +673,7 @@ export function StructureSettingsPage() {
       subtitle="Control the company-owned building blocks used by employees, dashboards, leave, attendance, and reports."
       permission="workspace_settings.view"
     >
-      {lookupsQuery.isLoading && <LoadingState label="Loading organization structure..." />}
+      {lookupsQuery.isLoading && <LoadingState label="Loading organization structure..." fill />}
       {lookupsQuery.isError && <ErrorState error={lookupsQuery.error} onRetry={() => lookupsQuery.refetch()} />}
       {lookups && (
         <div className="flex flex-col gap-5">
@@ -1341,15 +1342,155 @@ export function DocumentsControlPage() {
   );
 }
 
+function formatSnakeCase(value: string): string {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+const DECISION_OPTIONS: { value: ApprovalDecisionAction; label: string }[] = [
+  { value: 'approve', label: 'Approve' },
+  { value: 'reject', label: 'Reject' },
+  { value: 'request_changes', label: 'Request changes' },
+];
+
+function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | null; onClose: () => void }) {
+  const toast = useToast();
+  const [decisionAction, setDecisionAction] = useState<ApprovalDecisionAction>('approve');
+  const [note, setNote] = useState('');
+  const actMutation = useActOnApprovalRequest(request?.id ?? 0);
+
+  useEffect(() => {
+    if (request) {
+      setDecisionAction('approve');
+      setNote('');
+    }
+  }, [request]);
+
+  async function handleSubmit() {
+    try {
+      await actMutation.mutateAsync({ action: decisionAction, note: note.trim() || undefined });
+      toast.success('Decision recorded', `The request has been ${decisionAction === 'approve' ? 'approved' : decisionAction === 'reject' ? 'rejected' : 'sent back for changes'}.`);
+      onClose();
+    } catch (error) {
+      toast.error('Could not record decision', error instanceof ApiError ? error.message : 'Could not record this decision.');
+    }
+  }
+
+  return (
+    <Modal
+      open={Boolean(request)}
+      onClose={onClose}
+      title="Review approval request"
+      footer={
+        <>
+          <ModalCancelAction onClick={onClose} />
+          <ModalSendAction title="Record decision" isLoading={actMutation.isPending} onClick={handleSubmit} />
+        </>
+      }
+    >
+      {request && (
+        <div className="space-y-4">
+          <div>
+            <p className="font-medium text-strong">{request.title}</p>
+            <p className="text-xs text-muted">
+              {formatSnakeCase(request.module)} · {formatSnakeCase(request.action)} · Requested by {request.requester?.name ?? 'System'}
+            </p>
+          </div>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Decision</span>
+            <SelectMenu
+              value={decisionAction}
+              onChange={(value) => setDecisionAction(value as ApprovalDecisionAction)}
+              options={DECISION_OPTIONS}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Note</span>
+            <Textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Optional — some workflows require a note when rejecting or requesting changes."
+            />
+          </label>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function ApprovalRequestsPanel() {
+  const [statusFilter, setStatusFilter] = useState('pending');
+  const requestsQuery = useApprovalRequests({ status: statusFilter || undefined, per_page: 50 });
+  const [actingOn, setActingOn] = useState<ApprovalRequest | null>(null);
+  const requests = requestsQuery.data?.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Approval requests</CardTitle>
+        <SelectMenu
+          className="w-40"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: '', label: 'All statuses' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'rejected', label: 'Rejected' },
+            { value: 'changes_requested', label: 'Changes requested' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
+        />
+      </CardHeader>
+      <CardBody className="p-0">
+        {requestsQuery.isLoading && <LoadingState label="Loading approval requests..." />}
+        {requestsQuery.isError && <ErrorState error={requestsQuery.error} onRetry={() => requestsQuery.refetch()} />}
+        {requestsQuery.data && requests.length === 0 && (
+          <EmptyState title="No approval requests" description="Requests routed through your configured workflows will appear here." />
+        )}
+        {requests.length > 0 && (
+          <ul className="divide-y divide-border">
+            {requests.map((request) => (
+              <li key={request.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-strong">{request.title}</p>
+                  <p className="text-xs text-muted">
+                    {formatSnakeCase(request.module)} · {formatSnakeCase(request.action)} · {request.requester?.name ?? 'System'}
+                  </p>
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <StatusBadge status={request.status} />
+                  {request.status === 'pending' && (
+                    <Button type="button" size="sm" onClick={() => setActingOn(request)}>
+                      Review
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+      <ActOnApprovalModal request={actingOn} onClose={() => setActingOn(null)} />
+    </Card>
+  );
+}
+
 export function ApprovalsControlPage() {
+  const { hasPermission } = useAuth();
+
   return (
     <AreaShell
       title="Approvals"
-      subtitle="Control approval workflow definitions and monitor approval requests for this organization."
-      permission="approval_workflows.view"
+      subtitle="Review pending approval requests and control the workflow definitions that route them."
+      permission="approvals.view"
     >
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <DataPanel
+        {hasPermission('approval_workflows.view') && (
+          <DataPanel
           config={{
             title: 'Approval workflows',
             description: 'Workflow definitions owned by this organization.',
@@ -1421,19 +1562,9 @@ export function ApprovalsControlPage() {
               fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
             },
           }}
-        />
-        <DataPanel
-          config={{
-            title: 'Approval requests',
-            description: 'Open and historical decisions routed through the configured workflows.',
-            endpoint: '/approvals',
-            columns: [
-              { key: 'title', label: 'Title' },
-              { key: 'status', label: 'Status' },
-              { key: 'requester.name', label: 'Requester' },
-            ],
-          }}
-        />
+          />
+        )}
+        <ApprovalRequestsPanel />
       </div>
     </AreaShell>
   );
@@ -1474,6 +1605,31 @@ export function LeaveControlPage() {
                 { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
               ],
             },
+            edit: {
+              label: 'Edit leave type',
+              endpoint: (row) => `/leave/types/${row.id}`,
+              method: 'patch',
+              successMessage: 'Leave type updated',
+              invalidateKeys: [['control-panel', '/leave/types']],
+              fields: [
+                { name: 'name', label: 'Name', required: true },
+                { name: 'code', label: 'Code', required: true },
+                { name: 'description', label: 'Description' },
+                { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
+                { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
+                { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
+                { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
+                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+              ],
+            },
+            deactivate: {
+              label: 'Deactivate leave type',
+              endpoint: (row) => `/leave/types/${row.id}`,
+              method: 'patch',
+              successMessage: 'Leave type deactivated',
+              invalidateKeys: [['control-panel', '/leave/types']],
+              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+            },
           }}
         />
         <DataPanel
@@ -1498,6 +1654,27 @@ export function LeaveControlPage() {
                 { name: 'ends_on', label: 'Ends on', type: 'date', required: true },
                 { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
               ],
+            },
+            edit: {
+              label: 'Edit period',
+              endpoint: (row) => `/leave/periods/${row.id}`,
+              method: 'patch',
+              successMessage: 'Leave period updated',
+              invalidateKeys: [['control-panel', '/leave/periods']],
+              fields: [
+                { name: 'name', label: 'Name', required: true },
+                { name: 'starts_on', label: 'Starts on', type: 'date', required: true },
+                { name: 'ends_on', label: 'Ends on', type: 'date', required: true },
+                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+              ],
+            },
+            deactivate: {
+              label: 'Deactivate period',
+              endpoint: (row) => `/leave/periods/${row.id}`,
+              method: 'patch',
+              successMessage: 'Leave period deactivated',
+              invalidateKeys: [['control-panel', '/leave/periods']],
+              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
             },
           }}
         />
@@ -1524,6 +1701,28 @@ export function LeaveControlPage() {
                 { name: 'is_recurring', label: 'Recurring yearly', type: 'checkbox' },
                 { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
               ],
+            },
+            edit: {
+              label: 'Edit holiday',
+              endpoint: (row) => `/leave/holidays/${row.id}`,
+              method: 'patch',
+              successMessage: 'Holiday updated',
+              invalidateKeys: [['control-panel', '/leave/holidays']],
+              fields: [
+                { name: 'name', label: 'Name', required: true },
+                { name: 'date', label: 'Date', type: 'date', required: true },
+                { name: 'organization_location_id', label: 'Location ID', type: 'number' },
+                { name: 'is_recurring', label: 'Recurring yearly', type: 'checkbox' },
+                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+              ],
+            },
+            deactivate: {
+              label: 'Deactivate holiday',
+              endpoint: (row) => `/leave/holidays/${row.id}`,
+              method: 'patch',
+              successMessage: 'Holiday deactivated',
+              invalidateKeys: [['control-panel', '/leave/holidays']],
+              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
             },
           }}
         />
@@ -1603,9 +1802,35 @@ export function AttendanceControlPage() {
                 { name: 'starts_at', label: 'Starts at', type: 'time', required: true },
                 { name: 'ends_at', label: 'Ends at', type: 'time', required: true },
                 { name: 'break_minutes', label: 'Break minutes', type: 'number', defaultValue: 0 },
+                { name: 'is_overnight', label: 'Overnight shift', type: 'checkbox' },
                 { name: 'is_default', label: 'Default shift', type: 'checkbox' },
                 { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
               ],
+            },
+            edit: {
+              label: 'Edit shift',
+              endpoint: (row) => `/attendance/shifts/${row.id}`,
+              method: 'patch',
+              successMessage: 'Work shift updated',
+              invalidateKeys: [['control-panel', '/attendance/shifts']],
+              fields: [
+                { name: 'name', label: 'Name', required: true },
+                { name: 'code', label: 'Code', required: true },
+                { name: 'starts_at', label: 'Starts at', type: 'time', required: true },
+                { name: 'ends_at', label: 'Ends at', type: 'time', required: true },
+                { name: 'break_minutes', label: 'Break minutes', type: 'number', defaultValue: 0 },
+                { name: 'is_overnight', label: 'Overnight shift', type: 'checkbox' },
+                { name: 'is_default', label: 'Default shift', type: 'checkbox' },
+                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+              ],
+            },
+            deactivate: {
+              label: 'Deactivate shift',
+              endpoint: (row) => `/attendance/shifts/${row.id}`,
+              method: 'patch',
+              successMessage: 'Work shift deactivated',
+              invalidateKeys: [['control-panel', '/attendance/shifts']],
+              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
             },
           }}
         />

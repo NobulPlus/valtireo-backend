@@ -158,14 +158,16 @@ export function LoginPage() {
                       className="h-10 pr-10"
                       {...register('password')}
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-muted transition-colors hover:text-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
+                      className="absolute right-1 top-1"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    </Button>
                   </div>
                 </Field>
 

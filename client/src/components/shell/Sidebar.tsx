@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { NAV_GROUPS } from '@/components/shell/navConfig';
@@ -6,11 +7,22 @@ import { cn } from '@/lib/cn';
 
 export function Sidebar() {
   const { hasAnyRole, hasPermission, moduleByKey, session } = useAuth();
+  const [orgLogoFailed, setOrgLogoFailed] = useState(false);
+  const orgLogoUrl = session?.workspace?.identity?.logo_url;
 
   return (
     <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-border bg-[var(--workspace-sidebar,var(--color-pine))] text-white lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
-        <Logomark size={18} withBackground={false} />
+        {orgLogoUrl && !orgLogoFailed ? (
+          <img
+            src={orgLogoUrl}
+            alt={`${session?.workspace?.workspace_name ?? 'Organization'} logo`}
+            className="h-[18px] w-[18px] flex-shrink-0 rounded-sm object-cover"
+            onError={() => setOrgLogoFailed(true)}
+          />
+        ) : (
+          <Logomark size={18} withBackground={false} />
+        )}
         <span className="font-display text-[15px] font-semibold tracking-tight">
           Valtireo
         </span>

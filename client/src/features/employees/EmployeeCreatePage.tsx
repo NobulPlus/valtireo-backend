@@ -5,12 +5,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Download, FileSpreadsheet, Upload, UserPlus, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Alert } from '@/components/ui/Alert';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { CopyableSecret } from '@/components/ui/CopyableSecret';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
+import { PhoneInput } from '@/components/ui/PhoneInput';
 import { Button } from '@/components/ui/Button';
 import { AsyncSelect, type AsyncOption } from '@/components/ui/AsyncSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
+import { Modal } from '@/components/ui/Modal';
 import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
@@ -58,6 +62,7 @@ function EmployeeCreateContent() {
   const toast = useToast();
   const [reportingManager, setReportingManager] = useState<AsyncOption | null>(null);
   const [importResult, setImportResult] = useState<TemplateImportResult | null>(null);
+  const [invitationLink, setInvitationLink] = useState<{ url: string; employeeId: number } | null>(null);
 
   const {
     register,
@@ -93,6 +98,7 @@ function EmployeeCreateContent() {
   const selectedGradeLevelId = watch('grade_level_id') ?? '';
   const selectedEmploymentTypeId = watch('employment_type_id') ?? '';
   const selectedLocationId = watch('organization_location_id') ?? '';
+  const phone = watch('phone') ?? '';
   const units = useMemo(
     () =>
       (lookupsQuery.data?.units ?? []).filter(
@@ -121,7 +127,15 @@ function EmployeeCreateContent() {
         send_invitation: values.send_invitation,
       });
       toast.success('Employee created', `${result.employee.full_name} has been added successfully.`);
-      navigate(`/employees/${result.employee.id}`);
+
+      if (result.invitation) {
+        setInvitationLink({
+          url: `${window.location.origin}/accept-invitation/${result.invitation.token}`,
+          employeeId: result.employee.id,
+        });
+      } else {
+        navigate(`/employees/${result.employee.id}`);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.errors) {
         Object.entries(error.errors).forEach(([field, messages]) => {
@@ -136,6 +150,13 @@ function EmployeeCreateContent() {
         toast.error('Could not create employee', 'Something went wrong. Please try again.');
       }
     }
+  }
+
+  function closeInvitationModal() {
+    if (invitationLink) {
+      navigate(`/employees/${invitationLink.employeeId}`);
+    }
+    setInvitationLink(null);
   }
 
   async function handleDownloadTemplate() {
@@ -271,7 +292,12 @@ function EmployeeCreateContent() {
               <Input id="work_email" type="email" invalid={Boolean(errors.work_email)} {...register('work_email')} />
             </Field>
             <Field label="Phone" htmlFor="phone" error={errors.phone?.message}>
-              <Input id="phone" {...register('phone')} />
+              <PhoneInput
+                id="phone"
+                value={phone}
+                onChange={(value) => setValue('phone', value, { shouldDirty: true, shouldValidate: true })}
+                invalid={Boolean(errors.phone)}
+              />
             </Field>
             <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} required>
               <Input id="first_name" invalid={Boolean(errors.first_name)} {...register('first_name')} />
@@ -381,10 +407,11 @@ function EmployeeCreateContent() {
             <label className="flex items-start gap-3 text-sm">
               <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-border" {...register('send_invitation')} />
               <span>
-                <span className="block font-medium text-strong">Send invitation email</span>
+                <span className="block font-medium text-strong">Send invitation</span>
                 <span className="block text-muted">
-                  The employee will receive an invitation to set a password and complete their profile. Leave this
-                  unchecked to create a draft record you can invite later.
+                  Generates a link the employee uses to set a password and complete their profile &mdash; email delivery
+                  isn't wired up yet, so you'll get the link to share yourself. Leave this unchecked to create a draft
+                  record you can invite later.
                 </span>
               </span>
             </label>
@@ -402,6 +429,25 @@ function EmployeeCreateContent() {
           </Button>
         </div>
       </form>
+
+      <Modal
+        open={Boolean(invitationLink)}
+        onClose={closeInvitationModal}
+        title="Invitation link ready"
+        footer={
+          <Button type="button" variant="primary" onClick={closeInvitationModal}>
+            Continue to employee record
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <Alert tone="warning">
+            This link is shown once and isn't emailed. Share it with the employee so they can set their password and
+            activate their account.
+          </Alert>
+          {invitationLink && <CopyableSecret value={invitationLink.url} label="Copy invitation link" />}
+        </div>
+      </Modal>
     </div>
   );
 }

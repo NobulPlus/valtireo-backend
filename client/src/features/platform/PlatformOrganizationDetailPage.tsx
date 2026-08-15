@@ -8,21 +8,49 @@ import {
   FileCheck2,
   Layers3,
   MapPin,
+  Pencil,
   Power,
+  Settings2,
   Users,
 } from 'lucide-react';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Field } from '@/components/ui/Field';
+import { Input, Textarea } from '@/components/ui/Input';
+import { SelectMenu } from '@/components/ui/SelectMenu';
 import { StatTile } from '@/components/ui/StatTile';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { Modal } from '@/components/ui/Modal';
-import { ModalCancelAction, ModalConfirmAction } from '@/components/ui/ModalActions';
-import { Textarea } from '@/components/ui/Input';
+import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
 import { ApiError } from '@/lib/apiClient';
-import { usePlatformOrganization, useUpdateOrganizationStatus } from '@/features/platform/api';
+import { isValidEmail } from '@/lib/validation';
+import {
+  usePlatformOrganization,
+  useUpdateOrganizationModule,
+  useUpdateOrganizationStatus,
+  useUpdateOrganizationWorkspace,
+} from '@/features/platform/api';
+import type { PlatformOrganizationDetail } from '@/types/api';
+
+type ModuleRow = PlatformOrganizationDetail['modules'][number];
+type ModuleStatus = 'active' | 'trial' | 'suspended';
+type Duration = 'forever' | 'one_year' | 'custom';
+
+const STATUS_OPTIONS: { value: ModuleStatus; label: string; description: string }[] = [
+  { value: 'active', label: 'Active', description: 'Full access to the module' },
+  { value: 'trial', label: 'Trial', description: 'Time-boxed evaluation access' },
+  { value: 'suspended', label: 'Disabled', description: 'Hidden and inaccessible to the organization' },
+];
+
+const DURATION_OPTIONS: { value: Duration; label: string }[] = [
+  { value: 'forever', label: 'Forever - no expiry' },
+  { value: 'one_year', label: '1 year from today' },
+  { value: 'custom', label: 'Specific date' },
+];
 
 function fallback(value: string | null | undefined): string {
   return value || 'Not set';
@@ -33,18 +61,21 @@ function formatDate(value: string | null): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
 }
 
-export function PlatformOrganizationDetailPage() {
-  const { id } = useParams<{ id: string }>();
+function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganizationDetail; id: string | undefined }) {
   const [statusAction, setStatusAction] = useState<'active' | 'suspended' | null>(null);
   const [reason, setReason] = useState('');
-  const organization = usePlatformOrganization(id);
+  const [managingModule, setManagingModule] = useState<ModuleRow | null>(null);
+  const [moduleStatus, setModuleStatus] = useState<ModuleStatus>('active');
+  const [moduleDuration, setModuleDuration] = useState<Duration>('forever');
+  const [moduleExpiresAt, setModuleExpiresAt] = useState('');
+  const [editingWorkspace, setEditingWorkspace] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState('');
+  const [workspaceSupportEmail, setWorkspaceSupportEmail] = useState('');
+  const [workspaceTimezone, setWorkspaceTimezone] = useState('');
   const statusMutation = useUpdateOrganizationStatus(id);
+  const moduleMutation = useUpdateOrganizationModule(id);
+  const workspaceMutation = useUpdateOrganizationWorkspace(id);
 
-  if (organization.isLoading) return <LoadingState label="Loading organization..." />;
-  if (organization.isError) return <ErrorState error={organization.error} onRetry={() => organization.refetch()} />;
-  if (!organization.data) return <EmptyState title="Organization data is not available" />;
-
-  const data = organization.data;
   const org = data.organization;
   const isSuspended = org.status === 'suspended';
   const actionLabel = statusAction === 'suspended' ? 'Suspend organization' : 'Reactivate organization';
@@ -59,6 +90,49 @@ export function PlatformOrganizationDetailPage() {
     });
     setStatusAction(null);
     setReason('');
+  }
+
+  const moduleMutationError = moduleMutation.error instanceof ApiError ? moduleMutation.error.message : null;
+
+  function openModuleManager(module: ModuleRow) {
+    moduleMutation.reset();
+    setModuleStatus(module.status === 'locked' || module.status === 'suspended' ? 'active' : module.status);
+    setModuleDuration(module.expires_at ? 'custom' : 'forever');
+    setModuleExpiresAt(module.expires_at ? module.expires_at.slice(0, 10) : '');
+    setManagingModule(module);
+  }
+
+  async function submitModuleAction() {
+    if (!managingModule) return;
+
+    await moduleMutation.mutateAsync({
+      moduleId: managingModule.id,
+      status: moduleStatus,
+      duration: moduleStatus === 'suspended' ? undefined : moduleDuration,
+      expires_at: moduleStatus !== 'suspended' && moduleDuration === 'custom' ? moduleExpiresAt : undefined,
+    });
+    setManagingModule(null);
+  }
+
+  const workspaceMutationError = workspaceMutation.error instanceof ApiError ? workspaceMutation.error.message : null;
+  const workspaceSupportEmailError =
+    workspaceSupportEmail.trim() && !isValidEmail(workspaceSupportEmail) ? 'Enter a valid email address' : undefined;
+
+  function openWorkspaceEditor() {
+    workspaceMutation.reset();
+    setWorkspaceName(data.workspace.workspace_name);
+    setWorkspaceSupportEmail(data.workspace.identity.support_email ?? '');
+    setWorkspaceTimezone(data.workspace.localization.timezone);
+    setEditingWorkspace(true);
+  }
+
+  async function submitWorkspaceEdit() {
+    await workspaceMutation.mutateAsync({
+      name: workspaceName.trim(),
+      support_email: workspaceSupportEmail.trim() || null,
+      timezone: workspaceTimezone.trim(),
+    });
+    setEditingWorkspace(false);
   }
 
   return (
@@ -111,6 +185,9 @@ export function PlatformOrganizationDetailPage() {
         <Card>
           <CardHeader>
             <CardTitle>Workspace identity</CardTitle>
+            <Button variant="ghost" size="icon" title="Edit workspace identity" aria-label="Edit workspace identity" onClick={openWorkspaceEditor}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
           </CardHeader>
           <CardBody className="space-y-3 text-sm">
             <InfoRow label="Workspace name" value={data.workspace.workspace_name} />
@@ -123,20 +200,28 @@ export function PlatformOrganizationDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Subscribed modules</CardTitle>
+            <CardTitle>Modules</CardTitle>
             <Layers3 className="h-4 w-4 text-muted" />
           </CardHeader>
           <CardBody className="space-y-2">
             {data.modules.length === 0 ? (
-              <EmptyState title="No modules subscribed" />
+              <EmptyState title="No modules configured on the platform" />
             ) : (
               data.modules.map((module) => (
-                <div key={module.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                  <div>
+                <div key={module.id} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-strong">{module.name ?? module.key}</p>
-                    <p className="text-xs text-muted">{module.category ?? 'Uncategorized'} - expires {formatDate(module.expires_at)}</p>
+                    <p className="text-xs text-muted">
+                      {module.category ?? 'Uncategorized'}
+                      {module.status !== 'locked' && ` - expires ${formatDate(module.expires_at)}`}
+                    </p>
                   </div>
-                  <StatusBadge status={module.status} />
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <StatusBadge status={module.status} />
+                    <Button variant="ghost" size="icon" title="Manage module" aria-label="Manage module" onClick={() => openModuleManager(module)}>
+                      <Settings2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
@@ -253,8 +338,150 @@ export function PlatformOrganizationDetailPage() {
           {mutationError && <Alert>{mutationError}</Alert>}
         </div>
       </Modal>
+
+      <Modal
+        open={Boolean(managingModule)}
+        onClose={() => {
+          if (!moduleMutation.isPending) setManagingModule(null);
+        }}
+        title={managingModule ? `Manage ${managingModule.name ?? managingModule.key}` : 'Manage module'}
+        footer={
+          <>
+            <ModalCancelAction disabled={moduleMutation.isPending} onClick={() => setManagingModule(null)} />
+            <ModalSaveAction
+              title="Save module access"
+              isLoading={moduleMutation.isPending}
+              disabled={moduleStatus !== 'suspended' && moduleDuration === 'custom' && !moduleExpiresAt}
+              onClick={submitModuleAction}
+            />
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {managingModule?.description && <p className="leading-6 text-muted">{managingModule.description}</p>}
+
+          <Field label="Access">
+            <SelectMenu
+              value={moduleStatus}
+              onChange={(value) => setModuleStatus(value as ModuleStatus)}
+              options={STATUS_OPTIONS}
+              disabled={moduleMutation.isPending}
+            />
+          </Field>
+
+          {moduleStatus !== 'suspended' && (
+            <Field label="Duration">
+              <SelectMenu
+                value={moduleDuration}
+                onChange={(value) => setModuleDuration(value as Duration)}
+                options={DURATION_OPTIONS}
+                disabled={moduleMutation.isPending}
+              />
+            </Field>
+          )}
+
+          {moduleStatus !== 'suspended' && moduleDuration === 'custom' && (
+            <Field label="Expires on">
+              <DatePicker value={moduleExpiresAt} onChange={setModuleExpiresAt} />
+            </Field>
+          )}
+
+          {moduleMutationError && <Alert>{moduleMutationError}</Alert>}
+        </div>
+      </Modal>
+
+      <Modal
+        open={editingWorkspace}
+        onClose={() => {
+          if (!workspaceMutation.isPending) setEditingWorkspace(false);
+        }}
+        title="Edit workspace identity"
+        footer={
+          <>
+            <ModalCancelAction disabled={workspaceMutation.isPending} onClick={() => setEditingWorkspace(false)} />
+            <ModalSaveAction
+              isLoading={workspaceMutation.isPending}
+              disabled={!workspaceName.trim() || !workspaceTimezone.trim() || Boolean(workspaceSupportEmailError)}
+              onClick={submitWorkspaceEdit}
+            />
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="leading-6 text-muted">
+            Changes here are made on behalf of {org.name} and apply immediately to their workspace.
+          </p>
+
+          <Field label="Workspace name" required>
+            <Input
+              value={workspaceName}
+              onChange={(event) => setWorkspaceName(event.target.value)}
+              disabled={workspaceMutation.isPending}
+            />
+          </Field>
+
+          <Field
+            label="Support email"
+            hint="Shown to the organization's employees for help requests."
+            error={workspaceSupportEmailError}
+          >
+            <Input
+              type="email"
+              invalid={Boolean(workspaceSupportEmailError)}
+              value={workspaceSupportEmail}
+              onChange={(event) => setWorkspaceSupportEmail(event.target.value)}
+              placeholder="support@yourorg.com"
+              disabled={workspaceMutation.isPending}
+            />
+          </Field>
+
+          <Field label="Timezone" required hint="IANA timezone, e.g. Africa/Lagos.">
+            <Input
+              value={workspaceTimezone}
+              onChange={(event) => setWorkspaceTimezone(event.target.value)}
+              disabled={workspaceMutation.isPending}
+            />
+          </Field>
+
+          {workspaceMutationError && <Alert>{workspaceMutationError}</Alert>}
+        </div>
+      </Modal>
     </div>
   );
+}
+
+export function PlatformOrganizationDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const organization = usePlatformOrganization(id);
+
+  if (organization.isLoading) {
+    return (
+      <div>
+        <PageHeader title="Organization" breadcrumbs={[{ label: 'Platform console', to: '/platform' }]} />
+        <LoadingState label="Loading organization..." fill />
+      </div>
+    );
+  }
+
+  if (organization.isError) {
+    return (
+      <div>
+        <PageHeader title="Organization" breadcrumbs={[{ label: 'Platform console', to: '/platform' }]} />
+        <ErrorState error={organization.error} onRetry={() => organization.refetch()} />
+      </div>
+    );
+  }
+
+  if (!organization.data) {
+    return (
+      <div>
+        <PageHeader title="Organization" breadcrumbs={[{ label: 'Platform console', to: '/platform' }]} />
+        <EmptyState title="Organization data is not available" />
+      </div>
+    );
+  }
+
+  return <PlatformOrganizationDetailContent data={organization.data} id={id} />;
 }
 
 function InfoRow({ label, value }: { label: string; value: string | null }) {

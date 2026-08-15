@@ -1,19 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, Circle, Palette, Save } from 'lucide-react';
+import { CheckCircle2, Circle, Palette, Save, Trash2, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { Logomark } from '@/components/ui/Logomark';
+import { SelectMenu } from '@/components/ui/SelectMenu';
 import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
-import { useSetupChecklist, useWorkspace } from '@/features/workspace/api';
+import { useSetupChecklist, useUploadWorkspaceLogo, useRemoveWorkspaceLogo, useWorkspace } from '@/features/workspace/api';
 import { api, ApiError } from '@/lib/apiClient';
 import type { WorkspaceSettings } from '@/types/api';
 import { cn } from '@/lib/cn';
+import { isValidEmail } from '@/lib/validation';
 import { useAuth } from '@/context/AuthContext';
 
 function setupControlRoute(actionUrl?: string): string | null {
@@ -51,6 +54,9 @@ function WorkspaceContent() {
     timezone: string;
     date_format: string;
     currency: string;
+    allow_employee_directory: boolean;
+    show_org_chart: boolean;
+    allow_profile_corrections: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -69,6 +75,9 @@ function WorkspaceContent() {
         timezone: workspace.localization.timezone,
         date_format: workspace.localization.date_format,
         currency: workspace.localization.currency,
+        allow_employee_directory: workspace.employee_experience.allow_employee_directory,
+        show_org_chart: workspace.employee_experience.show_org_chart,
+        allow_profile_corrections: workspace.employee_experience.allow_profile_corrections,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,6 +104,11 @@ function WorkspaceContent() {
           date_format: form?.date_format,
           currency: form?.currency,
         },
+        employee_experience: {
+          allow_employee_directory: form?.allow_employee_directory,
+          show_org_chart: form?.show_org_chart,
+          allow_profile_corrections: form?.allow_profile_corrections,
+        },
       }),
     onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['workspace'] });
@@ -109,11 +123,14 @@ function WorkspaceContent() {
     },
   });
 
-  if (workspaceQuery.isLoading) return <LoadingState label="Loading workspace…" />;
+  if (workspaceQuery.isLoading) return <LoadingState label="Loading workspace…" fill />;
   if (workspaceQuery.isError) return <ErrorState error={workspaceQuery.error} onRetry={() => workspaceQuery.refetch()} />;
 
   const workspace = workspaceQuery.data?.workspace;
   if (!workspace || !form) return null;
+
+  const supportEmailError =
+    form.support_email && !isValidEmail(form.support_email) ? 'Enter a valid email address' : undefined;
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -130,15 +147,17 @@ function WorkspaceContent() {
                 updateMutation.mutate();
               }}
             >
+              <OrgLogoField logoUrl={workspace.identity.logo_url} />
               <Field label="Welcome message" className="sm:col-span-2">
                 <Input
                   value={form.welcome_message}
                   onChange={(event) => setForm({ ...form, welcome_message: event.target.value })}
                 />
               </Field>
-              <Field label="Support email">
+              <Field label="Support email" error={supportEmailError}>
                 <Input
                   type="email"
+                  invalid={Boolean(supportEmailError)}
                   value={form.support_email}
                   onChange={(event) => setForm({ ...form, support_email: event.target.value })}
                   placeholder="support@yourorg.com"
@@ -163,7 +182,7 @@ function WorkspaceContent() {
                 />
               </Field>
               <div className="flex items-center gap-3 sm:col-span-2">
-                <Button type="submit" variant="primary" isLoading={updateMutation.isPending}>
+                <Button type="submit" variant="primary" isLoading={updateMutation.isPending} disabled={Boolean(supportEmailError)}>
                   <Save className="h-3.5 w-3.5" />
                   Save changes
                 </Button>
@@ -203,28 +222,36 @@ function WorkspaceContent() {
                   onChange={(value) => setForm({ ...form, button_color: value })}
                 />
                 <Field label="Font family">
-                  <select
+                  <SelectMenu
                     value={form.font_family}
-                    onChange={(event) => setForm({ ...form, font_family: event.target.value })}
-                    className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-teal focus:ring-2 focus:ring-teal/15"
-                  >
-                    {['Inter', 'Roboto', 'Lato', 'Montserrat', 'Open Sans', 'Source Sans 3'].map((font) => (
-                      <option key={font} value={font}>
-                        {font}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setForm({ ...form, font_family: value })}
+                    options={['Inter', 'Roboto', 'Lato', 'Montserrat', 'Open Sans', 'Source Sans 3'].map((font) => ({
+                      value: font,
+                      label: font,
+                    }))}
+                  />
                 </Field>
                 <Field label="Density">
-                  <select
+                  <SelectMenu
                     value={form.density}
-                    onChange={(event) => setForm({ ...form, density: event.target.value })}
-                    className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm outline-none focus:border-teal focus:ring-2 focus:ring-teal/15"
-                  >
-                    <option value="compact">Compact</option>
-                    <option value="comfortable">Comfortable</option>
-                    <option value="spacious">Spacious</option>
-                  </select>
+                    onChange={(value) => setForm({ ...form, density: value })}
+                    options={[
+                      { value: 'compact', label: 'Compact' },
+                      { value: 'comfortable', label: 'Comfortable' },
+                      { value: 'spacious', label: 'Spacious' },
+                    ]}
+                  />
+                </Field>
+                <Field label="Corner radius">
+                  <SelectMenu
+                    value={form.radius}
+                    onChange={(value) => setForm({ ...form, radius: value })}
+                    options={[
+                      { value: 'sharp', label: 'Sharp' },
+                      { value: 'soft', label: 'Soft' },
+                      { value: 'rounded', label: 'Rounded' },
+                    ]}
+                  />
                 </Field>
               </div>
 
@@ -279,13 +306,30 @@ function WorkspaceContent() {
           <CardHeader>
             <CardTitle>Employee experience</CardTitle>
           </CardHeader>
-          <CardBody className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <SettingRow label="Employee directory" enabled={workspace.employee_experience.allow_employee_directory} />
-            <SettingRow label="Org chart" enabled={workspace.employee_experience.show_org_chart} />
-            <SettingRow
-              label="Profile self-corrections"
-              enabled={workspace.employee_experience.allow_profile_corrections}
-            />
+          <CardBody>
+            <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+              <SettingToggle
+                label="Employee directory"
+                checked={form.allow_employee_directory}
+                onChange={(checked) => setForm({ ...form, allow_employee_directory: checked })}
+              />
+              <SettingToggle
+                label="Org chart"
+                checked={form.show_org_chart}
+                onChange={(checked) => setForm({ ...form, show_org_chart: checked })}
+              />
+              <SettingToggle
+                label="Profile self-corrections"
+                checked={form.allow_profile_corrections}
+                onChange={(checked) => setForm({ ...form, allow_profile_corrections: checked })}
+              />
+            </div>
+            <div className="mt-5 flex items-center gap-3">
+              <Button type="button" variant="primary" isLoading={updateMutation.isPending} onClick={() => updateMutation.mutate()}>
+                <Save className="h-3.5 w-3.5" />
+                Save employee experience
+              </Button>
+            </div>
           </CardBody>
         </Card>
       </div>
@@ -365,14 +409,106 @@ function WorkspaceContent() {
   );
 }
 
-function SettingRow({ label, enabled }: { label: string; enabled: boolean }) {
+function SettingToggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+    <label className="flex items-center justify-between rounded-md border border-border px-3 py-2">
       <span className="text-strong">{label}</span>
-      <span className={cn('text-xs font-medium', enabled ? 'text-success' : 'text-muted')}>
-        {enabled ? 'Enabled' : 'Disabled'}
+      <span className="flex items-center gap-2">
+        <span className={cn('text-xs font-medium', checked ? 'text-success' : 'text-muted')}>
+          {checked ? 'Enabled' : 'Disabled'}
+        </span>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
       </span>
-    </div>
+    </label>
+  );
+}
+
+function OrgLogoField({ logoUrl }: { logoUrl: string | null }) {
+  const uploadMutation = useUploadWorkspaceLogo();
+  const removeMutation = useRemoveWorkspaceLogo();
+  const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      await uploadMutation.mutateAsync(file);
+      setImageFailed(false);
+      toast.success('Logo updated', 'Your organization logo now appears in the sidebar.');
+    } catch (error) {
+      toast.error('Could not upload logo', error instanceof ApiError ? error.message : 'Something went wrong. Please try again.');
+    }
+  }
+
+  async function handleRemove() {
+    try {
+      await removeMutation.mutateAsync();
+      toast.success('Logo removed', 'Switched back to the Valtireo mark.');
+    } catch (error) {
+      toast.error('Could not remove logo', error instanceof ApiError ? error.message : 'Something went wrong. Please try again.');
+    }
+  }
+
+  const showImage = Boolean(logoUrl) && !imageFailed;
+
+  return (
+    <Field label="Organization logo" className="sm:col-span-2" hint="PNG, JPG, or WEBP, up to 2MB. Shown in your sidebar after login.">
+      <div className="flex items-center gap-4">
+        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-surface-soft">
+          {showImage ? (
+            <img
+              src={logoUrl ?? undefined}
+              alt="Organization logo"
+              className="h-full w-full object-cover"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <Logomark size={24} />
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <Button
+            type="button"
+            variant="secondary"
+            isLoading={uploadMutation.isPending}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Upload logo
+          </Button>
+          {logoUrl && (
+            <Button type="button" variant="ghost" isLoading={removeMutation.isPending} onClick={handleRemove}>
+              <Trash2 className="h-3.5 w-3.5" />
+              Remove
+            </Button>
+          )}
+        </div>
+      </div>
+    </Field>
   );
 }
 

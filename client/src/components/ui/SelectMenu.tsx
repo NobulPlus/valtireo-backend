@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -19,6 +20,43 @@ interface SelectMenuProps {
   disabled?: boolean;
 }
 
+interface MenuPosition {
+  top?: number;
+  bottom?: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+}
+
+const GAP = 8;
+const MIN_WIDTH = 220;
+const MAX_MENU_HEIGHT = 256;
+/** Lists shorter than this stay a plain scroll list; at/above it, a filter box appears. */
+const SEARCH_THRESHOLD = 10;
+
+function computePosition(trigger: HTMLElement): MenuPosition {
+  const rect = trigger.getBoundingClientRect();
+  const width = Math.max(rect.width, MIN_WIDTH);
+  const spaceBelow = window.innerHeight - rect.bottom - GAP;
+  const spaceAbove = rect.top - GAP;
+
+  if (spaceBelow < MAX_MENU_HEIGHT && spaceAbove > spaceBelow) {
+    return {
+      bottom: window.innerHeight - rect.top + GAP,
+      left: rect.left,
+      width,
+      maxHeight: Math.min(MAX_MENU_HEIGHT, spaceAbove),
+    };
+  }
+
+  return {
+    top: rect.bottom + GAP,
+    left: rect.left,
+    width,
+    maxHeight: Math.min(MAX_MENU_HEIGHT, Math.max(spaceBelow, 120)),
+  };
+}
+
 export function SelectMenu({
   value,
   onChange,
@@ -29,8 +67,40 @@ export function SelectMenu({
   disabled,
 }: SelectMenuProps) {
   const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
+  const [query, setQuery] = useState('');
+  const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => options.find((option) => option.value === value), [options, value]);
+  const searchable = options.length >= SEARCH_THRESHOLD;
+
+  const filteredOptions = useMemo(() => {
+    if (!searchable) return options;
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter((option) => option.label.toLowerCase().includes(q));
+  }, [options, query, searchable]);
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) {
+      return;
+    }
+
+    const trigger = triggerRef.current;
+
+    function reposition() {
+      setPosition(computePosition(trigger));
+    }
+
+    reposition();
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+
+    return () => {
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -38,7 +108,8 @@ export function SelectMenu({
     }
 
     function handlePointerDown(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setOpen(false);
       }
     }
@@ -58,13 +129,19 @@ export function SelectMenu({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+    }
+  }, [open]);
+
   function select(value: string) {
     onChange(value);
     setOpen(false);
   }
 
   return (
-    <div ref={menuRef} className={cn('relative', className)}>
+    <div ref={triggerRef} className={cn('relative', className)}>
       <button
         type="button"
         disabled={disabled}
@@ -78,33 +155,63 @@ export function SelectMenu({
         <ChevronDown className={cn('h-4 w-4 flex-shrink-0 text-muted transition-transform', open && 'rotate-180')} />
       </button>
 
-      {open && !disabled && (
-        <div className="absolute left-0 z-40 mt-2 max-h-64 w-full min-w-[220px] overflow-y-auto rounded-lg border border-border bg-white p-1.5 shadow-xl">
-          {options.map((option, index) => {
-            const active = option.value === value;
+      {open &&
+        !disabled &&
+        position &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: position.top,
+              bottom: position.bottom,
+              left: position.left,
+              width: position.width,
+              maxHeight: position.maxHeight,
+            }}
+            className="z-[60] overflow-y-auto rounded-lg border border-border bg-white p-1.5 shadow-xl"
+          >
+            {searchable && (
+              <div className="sticky top-0 z-10 mb-1.5 bg-white pb-1.5">
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search..."
+                  className="h-8 w-full rounded-md border border-border px-2 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+                />
+              </div>
+            )}
+            {filteredOptions.length === 0 ? (
+              <p className="px-2.5 py-3 text-xs text-muted">No matches.</p>
+            ) : (
+              filteredOptions.map((option, index) => {
+                const active = option.value === value;
 
-            return (
-              <button
-                key={`${option.value || '__empty'}-${index}`}
-                type="button"
-                disabled={option.disabled}
-                onClick={() => select(option.value)}
-                className={cn(
-                  'flex w-full items-start justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
-                  active ? 'bg-teal/10 text-strong' : 'text-strong hover:bg-surface-soft',
-                  option.disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
-                )}
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{option.label}</span>
-                  {option.description && <span className="block truncate text-xs text-muted">{option.description}</span>}
-                </span>
-                {active && <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
+                return (
+                  <button
+                    key={`${option.value || '__empty'}-${index}`}
+                    type="button"
+                    disabled={option.disabled}
+                    onClick={() => select(option.value)}
+                    className={cn(
+                      'flex w-full items-start justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                      active ? 'bg-teal/10 text-strong' : 'text-strong hover:bg-surface-soft',
+                      option.disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate">{option.label}</span>
+                      {option.description && <span className="block truncate text-xs text-muted">{option.description}</span>}
+                    </span>
+                    {active && <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal" />}
+                  </button>
+                );
+              })
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

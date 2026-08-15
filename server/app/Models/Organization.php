@@ -173,6 +173,11 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(OrganizationModule::class);
     }
 
+    public function statusHistories(): HasMany
+    {
+        return $this->hasMany(OrganizationStatusHistory::class)->latest('id');
+    }
+
     /**
      * @return array<string, string>
      */

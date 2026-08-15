@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Leave\StoreLeaveTypeRequest;
+use App\Http\Requests\Leave\UpdateLeaveTypeRequest;
 use App\Http\Resources\LeaveTypeResource;
 use App\Models\LeaveType;
 use Illuminate\Http\JsonResponse;
@@ -37,5 +38,22 @@ class LeaveTypeController extends Controller
         return response()->json([
             'leave_type' => new LeaveTypeResource($type),
         ], 201);
+    }
+
+    public function update(UpdateLeaveTypeRequest $request, LeaveType $leaveType): JsonResponse
+    {
+        abort_unless($leaveType->organization_id === $request->user()->organization_id, 404);
+
+        $data = $request->validated();
+
+        if (array_key_exists('code', $data)) {
+            $data['code'] = Str::upper($data['code']);
+        }
+
+        $leaveType->update($data);
+
+        return response()->json([
+            'leave_type' => new LeaveTypeResource($leaveType->refresh()),
+        ]);
     }
 }

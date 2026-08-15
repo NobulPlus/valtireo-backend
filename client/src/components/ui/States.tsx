@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, Inbox, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Inbox, ShieldAlert } from 'lucide-react';
 import { ApiError } from '@/lib/apiClient';
 import { Button } from '@/components/ui/Button';
 
-export function LoadingState({ label = 'Loading…' }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted">
-      <Loader2 className="h-5 w-5 animate-spin" />
-      <p className="text-sm">{label}</p>
-    </div>
-  );
+/**
+ * Intentionally renders nothing — the page stays blank/empty while loading
+ * rather than showing a spinner or branded mark. Call sites still pass
+ * `label`/`fill` so no call-site changes are needed if this is revisited.
+ */
+export function LoadingState(_props: { label?: string; fill?: boolean }) {
+  return null;
 }
 
 export function EmptyState({

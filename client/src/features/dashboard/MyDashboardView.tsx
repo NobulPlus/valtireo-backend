@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 export function MyDashboardView() {
   const { data, isLoading, isError, error, refetch } = useMyDashboard();
 
-  if (isLoading) return <LoadingState label="Loading your dashboard…" />;
+  if (isLoading) return <LoadingState label="Loading your dashboard…" fill />;
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
   if (!data) return null;
 

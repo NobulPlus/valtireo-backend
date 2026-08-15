@@ -7,6 +7,7 @@ use App\Models\EmployeeDocument;
 use App\Models\EmployeeInvitation;
 use App\Models\LeaveRequest;
 use App\Models\Organization;
+use App\Models\OrganizationStatusHistory;
 use App\Models\PlatformModule;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -46,6 +47,7 @@ class PlatformAdminService
             'organizations_by_status' => $this->statusBreakdown($filters),
             'module_adoption' => $this->moduleAdoption($organizationIds->all()),
             'recent_organizations' => $this->dashboardOrganizationQuery($filters)
+                ->withCount(['users', 'employees', 'moduleSubscriptions'])
                 ->latest()
                 ->limit(15)
                 ->get()
@@ -219,6 +221,7 @@ class PlatformAdminService
             'locations',
             'moduleSubscriptions.platformModule',
             'users.roles',
+            'statusHistories.changedBy',
         ]);
 
         return [
@@ -248,16 +251,26 @@ class PlatformAdminService
                 'leave_requests_pending' => $organization->leaveRequests()->where('status', 'submitted')->count(),
                 'attendance_records' => $organization->attendanceRecords()->count(),
             ],
-            'modules' => $organization->moduleSubscriptions
-                ->map(fn ($subscription) => [
-                    'id' => $subscription->id,
-                    'key' => $subscription->platformModule?->key,
-                    'name' => $subscription->platformModule?->name,
-                    'category' => $subscription->platformModule?->category,
-                    'status' => $subscription->status,
-                    'starts_at' => $subscription->starts_at,
-                    'expires_at' => $subscription->expires_at,
-                ])
+            'modules' => PlatformModule::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get()
+                ->map(function (PlatformModule $module) use ($organization) {
+                    $subscription = $organization->moduleSubscriptions->firstWhere('platform_module_id', $module->id);
+
+                    return [
+                        'id' => $module->id,
+                        'key' => $module->key,
+                        'name' => $module->name,
+                        'description' => $module->description,
+                        'category' => $module->category,
+                        'status' => $subscription?->status ?? 'locked',
+                        'starts_at' => $subscription?->starts_at,
+                        'expires_at' => $subscription?->expires_at,
+                        'subscription_id' => $subscription?->id,
+                    ];
+                })
                 ->values(),
             'admins' => $organization->users
                 ->filter(fn (User $user) => $user->hasRole('Organization Admin'))
@@ -279,6 +292,16 @@ class PlatformAdminService
                     'country' => $location->country,
                     'is_primary' => $location->is_primary,
                     'is_active' => $location->is_active,
+                ])
+                ->values(),
+            'status_history' => $organization->statusHistories
+                ->map(fn (OrganizationStatusHistory $history) => [
+                    'id' => $history->id,
+                    'previous_status' => $history->previous_status,
+                    'new_status' => $history->new_status,
+                    'reason' => $history->reason,
+                    'changed_by' => $history->changedBy?->name,
+                    'created_at' => $history->created_at,
                 ])
                 ->values(),
         ];

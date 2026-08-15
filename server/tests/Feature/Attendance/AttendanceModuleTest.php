@@ -6,6 +6,7 @@ use App\Models\ApprovalRequest;
 use App\Models\AttendanceCorrectionRequest;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
+use App\Models\Organization;
 use App\Models\User;
 use App\Models\WorkShift;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,7 +31,7 @@ class AttendanceModuleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('attendance_settings.late_grace_minutes', 20);
 
-        $this->postJson('/api/attendance/shifts', [
+        $morningShiftId = $this->postJson('/api/attendance/shifts', [
             'name' => 'Morning Shift',
             'code' => 'morning',
             'starts_at' => '08:00',
@@ -40,7 +41,62 @@ class AttendanceModuleTest extends TestCase
         ])
             ->assertCreated()
             ->assertJsonPath('work_shift.code', 'MORNING')
+            ->assertJsonPath('work_shift.is_default', true)
+            ->json('work_shift.id');
+
+        $this->patchJson("/api/attendance/shifts/{$morningShiftId}", [
+            'break_minutes' => 30,
+        ])
+            ->assertOk()
+            ->assertJsonPath('work_shift.break_minutes', 30)
+            ->assertJsonPath('work_shift.code', 'MORNING');
+
+        $eveningShiftId = $this->postJson('/api/attendance/shifts', [
+            'name' => 'Evening Shift',
+            'code' => 'evening',
+            'starts_at' => '16:00',
+            'ends_at' => '00:00',
+            'is_overnight' => true,
+        ])
+            ->assertCreated()
+            ->json('work_shift.id');
+
+        $this->patchJson("/api/attendance/shifts/{$eveningShiftId}", [
+            'is_default' => true,
+        ])
+            ->assertOk()
             ->assertJsonPath('work_shift.is_default', true);
+
+        $this->assertDatabaseHas('work_shifts', ['id' => $eveningShiftId, 'is_default' => true]);
+        $this->assertDatabaseHas('work_shifts', ['id' => $morningShiftId, 'is_default' => false]);
+    }
+
+    public function test_cannot_update_work_shift_from_another_organization(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $otherOrganization = Organization::query()->create([
+            'name' => 'Other Attendance Tenant',
+            'code' => 'OTHERATTEND',
+            'status' => 'active',
+            'country' => 'Nigeria',
+            'settings' => [],
+        ]);
+        $otherShift = WorkShift::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'name' => 'Other Shift',
+            'code' => 'OTHER-SHIFT',
+            'starts_at' => '08:00',
+            'ends_at' => '16:00',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/attendance/shifts/{$otherShift->id}", ['name' => 'Hijacked'])
+            ->assertNotFound();
+
+        $this->assertDatabaseMissing('work_shifts', ['id' => $otherShift->id, 'name' => 'Hijacked']);
     }
 
     public function test_employee_can_create_own_attendance_record(): void
@@ -131,6 +187,52 @@ class AttendanceModuleTest extends TestCase
             '2026-08-24 09:00:00',
             AttendanceRecord::query()->findOrFail($recordId)->check_in_at->format('Y-m-d H:i:s')
         );
+    }
+
+    public function test_approved_correction_recalculates_duration_net_of_shift_break_minutes(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $shift = WorkShift::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'REGULAR')->firstOrFail();
+        $this->assertSame(60, $shift->break_minutes);
+
+        Sanctum::actingAs($employeeUser);
+
+        $recordId = $this->postJson('/api/attendance/records', [
+            'work_shift_id' => $shift->id,
+            'attendance_date' => '2026-08-25',
+            'check_in_at' => '2026-08-25 09:45:00',
+            'check_out_at' => '2026-08-25 17:00:00',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('attendance_record.duration_minutes', 375)
+            ->json('attendance_record.id');
+
+        $correctionId = $this->postJson('/api/attendance/corrections', [
+            'attendance_record_id' => $recordId,
+            'requested_check_in_at' => '2026-08-25 09:00:00',
+            'requested_check_out_at' => '2026-08-25 17:00:00',
+            'reason' => 'Forgot to clock in after arriving on time.',
+        ])
+            ->assertCreated()
+            ->json('attendance_correction.id');
+
+        $approval = ApprovalRequest::query()
+            ->where('approvable_type', AttendanceCorrectionRequest::class)
+            ->where('approvable_id', $correctionId)
+            ->firstOrFail();
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson("/api/approvals/{$approval->id}/actions", [
+            'action' => 'approve',
+            'note' => 'Correction confirmed.',
+        ])->assertOk();
+
+        // 09:00 to 17:00 is 480 raw minutes; net of the shift's 60-minute break, 420.
+        $this->assertSame(420, AttendanceRecord::query()->findOrFail($recordId)->duration_minutes);
     }
 
     public function test_employee_only_sees_own_attendance_records(): void

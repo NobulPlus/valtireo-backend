@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
@@ -24,10 +25,12 @@ import { ModalCancelAction, ModalConfirmAction, ModalSaveAction, ModalSendAction
 import { AsyncSelect, type AsyncOption } from '@/components/ui/AsyncSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input, Textarea } from '@/components/ui/Input';
+import { PhoneInput } from '@/components/ui/PhoneInput';
 import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
 import { useAuth } from '@/context/AuthContext';
+import { isValidEmail } from '@/lib/validation';
 import {
   downloadEmployeeProfileCsv,
   searchEmployees,
@@ -166,9 +169,9 @@ function actionError(error: unknown, fallback: string): string {
 function GenderIcon({ gender }: { gender?: string | null }) {
   const tone =
     gender === 'female'
-      ? 'bg-rose-100 text-rose-700'
+      ? 'bg-pending-bg text-pending'
       : gender === 'male'
-        ? 'bg-sky-100 text-sky-700'
+        ? 'bg-info-bg text-info'
         : 'bg-teal/10 text-teal';
 
   return (
@@ -189,15 +192,12 @@ function GenderBadge({ gender }: { gender?: string | null }) {
   );
 }
 
-function EmployeeDetailContent() {
-  const { id } = useParams<{ id: string }>();
+function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const { hasPermission } = useAuth();
   const toast = useToast();
   const lookups = useSetupLookups();
-  const { data: employee, isLoading, isError, error, refetch } = useEmployee(id);
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmApprove, setConfirmApprove] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
@@ -232,15 +232,11 @@ function EmployeeDetailContent() {
   const [managerEffectiveDate, setManagerEffectiveDate] = useState(today());
   const [managerReason, setManagerReason] = useState('');
   const [managerNote, setManagerNote] = useState('');
-  const approveMutation = useApproveOnboarding(Number(id));
-  const updateEmployeeMutation = useUpdateEmployee(Number(id));
-  const statusMutation = useChangeEmployeeStatus(Number(id));
-  const managerMutation = useChangeEmployeeManager(Number(id));
-  const correctionMutation = useRequestEmployeeCorrection(Number(id));
-
-  if (isLoading) return <LoadingState label="Loading employee…" />;
-  if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
-  if (!employee) return null;
+  const approveMutation = useApproveOnboarding(employee.id);
+  const updateEmployeeMutation = useUpdateEmployee(employee.id);
+  const statusMutation = useChangeEmployeeStatus(employee.id);
+  const managerMutation = useChangeEmployeeManager(employee.id);
+  const correctionMutation = useRequestEmployeeCorrection(employee.id);
 
   const currentStatus = employee.status;
   const canApprove = hasPermission('employees.update') && employee.status === 'onboarding';
@@ -378,118 +374,70 @@ function EmployeeDetailContent() {
               </Button>
             )}
             {canViewEmployee && (
-              <div className="relative">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setActionsOpen((current) => !current)}
-                  aria-label="Employee actions"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                  Actions
-                </Button>
-                {actionsOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setActionsOpen(false)} />
-                    <div className="absolute right-0 z-20 mt-2 w-56 rounded-md border border-border bg-white py-1 shadow-lg">
-                      {canUpdateEmployee && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActionsOpen(false);
-                            openEditModal(employee);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                        >
-                          <Edit3 className="h-4 w-4 text-muted" />
-                          Edit profile
-                        </button>
-                      )}
-                      {canApprove && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActionsOpen(false);
-                            setConfirmApprove(true);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                        >
-                          <CheckCircle2 className="h-4 w-4 text-muted" />
-                          Approve onboarding
-                        </button>
-                      )}
-                      {canUpdateEmployee && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActionsOpen(false);
-                            setNewStatus(currentStatus);
-                            setStatusEffectiveDate(today());
-                            setStatusModalOpen(true);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                        >
-                          <UserRoundCheck className="h-4 w-4 text-muted" />
-                          Change status
-                        </button>
-                      )}
-                      {canUpdateEmployee && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActionsOpen(false);
-                            setManagerEffectiveDate(today());
-                            setManagerModalOpen(true);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                        >
-                          <UserCog className="h-4 w-4 text-muted" />
-                          Change manager
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionsOpen(false);
-                          setTab('documents');
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                      >
-                        <FileText className="h-4 w-4 text-muted" />
-                        View documents
-                      </button>
-                      {canUpdateEmployee && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActionsOpen(false);
-                            setCorrectionModalOpen(true);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                        >
-                          <AlertTriangle className="h-4 w-4 text-muted" />
-                          Request correction
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionsOpen(false);
-                          void downloadEmployeeProfileCsv(employee)
-                            .then(() => toast.success('Profile exported', 'The employee profile CSV has been downloaded.'))
-                            .catch((error) => {
-                              toast.error('Could not export profile', actionError(error, 'Could not export employee profile.'));
-                            });
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-strong hover:bg-surface-soft"
-                      >
-                        <Download className="h-4 w-4 text-muted" />
-                        Export profile
-                      </button>
-                    </div>
-                  </>
+              <Dropdown
+                align="right"
+                panelClassName="w-56"
+                trigger={({ toggle }) => (
+                  <Button variant="secondary" size="sm" onClick={toggle} aria-label="Employee actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                    Actions
+                  </Button>
                 )}
-              </div>
+              >
+                {canUpdateEmployee && (
+                  <DropdownMenuItem icon={Edit3} onClick={() => openEditModal(employee)}>
+                    Edit profile
+                  </DropdownMenuItem>
+                )}
+                {canApprove && (
+                  <DropdownMenuItem icon={CheckCircle2} onClick={() => setConfirmApprove(true)}>
+                    Approve onboarding
+                  </DropdownMenuItem>
+                )}
+                {canUpdateEmployee && (
+                  <DropdownMenuItem
+                    icon={UserRoundCheck}
+                    onClick={() => {
+                      setNewStatus(currentStatus);
+                      setStatusEffectiveDate(today());
+                      setStatusModalOpen(true);
+                    }}
+                  >
+                    Change status
+                  </DropdownMenuItem>
+                )}
+                {canUpdateEmployee && (
+                  <DropdownMenuItem
+                    icon={UserCog}
+                    onClick={() => {
+                      setManagerEffectiveDate(today());
+                      setManagerModalOpen(true);
+                    }}
+                  >
+                    Change manager
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem icon={FileText} onClick={() => setTab('documents')}>
+                  View documents
+                </DropdownMenuItem>
+                {canUpdateEmployee && (
+                  <DropdownMenuItem icon={AlertTriangle} onClick={() => setCorrectionModalOpen(true)}>
+                    Request correction
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  icon={Download}
+                  onClick={() => {
+                    void downloadEmployeeProfileCsv(employee)
+                      .then(() => toast.success('Profile exported', 'The employee profile CSV has been downloaded.'))
+                      .catch((error) => {
+                        toast.error('Could not export profile', actionError(error, 'Could not export employee profile.'));
+                      });
+                  }}
+                >
+                  Export profile
+                </DropdownMenuItem>
+              </Dropdown>
             )}
           </>
         }
@@ -755,7 +703,14 @@ function EmployeeDetailContent() {
         footer={
           <>
             <ModalCancelAction onClick={() => setEditModalOpen(false)} />
-            <ModalSaveAction isLoading={updateEmployeeMutation.isPending} onClick={handleUpdateEmployee} />
+            <ModalSaveAction
+              isLoading={updateEmployeeMutation.isPending}
+              disabled={
+                !isValidEmail(editForm.work_email) ||
+                (Boolean(editForm.personal_email) && !isValidEmail(editForm.personal_email))
+              }
+              onClick={handleUpdateEmployee}
+            />
           </>
         }
       >
@@ -772,11 +727,16 @@ function EmployeeDetailContent() {
           <ActionField label="Middle name">
             <Input value={editForm.middle_name} onChange={(event) => setEditForm((current) => ({ ...current, middle_name: event.target.value }))} />
           </ActionField>
-          <ActionField label="Work email">
-            <Input type="email" value={editForm.work_email} onChange={(event) => setEditForm((current) => ({ ...current, work_email: event.target.value }))} />
+          <ActionField label="Work email" error={editForm.work_email && !isValidEmail(editForm.work_email) ? 'Enter a valid email address' : undefined}>
+            <Input
+              type="email"
+              invalid={Boolean(editForm.work_email) && !isValidEmail(editForm.work_email)}
+              value={editForm.work_email}
+              onChange={(event) => setEditForm((current) => ({ ...current, work_email: event.target.value }))}
+            />
           </ActionField>
           <ActionField label="Phone">
-            <Input value={editForm.phone} onChange={(event) => setEditForm((current) => ({ ...current, phone: event.target.value }))} />
+            <PhoneInput value={editForm.phone} onChange={(value) => setEditForm((current) => ({ ...current, phone: value }))} />
           </ActionField>
           <ActionField label="Start date">
             <DatePicker value={editForm.start_date} onChange={(value) => setEditForm((current) => ({ ...current, start_date: value }))} />
@@ -825,20 +785,25 @@ function EmployeeDetailContent() {
                   options={GENDER_OPTIONS}
                 />
               </ActionField>
-              <ActionField label="Personal email">
-                <Input type="email" value={editForm.personal_email} onChange={(event) => setEditForm((current) => ({ ...current, personal_email: event.target.value }))} />
+              <ActionField label="Personal email" error={editForm.personal_email && !isValidEmail(editForm.personal_email) ? 'Enter a valid email address' : undefined}>
+                <Input
+                  type="email"
+                  invalid={Boolean(editForm.personal_email) && !isValidEmail(editForm.personal_email)}
+                  value={editForm.personal_email}
+                  onChange={(event) => setEditForm((current) => ({ ...current, personal_email: event.target.value }))}
+                />
               </ActionField>
               <ActionField label="Next of kin name">
                 <Input value={editForm.next_of_kin_name} onChange={(event) => setEditForm((current) => ({ ...current, next_of_kin_name: event.target.value }))} />
               </ActionField>
               <ActionField label="Next of kin phone">
-                <Input value={editForm.next_of_kin_phone} onChange={(event) => setEditForm((current) => ({ ...current, next_of_kin_phone: event.target.value }))} />
+                <PhoneInput value={editForm.next_of_kin_phone} onChange={(value) => setEditForm((current) => ({ ...current, next_of_kin_phone: value }))} />
               </ActionField>
               <ActionField label="Emergency contact name">
                 <Input value={editForm.emergency_contact_name} onChange={(event) => setEditForm((current) => ({ ...current, emergency_contact_name: event.target.value }))} />
               </ActionField>
               <ActionField label="Emergency contact phone">
-                <Input value={editForm.emergency_contact_phone} onChange={(event) => setEditForm((current) => ({ ...current, emergency_contact_phone: event.target.value }))} />
+                <PhoneInput value={editForm.emergency_contact_phone} onChange={(value) => setEditForm((current) => ({ ...current, emergency_contact_phone: value }))} />
               </ActionField>
               <div className="md:col-span-2">
                 <ActionField label="Residential address">
@@ -960,11 +925,12 @@ function EmployeeDetailContent() {
   );
 }
 
-function ActionField({ label, children }: { label: string; children: ReactNode }) {
+function ActionField({ label, error, children }: { label: string; error?: string; children: ReactNode }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
       {children}
+      {error && <span className="mt-1 block text-xs text-danger">{error}</span>}
     </label>
   );
 }
@@ -987,10 +953,37 @@ function ApprovalCheck({ complete, label, value }: { complete: boolean; label: s
   );
 }
 
+function EmployeeDetailShell() {
+  const { id } = useParams<{ id: string }>();
+  const { data: employee, isLoading, isError, error, refetch } = useEmployee(id);
+
+  if (isLoading) {
+    return (
+      <div>
+        <PageHeader title="Employee" breadcrumbs={[{ label: 'Employees', to: '/employees' }]} />
+        <LoadingState label="Loading employee…" fill />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div>
+        <PageHeader title="Employee" breadcrumbs={[{ label: 'Employees', to: '/employees' }]} />
+        <ErrorState error={error} onRetry={() => refetch()} />
+      </div>
+    );
+  }
+
+  if (!employee) return null;
+
+  return <EmployeeDetailContent employee={employee} />;
+}
+
 export function EmployeeDetailPage() {
   return (
     <RequirePermission permission="employees.view">
-      <EmployeeDetailContent />
+      <EmployeeDetailShell />
     </RequirePermission>
   );
 }

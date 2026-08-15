@@ -40,19 +40,17 @@ class EmployeeDocumentController extends Controller
     {
         $data = $request->validated();
 
-        if ($request->hasFile('file')) {
-            $employeeId = $data['employee_id'] ?? $request->user()->employee?->id;
-            abort_if(! $employeeId, 422, 'An employee record is required to upload a document file.');
+        $employeeId = $data['employee_id'] ?? $request->user()->employee?->id;
+        abort_if(! $employeeId, 422, 'An employee record is required to upload a document file.');
 
-            $file = $request->file('file');
-            $data['file_name'] = $data['file_name'] ?? $file->getClientOriginalName();
-            $data['mime_type'] = $file->getClientMimeType();
-            $data['file_size'] = $file->getSize();
-            $data['file_path'] = $file->store(
-                "organizations/{$request->user()->organization_id}/employees/{$employeeId}/documents",
-                'local'
-            );
-        }
+        $file = $request->file('file');
+        $data['file_name'] = $data['file_name'] ?? $file->getClientOriginalName();
+        $data['mime_type'] = $file->getClientMimeType();
+        $data['file_size'] = $file->getSize();
+        $data['file_path'] = $file->store(
+            "organizations/{$request->user()->organization_id}/employees/{$employeeId}/documents",
+            'local'
+        );
 
         $document = $documents->submit($request->user(), $data);
 

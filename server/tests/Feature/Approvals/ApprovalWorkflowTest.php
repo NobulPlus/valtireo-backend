@@ -9,6 +9,8 @@ use App\Models\DocumentType;
 use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -58,6 +60,7 @@ class ApprovalWorkflowTest extends TestCase
 
     public function test_document_submission_creates_approval_request_and_review_decision(): void
     {
+        Storage::fake('local');
         $this->seed();
 
         $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
@@ -70,17 +73,14 @@ class ApprovalWorkflowTest extends TestCase
 
         Sanctum::actingAs($employeeUser);
 
-        $documentId = $this->postJson('/api/documents', [
+        $documentId = $this->post('/api/documents', [
             'document_type_id' => $type->id,
             'document_requirement_id' => $requirement->id,
             'title' => 'Aisha Government ID',
-            'file_name' => 'aisha-government-id.pdf',
-            'file_path' => 'uploads/aisha-government-id.pdf',
-            'mime_type' => 'application/pdf',
-            'file_size' => 150000,
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
             'issued_at' => '2025-01-01',
             'expires_at' => '2028-01-01',
-        ])
+        ], ['Accept' => 'application/json'])
             ->assertCreated()
             ->assertJsonPath('document.status', 'submitted')
             ->assertJsonPath('document.approval_requests.0.status', 'pending')
@@ -107,8 +107,60 @@ class ApprovalWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_unrelated_employee_cannot_cancel_someone_elses_pending_approval(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $requester = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $unrelatedEmployee = User::query()->where('email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $requester->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $requester->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+
+        Sanctum::actingAs($requester);
+
+        $documentId = $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'issued_at' => '2025-01-01',
+            'expires_at' => '2028-01-01',
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('document.id');
+
+        $approval = ApprovalRequest::query()
+            ->where('approvable_id', $documentId)
+            ->where('module', 'employee_documents')
+            ->firstOrFail();
+
+        Sanctum::actingAs($unrelatedEmployee);
+
+        $this->postJson("/api/approvals/{$approval->id}/actions", [
+            'action' => 'cancel',
+        ])->assertForbidden();
+
+        $this->assertDatabaseHas('approval_requests', [
+            'id' => $approval->id,
+            'status' => 'pending',
+        ]);
+
+        Sanctum::actingAs($requester);
+
+        $this->postJson("/api/approvals/{$approval->id}/actions", [
+            'action' => 'cancel',
+        ])
+            ->assertOk()
+            ->assertJsonPath('approval_request.status', 'cancelled');
+    }
+
     public function test_request_changes_requires_note_when_workflow_policy_requires_it(): void
     {
+        Storage::fake('local');
         $this->seed();
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
@@ -121,15 +173,14 @@ class ApprovalWorkflowTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $documentId = $this->postJson('/api/documents', [
+        $documentId = $this->post('/api/documents', [
             'employee_id' => $employee->id,
             'document_type_id' => $type->id,
             'document_requirement_id' => $requirement->id,
             'title' => 'Aisha Government ID',
-            'file_name' => 'aisha-government-id.pdf',
-            'file_path' => 'uploads/aisha-government-id.pdf',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
             'expires_at' => '2028-01-01',
-        ])
+        ], ['Accept' => 'application/json'])
             ->assertCreated()
             ->json('document.id');
 

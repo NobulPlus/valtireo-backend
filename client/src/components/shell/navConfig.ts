@@ -3,14 +3,17 @@ import {
   BadgeCheck,
   BarChart3,
   Building2,
+  CalendarCheck2,
   CalendarClock,
   ClipboardCheck,
+  Clock,
   FileStack,
   Gauge,
   ScrollText,
   Settings,
   SlidersHorizontal,
   ShieldCheck,
+  UserRound,
   Users,
 } from 'lucide-react';
 
@@ -47,6 +50,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Valtireo console', to: '/platform', icon: ShieldCheck, roles: ['Super Admin'] },
       { label: 'Dashboard', to: '/dashboard', icon: Gauge },
+    ],
+  },
+  {
+    label: 'My workspace',
+    items: [
+      { label: 'My profile', to: '/me/profile', icon: UserRound },
+      { label: 'My leave', to: '/me/leave', icon: CalendarCheck2 },
+      { label: 'My attendance', to: '/me/attendance', icon: Clock },
     ],
   },
   {

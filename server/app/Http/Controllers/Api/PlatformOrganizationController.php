@@ -4,12 +4,16 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Platform\ProvisionOrganizationRequest;
+use App\Http\Requests\Platform\UpdateOrganizationModuleRequest;
 use App\Http\Requests\Platform\UpdateOrganizationStatusRequest;
+use App\Http\Requests\Platform\UpdateOrganizationWorkspaceRequest;
 use App\Http\Resources\OrganizationResource;
 use App\Http\Resources\UserResource;
 use App\Models\Organization;
+use App\Models\PlatformModule;
 use App\Services\OrganizationProvisioningService;
 use App\Services\PlatformAdminService;
+use App\Services\WorkspaceSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -58,8 +62,17 @@ class PlatformOrganizationController extends Controller
             ], 422);
         }
 
+        $previousStatus = $organization->status;
+
         $organization->update([
             'status' => $request->validated('status'),
+        ]);
+
+        $organization->statusHistories()->create([
+            'changed_by_id' => $request->user()->id,
+            'previous_status' => $previousStatus,
+            'new_status' => $request->validated('status'),
+            'reason' => $request->validated('reason'),
         ]);
 
         if ($request->validated('status') === 'suspended') {
@@ -70,6 +83,68 @@ class PlatformOrganizationController extends Controller
             'message' => $request->validated('status') === 'suspended'
                 ? 'Organization suspended successfully.'
                 : 'Organization reactivated successfully.',
+            ...$platform->organization($organization->refresh()),
+        ]);
+    }
+
+    public function updateWorkspace(
+        UpdateOrganizationWorkspaceRequest $request,
+        Organization $organization,
+        WorkspaceSettingsService $workspaceSettings,
+        PlatformAdminService $platform
+    ): JsonResponse {
+        if ($request->has('name')) {
+            $organization->update(['name' => $request->validated('name')]);
+        }
+
+        $settings = [];
+
+        if ($request->has('support_email')) {
+            $settings['identity']['support_email'] = $request->validated('support_email');
+        }
+
+        if ($request->has('timezone')) {
+            $settings['localization']['timezone'] = $request->validated('timezone');
+        }
+
+        if ($settings !== []) {
+            $workspaceSettings->update($organization, $settings);
+        }
+
+        return response()->json([
+            'message' => "Workspace identity updated for {$organization->name}.",
+            ...$platform->organization($organization->refresh()),
+        ]);
+    }
+
+    public function updateModule(
+        UpdateOrganizationModuleRequest $request,
+        Organization $organization,
+        PlatformModule $platformModule,
+        PlatformAdminService $platform
+    ): JsonResponse {
+        $status = $request->validated('status');
+
+        $subscription = $organization->moduleSubscriptions()->firstOrNew([
+            'platform_module_id' => $platformModule->id,
+        ]);
+
+        $subscription->status = $status;
+        $subscription->starts_at ??= now();
+        $subscription->settings ??= [];
+
+        $subscription->expires_at = match ($request->validated('duration')) {
+            'one_year' => now()->addYear(),
+            'custom' => $request->validated('expires_at'),
+            default => null,
+        };
+
+        $subscription->save();
+
+        return response()->json([
+            'message' => $status === 'suspended'
+                ? "{$platformModule->name} disabled for {$organization->name}."
+                : "{$platformModule->name} enabled for {$organization->name}.",
             ...$platform->organization($organization->refresh()),
         ]);
     }

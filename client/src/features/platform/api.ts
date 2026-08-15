@@ -3,8 +3,11 @@ import { api, apiClient } from '@/lib/apiClient';
 import type {
   Paginated,
   PlatformDashboard,
+  PlatformModuleCatalogEntry,
   PlatformOrganizationDetail,
   PlatformOrganizationSummary,
+  ProvisionOrganizationPayload,
+  ProvisionOrganizationResponse,
 } from '@/types/api';
 
 export interface PlatformOrganizationFilters {
@@ -75,6 +78,72 @@ export function useUpdateOrganizationStatus(id: string | undefined) {
       queryClient.invalidateQueries({ queryKey: ['platform', 'dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['platform', 'organizations'] });
       queryClient.invalidateQueries({ queryKey: ['platform', 'organizations', id] });
+    },
+  });
+}
+
+export interface UpdateOrganizationModulePayload {
+  status: 'active' | 'trial' | 'suspended';
+  duration?: 'forever' | 'one_year' | 'custom';
+  expires_at?: string;
+}
+
+export function useUpdateOrganizationModule(organizationId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ moduleId, ...payload }: UpdateOrganizationModulePayload & { moduleId: number }) =>
+      api.patch<PlatformOrganizationDetail & { message: string }>(
+        `/platform/organizations/${organizationId}/modules/${moduleId}`,
+        payload,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'organizations', organizationId] });
+    },
+  });
+}
+
+export interface UpdateOrganizationWorkspacePayload {
+  name?: string;
+  support_email?: string | null;
+  timezone?: string;
+}
+
+export function useUpdateOrganizationWorkspace(organizationId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: UpdateOrganizationWorkspacePayload) =>
+      api.patch<PlatformOrganizationDetail & { message: string }>(
+        `/platform/organizations/${organizationId}/workspace`,
+        payload,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'organizations', organizationId] });
+    },
+  });
+}
+
+export function usePlatformModuleCatalog() {
+  return useQuery({
+    queryKey: ['platform', 'modules'],
+    queryFn: () => api.get<{ data: PlatformModuleCatalogEntry[] }>('/platform/modules'),
+  });
+}
+
+export function useCreateOrganization() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: ProvisionOrganizationPayload) =>
+      api.post<ProvisionOrganizationResponse>('/platform/organizations', payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'organizations'] });
     },
   });
 }

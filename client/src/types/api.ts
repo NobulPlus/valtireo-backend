@@ -272,8 +272,9 @@ export interface Employee {
 export interface EmergencyContact {
   id: number;
   name: string;
-  relationship: string;
+  relationship: string | null;
   phone: string;
+  alternate_phone?: string | null;
   email: string | null;
   address: string | null;
   is_primary: boolean;
@@ -284,6 +285,10 @@ export interface Dependent {
   name: string;
   relationship: string;
   date_of_birth: string | null;
+  gender?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
   is_beneficiary: boolean;
 }
 
@@ -292,6 +297,13 @@ export interface EmployeeDocument {
   title: string;
   status: string;
   expires_at: string | null;
+  issued_at?: string | null;
+  notes?: string | null;
+  file_name?: string;
+  download_url?: string;
+  view_url?: string;
+  mime_type?: string;
+  submitted_at?: string | null;
   document_type?: LookupRef | null;
 }
 
@@ -322,6 +334,125 @@ export interface ProfileActivity {
   description: string | null;
   actor?: { id: number; name: string } | null;
   created_at: string;
+}
+
+export type EmployeeCustomFieldType = 'text' | 'textarea' | 'number' | 'date' | 'boolean' | 'select' | 'multi_select';
+
+export interface EmployeeCustomFieldDefinition {
+  id: number;
+  name: string;
+  key: string;
+  type: EmployeeCustomFieldType;
+  options: string[] | null;
+  is_required: boolean;
+  visible_to_employee: boolean;
+  editable_by_employee: boolean;
+  is_active: boolean;
+  sort_order: number;
+}
+
+export interface EmployeeCustomFieldValue {
+  id: number;
+  employee_id: number;
+  employee_custom_field_id: number;
+  field: EmployeeCustomFieldDefinition;
+  value: string | number | boolean | string[] | null;
+  updated_by?: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Response shape of GET /employee-profile/overview (and the HR-side /employees/:id/profile-overview). */
+export interface EmployeeProfileOverview {
+  employee: Employee;
+  profile: EmployeeProfileSummary | null;
+  emergency_contacts: EmergencyContact[];
+  dependents: Dependent[];
+  documents: EmployeeDocument[];
+  custom_fields: EmployeeCustomFieldValue[];
+  status_history: EmployeeStatusHistoryEntry[];
+  reporting_history: EmployeeReportingHistoryEntry[];
+  activities: ProfileActivity[];
+}
+
+export interface LeaveType {
+  id: number;
+  name: string;
+  code: string;
+  is_paid?: boolean;
+}
+
+export interface LeaveRequest {
+  id: number;
+  employee_id: number;
+  leave_type_id: number;
+  starts_on: string;
+  ends_on: string;
+  total_days: number;
+  status: string;
+  reason: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  leave_type?: LookupRef | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendanceRecord {
+  id: number;
+  employee_id: number;
+  attendance_date: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  duration_minutes: number | null;
+  source: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendanceCorrectionRequest {
+  id: number;
+  attendance_record_id: number;
+  original_check_in_at: string | null;
+  original_check_out_at: string | null;
+  requested_check_in_at: string | null;
+  requested_check_out_at: string | null;
+  status: string;
+  reason: string;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApprovalDecision {
+  id: number;
+  actor?: { id: number; name: string; email: string } | null;
+  action: string;
+  previous_status: string | null;
+  next_status: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface ApprovalRequest {
+  id: number;
+  requester?: { id: number; name: string; email: string } | null;
+  subject_employee?: { id: number; employee_number: string; full_name: string; work_email: string } | null;
+  approvable_type: string;
+  approvable_id: number;
+  module: string;
+  action: string;
+  title: string;
+  status: string;
+  current_step_order: number;
+  submitted_at: string | null;
+  completed_at: string | null;
+  decisions?: ApprovalDecision[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CreateEmployeePayload {
@@ -675,6 +806,55 @@ export interface PlatformDashboard {
   };
 }
 
+export interface PlatformModuleCatalogEntry {
+  id: number;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+}
+
+export interface ProvisionOrganizationPayload {
+  organization: {
+    name: string;
+    code: string;
+    email?: string | null;
+    phone?: string | null;
+    website?: string | null;
+    sector?: string | null;
+    country: string;
+    state?: string | null;
+    city?: string | null;
+    address?: string | null;
+  };
+  admin: {
+    name: string;
+    email: string;
+  };
+  modules: string[];
+}
+
+export interface ProvisionOrganizationResponse {
+  organization: Organization;
+  main_location: {
+    id: number;
+    code: string | null;
+    name: string;
+    type: string | null;
+    is_primary: boolean;
+  };
+  admin: CurrentUser;
+  modules: Array<{ id: number; key: string; name: string; category: string | null }>;
+  workspace: WorkspaceSettings;
+  invitation: {
+    email: string;
+    temporary_password: string;
+    login_hint: string;
+    delivery_status: string;
+  };
+  created_by: { id: number; name: string; email: string };
+}
+
 export interface PlatformOrganizationDetail {
   organization: PlatformOrganizationSummary & {
     email: string | null;
@@ -703,10 +883,12 @@ export interface PlatformOrganizationDetail {
     id: number;
     key: string | null;
     name: string | null;
+    description: string | null;
     category: string | null;
-    status: string;
+    status: 'active' | 'trial' | 'suspended' | 'locked';
     starts_at: string | null;
     expires_at: string | null;
+    subscription_id: number | null;
   }>;
   admins: Array<{
     id: number;

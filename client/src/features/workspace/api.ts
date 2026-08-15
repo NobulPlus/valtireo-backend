@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/apiClient';
 import { useAuth } from '@/context/AuthContext';
 import type { AllSetupLookups, SetupChecklist, WorkspaceSettings } from '@/types/api';
@@ -27,5 +27,33 @@ export function useSetupLookups() {
     queryKey: ['setup', 'lookups'],
     queryFn: () => api.get<AllSetupLookups>('/setup/lookups'),
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useUploadWorkspaceLogo() {
+  const queryClient = useQueryClient();
+  const { refresh } = useAuth();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('logo', file);
+      return api.post<{ workspace: WorkspaceSettings }>('/workspace/identity/logo', formData);
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace'] });
+      await refresh();
+    },
+  });
+}
+
+export function useRemoveWorkspaceLogo() {
+  const queryClient = useQueryClient();
+  const { refresh } = useAuth();
+  return useMutation({
+    mutationFn: () => api.delete<{ workspace: WorkspaceSettings }>('/workspace/identity/logo'),
+    onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['workspace'] });
+      await refresh();
+    },
   });
 }

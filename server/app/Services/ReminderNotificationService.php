@@ -129,14 +129,20 @@ class ReminderNotificationService
     private function pendingApprovalReminders(int $days): int
     {
         $sent = 0;
+        $usersByOrganization = [];
 
         ApprovalRequest::query()
             ->with(['workflow.steps', 'requester', 'subjectEmployee.user'])
             ->where('status', 'pending')
             ->whereDate('submitted_at', '<=', now()->subDays($days)->toDateString())
-            ->chunk(100, function ($approvals) use (&$sent): void {
+            ->chunk(100, function ($approvals) use (&$sent, &$usersByOrganization): void {
                 foreach ($approvals as $approval) {
-                    foreach ($this->approvalRecipients($approval) as $recipient) {
+                    $usersByOrganization[$approval->organization_id] ??= User::query()
+                        ->where('organization_id', $approval->organization_id)
+                        ->with('employee')
+                        ->get();
+
+                    foreach ($this->approvalRecipients($approval, $usersByOrganization[$approval->organization_id]) as $recipient) {
                         $reminderKey = "pending_approval:{$approval->id}:{$approval->current_step_order}:{$recipient->id}";
 
                         if ($this->alreadySent($recipient, $reminderKey)) {
@@ -171,19 +177,16 @@ class ReminderNotificationService
     }
 
     /**
+     * @param Collection<int, User> $users
+     *
      * @return Collection<int, User>
      */
-    private function approvalRecipients(ApprovalRequest $approval): Collection
+    private function approvalRecipients(ApprovalRequest $approval, Collection $users): Collection
     {
         $step = $approval->workflow?->steps
             ->where('is_active', true)
             ->where('step_order', $approval->current_step_order)
             ->first();
-
-        $users = User::query()
-            ->where('organization_id', $approval->organization_id)
-            ->with('employee')
-            ->get();
 
         return $users
             ->filter(function (User $user) use ($approval, $step): bool {

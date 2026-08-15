@@ -1,3 +1,5 @@
+import { cn } from '@/lib/cn';
+
 /**
  * The Valtireo mark: a layered V built from two converging strokes (teal +
  * blue, echoing the product's core identity colors), a gold node marking
@@ -9,7 +11,15 @@
  * the mark already sits on a pine surface (e.g. the sidebar) to avoid a
  * double background.
  */
-export function Logomark({ size = 28, withBackground = true }: { size?: number; withBackground?: boolean }) {
+export function Logomark({
+  size = 28,
+  withBackground = true,
+  className,
+}: {
+  size?: number;
+  withBackground?: boolean;
+  className?: string;
+}) {
   const mark = (
     <svg viewBox="0 0 32 32" width={size} height={size} fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="13.6" y="2.6" width="4.8" height="4.8" rx="1.2" fill="#FFCC29" />
@@ -23,7 +33,7 @@ export function Logomark({ size = 28, withBackground = true }: { size?: number; 
 
   return (
     <div
-      className="flex flex-shrink-0 items-center justify-center rounded-lg bg-pine"
+      className={cn('flex flex-shrink-0 items-center justify-center rounded-lg bg-pine', className)}
       style={{ width: size + 12, height: size + 12 }}
     >
       {mark}

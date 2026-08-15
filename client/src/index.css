@@ -1,5 +1,20 @@
 @import 'tailwindcss';
 
+/* Self-hosted, so the app never makes a third-party request just to render
+   text — no fonts.gstatic.com round trip, no dependency an institutional
+   customer's network policy could block.
+   Inter (UI body): regular/medium/semibold/bold cover every font-medium,
+   font-semibold, and font-bold weight actually used in the app.
+   Manrope (font-display headings): semibold is the established weight for
+   most font-display usage; extrabold is reserved for --text-page-title. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/manrope/600.css';
+@import '@fontsource/manrope/700.css';
+@import '@fontsource/manrope/800.css';
+
 /*
  * Valtireo design tokens.
  * Source of truth: docs/valtireo-brand-guide-v1.pdf

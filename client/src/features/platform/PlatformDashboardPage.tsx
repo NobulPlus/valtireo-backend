@@ -7,6 +7,7 @@ import {
   Download,
   FileClock,
   Layers3,
+  Plus,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -27,7 +28,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { CHART_COLORS, DonutChart, RankedBarList } from '@/components/ui/Charts';
 import { downloadPlatformOrganizationsCsv, usePlatformDashboard, usePlatformOrganizations } from '@/features/platform/api';
-import type { PlatformOrganizationSummary } from '@/types/api';
+import type { PlatformDashboard, PlatformOrganizationSummary } from '@/types/api';
 
 const STATUS_OPTIONS = ['', 'active', 'invited', 'setup_in_progress', 'suspended'];
 type AttentionKey = 'setup_incomplete' | 'without_modules' | 'without_admins';
@@ -75,7 +76,22 @@ function statusLabel(status: string): string {
     .join(' ');
 }
 
-export function PlatformDashboardPage() {
+const DASHBOARD_HEADER_TITLE = 'Valtireo console';
+const DASHBOARD_HEADER_SUBTITLE = 'Monitor every customer workspace, subscription footprint, and setup risk from one place.';
+
+function PlatformDashboardContent({
+  data,
+  dateFrom,
+  dateTo,
+  onDateFromChange,
+  onDateToChange,
+}: {
+  data: PlatformDashboard;
+  dateFrom: string;
+  dateTo: string;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
+}) {
   const navigate = useNavigate();
   const [tableSearch, setTableSearch] = useState('');
   const [tableStatus, setTableStatus] = useState('');
@@ -83,16 +99,10 @@ export function PlatformDashboardPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [activeAttention, setActiveAttention] = useState<AttentionKey | null>(null);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [showAllRecent, setShowAllRecent] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const dashboard = usePlatformDashboard({
-    date_from: dateFrom || undefined,
-    date_to: dateTo || undefined,
-  });
   const organizations = usePlatformOrganizations({
     page,
     search: tableSearch,
@@ -181,11 +191,6 @@ export function PlatformDashboardPage() {
     [sortBy, sortDirection],
   );
 
-  if (dashboard.isLoading) return <LoadingState label="Loading Valtireo console..." />;
-  if (dashboard.isError) return <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />;
-  if (!dashboard.data) return <EmptyState title="Platform data is not available" />;
-
-  const data = dashboard.data;
   const summary = data.summary;
   const sortedModules = [...data.module_adoption]
     .sort((a, b) => b.active_organizations - a.active_organizations)
@@ -208,13 +213,19 @@ export function PlatformDashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Valtireo console"
-        subtitle="Monitor every customer workspace, subscription footprint, and setup risk from one place."
+        title={DASHBOARD_HEADER_TITLE}
+        subtitle={DASHBOARD_HEADER_SUBTITLE}
         actions={
-          <Button variant="secondary" size="sm" onClick={handleDownloadReport} isLoading={isExporting}>
-            {!isExporting && <Download className="h-4 w-4" />}
-            Report
-          </Button>
+          <>
+            <Button variant="secondary" size="sm" onClick={handleDownloadReport} isLoading={isExporting}>
+              {!isExporting && <Download className="h-4 w-4" />}
+              Report
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => navigate('/platform/organizations/new')}>
+              <Plus className="h-4 w-4" />
+              New organization
+            </Button>
+          </>
         }
       />
 
@@ -229,8 +240,8 @@ export function PlatformDashboardPage() {
               dateFrom={dateFrom}
               dateTo={dateTo}
               onChange={(range) => {
-                setDateFrom(range.dateFrom);
-                setDateTo(range.dateTo);
+                onDateFromChange(range.dateFrom);
+                onDateToChange(range.dateTo);
               }}
             />
             <Button
@@ -240,8 +251,8 @@ export function PlatformDashboardPage() {
                 const today = new Date();
                 const from = new Date();
                 from.setDate(today.getDate() - 30);
-                setDateFrom(localDateString(from));
-                setDateTo(localDateString(today));
+                onDateFromChange(localDateString(from));
+                onDateToChange(localDateString(today));
               }}
             >
               Last 30 days
@@ -251,8 +262,8 @@ export function PlatformDashboardPage() {
               size="sm"
               className="w-9 px-0"
               onClick={() => {
-                setDateFrom('');
-                setDateTo('');
+                onDateFromChange('');
+                onDateToChange('');
               }}
               aria-label="Clear reporting window"
             >
@@ -526,5 +537,51 @@ export function PlatformDashboardPage() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export function PlatformDashboardPage() {
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const dashboard = usePlatformDashboard({
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+  });
+
+  if (dashboard.isLoading) {
+    return (
+      <div>
+        <PageHeader title={DASHBOARD_HEADER_TITLE} subtitle={DASHBOARD_HEADER_SUBTITLE} />
+        <LoadingState label="Loading Valtireo console..." fill />
+      </div>
+    );
+  }
+
+  if (dashboard.isError) {
+    return (
+      <div>
+        <PageHeader title={DASHBOARD_HEADER_TITLE} subtitle={DASHBOARD_HEADER_SUBTITLE} />
+        <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
+      </div>
+    );
+  }
+
+  if (!dashboard.data) {
+    return (
+      <div>
+        <PageHeader title={DASHBOARD_HEADER_TITLE} subtitle={DASHBOARD_HEADER_SUBTITLE} />
+        <EmptyState title="Platform data is not available" />
+      </div>
+    );
+  }
+
+  return (
+    <PlatformDashboardContent
+      data={dashboard.data}
+      dateFrom={dateFrom}
+      dateTo={dateTo}
+      onDateFromChange={setDateFrom}
+      onDateToChange={setDateTo}
+    />
   );
 }

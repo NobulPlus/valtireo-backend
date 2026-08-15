@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\LeavePeriodController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\LeaveTypeController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PlatformModuleController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SetupChecklistController;
@@ -55,15 +56,20 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(function () {
     Route::prefix('platform')->group(function () {
         Route::get('/dashboard', [PlatformOrganizationController::class, 'dashboard']);
+        Route::get('/modules', [PlatformModuleController::class, 'index']);
         Route::get('/organizations', [PlatformOrganizationController::class, 'index']);
         Route::get('/organizations/export', [PlatformOrganizationController::class, 'export']);
         Route::post('/organizations', [PlatformOrganizationController::class, 'store']);
         Route::get('/organizations/{organization}', [PlatformOrganizationController::class, 'show']);
         Route::patch('/organizations/{organization}/status', [PlatformOrganizationController::class, 'updateStatus']);
+        Route::patch('/organizations/{organization}/modules/{platformModule}', [PlatformOrganizationController::class, 'updateModule']);
+        Route::patch('/organizations/{organization}/workspace', [PlatformOrganizationController::class, 'updateWorkspace']);
     });
 
     Route::get('/workspace', [WorkspaceController::class, 'show']);
     Route::patch('/workspace/settings', [WorkspaceController::class, 'update']);
+    Route::post('/workspace/identity/logo', [WorkspaceController::class, 'updateLogo']);
+    Route::delete('/workspace/identity/logo', [WorkspaceController::class, 'removeLogo']);
 
     Route::prefix('dashboard')->group(function () {
         Route::get('/organization', [DashboardController::class, 'organization']);
@@ -148,10 +154,13 @@ Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(fu
     Route::prefix('leave')->group(function () {
         Route::get('/types', [LeaveTypeController::class, 'index']);
         Route::post('/types', [LeaveTypeController::class, 'store']);
+        Route::patch('/types/{leaveType}', [LeaveTypeController::class, 'update']);
         Route::get('/periods', [LeavePeriodController::class, 'index']);
         Route::post('/periods', [LeavePeriodController::class, 'store']);
+        Route::patch('/periods/{leavePeriod}', [LeavePeriodController::class, 'update']);
         Route::get('/holidays', [LeaveHolidayController::class, 'index']);
         Route::post('/holidays', [LeaveHolidayController::class, 'store']);
+        Route::patch('/holidays/{leaveHoliday}', [LeaveHolidayController::class, 'update']);
         Route::get('/entitlements', [LeaveEntitlementController::class, 'index']);
         Route::post('/entitlements', [LeaveEntitlementController::class, 'store']);
         Route::get('/requests', [LeaveRequestController::class, 'index']);
@@ -165,6 +174,7 @@ Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(fu
         Route::patch('/settings', [AttendanceSettingController::class, 'update']);
         Route::get('/shifts', [WorkShiftController::class, 'index']);
         Route::post('/shifts', [WorkShiftController::class, 'store']);
+        Route::patch('/shifts/{workShift}', [WorkShiftController::class, 'update']);
         Route::get('/records', [AttendanceRecordController::class, 'index']);
         Route::post('/records', [AttendanceRecordController::class, 'store']);
         Route::get('/records/{attendanceRecord}', [AttendanceRecordController::class, 'show']);

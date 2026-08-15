@@ -304,23 +304,39 @@ class DashboardService
             : CarbonImmutable::create($year, 1, 1)->startOfYear();
         $periodEnd = $month ? $periodStart->endOfMonth() : $periodStart->endOfYear();
         $steps = $month ? range(1, $periodEnd->day) : range(1, 12);
+        $bucketFormat = $month ? 'Y-m-d' : 'Y-m';
+
+        $employeeTimestamps = Employee::query()
+            ->whereIn('id', $employeeIds)
+            ->get(['id', 'created_at', 'invited_at', 'activated_at']);
+
+        $submittedProfiles = EmployeeProfile::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('completion_status', ['submitted', 'approved'])
+            ->get(['employee_id', 'updated_at']);
+
+        $bucketCounts = function ($items, string $column) use ($periodStart, $periodEnd, $bucketFormat) {
+            return $items
+                ->filter(fn ($item) => $item->{$column} && $item->{$column}->between($periodStart, $periodEnd))
+                ->countBy(fn ($item) => $item->{$column}->format($bucketFormat));
+        };
+
+        $createdCounts = $bucketCounts($employeeTimestamps, 'created_at');
+        $invitedCounts = $bucketCounts($employeeTimestamps, 'invited_at');
+        $activatedCounts = $bucketCounts($employeeTimestamps, 'activated_at');
+        $submittedCounts = $bucketCounts($submittedProfiles, 'updated_at');
 
         $entries = collect($steps)
-            ->map(function (int $step) use ($employeeIds, $year, $month): array {
+            ->map(function (int $step) use ($year, $month, $bucketFormat, $createdCounts, $invitedCounts, $submittedCounts, $activatedCounts): array {
                 $date = $month ? CarbonImmutable::create($year, $month, $step) : CarbonImmutable::create($year, $step, 1);
-                $start = $month ? $date->startOfDay() : $date->startOfMonth();
-                $end = $month ? $date->endOfDay() : $date->endOfMonth();
-                $created = $this->countEmployeesBetween($employeeIds, 'created_at', $start, $end);
-                $invited = $this->countEmployeesBetween($employeeIds, 'invited_at', $start, $end);
-                $submitted = EmployeeProfile::query()
-                    ->whereIn('employee_id', $employeeIds)
-                    ->whereIn('completion_status', ['submitted', 'approved'])
-                    ->whereBetween('updated_at', [$start, $end])
-                    ->count();
-                $activated = $this->countEmployeesBetween($employeeIds, 'activated_at', $start, $end);
+                $key = $date->format($bucketFormat);
+                $created = $createdCounts->get($key, 0);
+                $invited = $invitedCounts->get($key, 0);
+                $submitted = $submittedCounts->get($key, 0);
+                $activated = $activatedCounts->get($key, 0);
 
                 return [
-                    'key' => $month ? $date->format('Y-m-d') : $date->format('Y-m'),
+                    'key' => $key,
                     'label' => $month ? $date->format('j') : $date->format('M'),
                     'created' => $created,
                     'invited' => $invited,
@@ -344,14 +360,6 @@ class DashboardService
             'available_months' => $availableMonths,
             'entries' => $entries,
         ];
-    }
-
-    private function countEmployeesBetween($employeeIds, string $column, CarbonImmutable $start, CarbonImmutable $end): int
-    {
-        return Employee::query()
-            ->whereIn('id', $employeeIds)
-            ->whereBetween($column, [$start, $end])
-            ->count();
     }
 
     /**

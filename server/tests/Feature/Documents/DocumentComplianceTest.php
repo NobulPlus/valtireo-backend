@@ -78,6 +78,35 @@ class DocumentComplianceTest extends TestCase
 
     public function test_employee_can_submit_own_required_document(): void
     {
+        Storage::fake('local');
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'issued_at' => '2025-01-01',
+            'expires_at' => '2028-01-01',
+            'notes' => 'Submitted during onboarding.',
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('document.employee.employee_number', 'EMP-FIN-001')
+            ->assertJsonPath('document.document_type.code', 'GOV-ID')
+            ->assertJsonPath('document.status', 'submitted');
+    }
+
+    public function test_document_submission_requires_a_real_file_and_rejects_a_fabricated_path(): void
+    {
         $this->seed();
 
         $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
@@ -92,19 +121,16 @@ class DocumentComplianceTest extends TestCase
         $this->postJson('/api/documents', [
             'document_type_id' => $type->id,
             'document_requirement_id' => $requirement->id,
-            'title' => 'Aisha Government ID',
-            'file_name' => 'aisha-government-id.pdf',
-            'file_path' => 'uploads/aisha-government-id.pdf',
+            'title' => 'Fabricated ID',
+            'file_name' => 'fabricated.pdf',
+            'file_path' => 'uploads/fabricated.pdf',
             'mime_type' => 'application/pdf',
             'file_size' => 150000,
-            'issued_at' => '2025-01-01',
-            'expires_at' => '2028-01-01',
-            'notes' => 'Submitted during onboarding.',
         ])
-            ->assertCreated()
-            ->assertJsonPath('document.employee.employee_number', 'EMP-FIN-001')
-            ->assertJsonPath('document.document_type.code', 'GOV-ID')
-            ->assertJsonPath('document.status', 'submitted');
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['file']);
+
+        $this->assertDatabaseMissing('employee_documents', ['title' => 'Fabricated ID']);
     }
 
     public function test_employee_can_upload_and_download_own_document_file(): void
@@ -149,6 +175,7 @@ class DocumentComplianceTest extends TestCase
 
     public function test_hr_admin_can_review_employee_document(): void
     {
+        Storage::fake('local');
         $this->seed();
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
@@ -161,15 +188,14 @@ class DocumentComplianceTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $documentId = $this->postJson('/api/documents', [
+        $documentId = $this->post('/api/documents', [
             'employee_id' => $employee->id,
             'document_type_id' => $type->id,
             'document_requirement_id' => $requirement->id,
             'title' => 'Aisha Government ID',
-            'file_name' => 'aisha-government-id.pdf',
-            'file_path' => 'uploads/aisha-government-id.pdf',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
             'expires_at' => '2028-01-01',
-        ])
+        ], ['Accept' => 'application/json'])
             ->assertCreated()
             ->json('document.id');
 

@@ -14,7 +14,7 @@ class DocumentTypeController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        abort_unless($request->user()->can('employee_documents.view'), 403);
+        abort_unless($request->user()->can('employee_documents.view') || $request->user()->employee !== null, 403);
 
         $types = DocumentType::query()
             ->withCount('requirements')
@@ -45,7 +45,7 @@ class DocumentTypeController extends Controller
 
     public function show(Request $request, DocumentType $documentType): DocumentTypeResource
     {
-        abort_unless($request->user()->can('employee_documents.view'), 403);
+        abort_unless($request->user()->can('employee_documents.view') || $request->user()->employee !== null, 403);
         abort_unless($documentType->organization_id === $request->user()->organization_id, 404);
 
         return new DocumentTypeResource($documentType->loadCount('requirements'));

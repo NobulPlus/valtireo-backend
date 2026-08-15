@@ -9,7 +9,7 @@ import { BreakdownList } from '@/components/ui/BreakdownList';
 export function ManagerDashboardView() {
   const { data, isLoading, isError, error, refetch } = useManagerDashboard();
 
-  if (isLoading) return <LoadingState label="Loading manager dashboard…" />;
+  if (isLoading) return <LoadingState label="Loading manager dashboard…" fill />;
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
   if (!data) return null;
 

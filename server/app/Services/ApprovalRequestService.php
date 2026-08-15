@@ -85,7 +85,9 @@ class ApprovalRequestService
             $approvalRequest->loadMissing(['workflow.steps', 'subjectEmployee']);
             $step = $this->currentStep($approvalRequest);
 
-            if ($action !== 'cancel') {
+            if ($action === 'cancel') {
+                $this->ensureActorCanCancel($actor, $approvalRequest, $step);
+            } else {
                 $this->ensureActorCanApproveStep($actor, $approvalRequest, $step);
             }
 
@@ -176,6 +178,19 @@ class ApprovalRequestService
         };
 
         abort_unless($allowed, 403);
+    }
+
+    private function ensureActorCanCancel(User $actor, ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step): void
+    {
+        if ($actor->id === $approvalRequest->requester_id) {
+            return;
+        }
+
+        if ($approvalRequest->subject_employee_id && $actor->employee?->id === $approvalRequest->subject_employee_id) {
+            return;
+        }
+
+        $this->ensureActorCanApproveStep($actor, $approvalRequest, $step);
     }
 
     private function ensureRequiredNote(ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step, string $action, ?string $note): void
@@ -289,7 +304,7 @@ class ApprovalRequestService
             $record->update([
                 'check_in_at' => $checkIn,
                 'check_out_at' => $checkOut,
-                'duration_minutes' => $checkIn && $checkOut ? max($checkIn->diffInMinutes($checkOut, false), 0) : 0,
+                'duration_minutes' => AttendanceService::durationMinutes($checkIn, $checkOut, $record->workShift),
                 'status' => 'corrected',
             ]);
         }

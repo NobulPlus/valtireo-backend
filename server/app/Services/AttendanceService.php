@@ -62,7 +62,7 @@ class AttendanceService
             $shift = $this->shiftFor($actor, $data['work_shift_id'] ?? null);
             $checkIn = ! empty($data['check_in_at']) ? Carbon::parse($data['check_in_at']) : null;
             $checkOut = ! empty($data['check_out_at']) ? Carbon::parse($data['check_out_at']) : null;
-            $duration = $this->durationMinutes($checkIn, $checkOut, $shift);
+            $duration = self::durationMinutes($checkIn, $checkOut, $shift);
 
             $record = AttendanceRecord::query()->updateOrCreate(
                 [
@@ -136,7 +136,7 @@ class AttendanceService
                 $record->update([
                     'check_in_at' => $correction->requested_check_in_at ?? $record->check_in_at,
                     'check_out_at' => $correction->requested_check_out_at ?? $record->check_out_at,
-                    'duration_minutes' => $this->durationMinutes($correction->requested_check_in_at ?? $record->check_in_at, $correction->requested_check_out_at ?? $record->check_out_at, $record->workShift),
+                    'duration_minutes' => self::durationMinutes($correction->requested_check_in_at ?? $record->check_in_at, $correction->requested_check_out_at ?? $record->check_out_at, $record->workShift),
                     'status' => 'corrected',
                 ]);
             }
@@ -203,7 +203,7 @@ class AttendanceService
             ->first();
     }
 
-    private function durationMinutes(?Carbon $checkIn, ?Carbon $checkOut, ?WorkShift $shift): int
+    public static function durationMinutes(?Carbon $checkIn, ?Carbon $checkOut, ?WorkShift $shift): int
     {
         if (! $checkIn || ! $checkOut) {
             return 0;

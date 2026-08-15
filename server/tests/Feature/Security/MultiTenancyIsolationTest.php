@@ -142,6 +142,29 @@ class MultiTenancyIsolationTest extends TestCase
             ]);
     }
 
+    public function test_employee_work_email_uniqueness_is_scoped_to_the_organization(): void
+    {
+        $this->seed();
+
+        $tenantAAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $tenantB = $this->createTenantFixture();
+        $tenantAEmployee = Employee::query()
+            ->where('organization_id', $tenantAAdmin->organization_id)
+            ->where('employee_number', 'EMP-FIN-001')
+            ->firstOrFail();
+
+        Sanctum::actingAs($tenantAAdmin);
+
+        $this->patchJson("/api/employees/{$tenantAEmployee->id}", [
+            'work_email' => $tenantB['employee']->work_email,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $tenantAEmployee->id,
+            'work_email' => $tenantB['employee']->work_email,
+        ]);
+    }
+
     public function test_setup_lookups_and_workspace_settings_are_scoped_to_logged_in_organization(): void
     {
         $this->seed();

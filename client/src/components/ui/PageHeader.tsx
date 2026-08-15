@@ -40,7 +40,7 @@ export function PageHeader({
           </nav>
         )}
         <div className="flex items-center gap-2.5">
-          <h1 className="font-display text-xl font-semibold text-strong">{title}</h1>
+          <h1 className="font-display text-page-title font-extrabold text-strong">{title}</h1>
           {status}
         </div>
         {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
