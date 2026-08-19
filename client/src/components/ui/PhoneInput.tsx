@@ -16,6 +16,7 @@ const DIAL_CODE_OPTIONS = CALLING_CODES.map((code) => ({
   value: code.iso2,
   label: code.dialCode,
   description: code.country,
+  icon: <span className={`fi fi-${code.iso2.toLowerCase()}`} />,
 }));
 
 /** Longest dial code first, so "+1" doesn't shadow "+1xxx"-style matches. */

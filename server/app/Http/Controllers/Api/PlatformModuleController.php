@@ -11,7 +11,7 @@ class PlatformModuleController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        abort_unless($request->user()->is_platform_admin, 403);
 
         $modules = PlatformModule::query()
             ->where('is_active', true)

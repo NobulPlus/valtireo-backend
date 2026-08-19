@@ -138,4 +138,19 @@ class NotificationModuleTest extends TestCase
         $this->patchJson("/api/notifications/{$notificationId}/read")
             ->assertNotFound();
     }
+
+    public function test_default_mail_configuration_enables_notification_delivery(): void
+    {
+        $this->assertTrue(filter_var(env('VALTIREO_MAIL_NOTIFICATIONS', true), FILTER_VALIDATE_BOOLEAN));
+
+        $notification = new \App\Notifications\ValtireoNotification([
+            'title' => 'Welcome',
+            'message' => 'Your account is ready.',
+        ]);
+
+        $this->assertContains('mail', $notification->via(new class
+        {
+            public string $name = 'Ada';
+        }));
+    }
 }

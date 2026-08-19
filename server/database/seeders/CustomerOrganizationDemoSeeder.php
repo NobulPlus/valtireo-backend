@@ -12,11 +12,15 @@ use App\Models\GradeLevel;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
 use App\Models\PlatformModule;
+use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\DefaultApprovalWorkflowService;
+use App\Services\DefaultRoleSeedingService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
+use Spatie\Permission\PermissionRegistrar;
 
 class CustomerOrganizationDemoSeeder extends Seeder
 {
@@ -27,11 +31,12 @@ class CustomerOrganizationDemoSeeder extends Seeder
     {
         foreach ($this->organizations() as $organizationData) {
             $organization = $this->seedOrganization($organizationData);
+            $roles = $this->seedRoles($organization);
             $this->seedModules($organization, $organizationData['modules']);
             $this->seedLocations($organization, $organizationData['locations']);
             $this->seedStructure($organization, $organizationData['departments']);
-            $this->seedAdmin($organization, $organizationData['admin']);
-            $employees = $this->seedEmployees($organization, $organizationData['employees']);
+            $this->seedAdmin($organization, $roles, $organizationData['admin']);
+            $employees = $this->seedEmployees($organization, $roles, $organizationData['employees']);
             $this->seedDocuments($organization, $organizationData['document_types'], $employees);
             $this->seedLeave($organization, $organizationData['leave_types'], $employees);
             $this->seedAttendance($organization, $organizationData['attendance'], $employees);
@@ -77,6 +82,16 @@ class CustomerOrganizationDemoSeeder extends Seeder
         app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
 
         return $organization->refresh();
+    }
+
+    /**
+     * @return Collection<string, Role> keyed by the internal role `key`
+     */
+    private function seedRoles(Organization $organization): Collection
+    {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+
+        return app(DefaultRoleSeedingService::class)->seedForOrganization($organization);
     }
 
     /**
@@ -177,9 +192,10 @@ class CustomerOrganizationDemoSeeder extends Seeder
     }
 
     /**
+     * @param Collection<string, Role> $roles
      * @param array<string, string> $adminData
      */
-    private function seedAdmin(Organization $organization, array $adminData): User
+    private function seedAdmin(Organization $organization, Collection $roles, array $adminData): User
     {
         $admin = User::query()->firstOrCreate(
             ['email' => $adminData['email']],
@@ -194,17 +210,18 @@ class CustomerOrganizationDemoSeeder extends Seeder
             'organization_id' => $organization->id,
             'name' => $adminData['name'],
         ]);
-        $admin->assignRole('Organization Admin');
+        $admin->syncRoles([$roles->get('organization_admin')]);
 
         return $admin;
     }
 
     /**
+     * @param Collection<string, Role> $roles
      * @param array<int, array<string, mixed>> $employees
      *
      * @return array<string, Employee>
      */
-    private function seedEmployees(Organization $organization, array $employees): array
+    private function seedEmployees(Organization $organization, Collection $roles, array $employees): array
     {
         $seeded = [];
 
@@ -227,7 +244,7 @@ class CustomerOrganizationDemoSeeder extends Seeder
                     ]
                 );
                 $user->update(['organization_id' => $organization->id]);
-                $user->assignRole($employeeData['role']);
+                $user->syncRoles([$roles->get($employeeData['role_key'])]);
             }
 
             $employee = Employee::query()->updateOrCreate(
@@ -808,7 +825,7 @@ class CustomerOrganizationDemoSeeder extends Seeder
                 'grade_level_code' => 'G0'.min(5, max(1, 5 - ($index % 5))),
                 'employment_type_code' => ['PERM', 'CONT', 'FIELD', 'PART'][$index % 4],
                 'location_code' => $locationCodes[$index % count($locationCodes)],
-                'role' => $index === 0 ? 'HR Director' : ($index === 3 ? 'Department Head' : 'Employee'),
+                'role_key' => $index === 0 ? 'hr_director' : ($index === 3 ? 'department_head' : 'employee'),
                 'create_user' => ! in_array($status, ['draft'], true),
                 'status' => $status,
                 'start_date' => Carbon::parse('2024-01-15')->addDays($index * 38)->toDateString(),

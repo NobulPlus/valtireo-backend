@@ -9,7 +9,7 @@ interface DatePickerProps {
   className?: string;
 }
 
-const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const YEAR_RANGE_BEFORE = 90;
 const YEAR_RANGE_AFTER = 10;
 
@@ -34,7 +34,8 @@ function monthLabel(date: Date): string {
 function calendarDays(cursor: Date): Date[] {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const start = new Date(first);
-  start.setDate(first.getDate() - first.getDay());
+  // Monday-first grid, matching the WEEKDAYS header order.
+  start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
 
   return Array.from({ length: 42 }, (_, index) => {
     const day = new Date(start);
@@ -127,7 +128,7 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
             <button
               type="button"
               onClick={() => setYearPickerOpen((current) => !current)}
-              className="rounded-md px-2 py-1 text-sm font-semibold text-strong hover:bg-surface-soft"
+              className="rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-strong transition-colors hover:bg-surface-soft"
             >
               {monthLabel(cursor)}
             </button>
@@ -173,7 +174,7 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
                 ))}
               </div>
 
-              <div className="mt-2 grid grid-cols-7 gap-1">
+              <div className="mt-2 grid grid-cols-7 gap-y-1">
                 {days.map((day) => {
                   const dateValue = toInputDate(day);
                   const isCurrentMonth = day.getMonth() === cursor.getMonth();
@@ -185,10 +186,9 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
                       type="button"
                       onClick={() => selectDay(day)}
                       className={cn(
-                        'h-9 rounded-md text-sm transition-colors',
+                        'mx-auto flex h-8 w-8 items-center justify-center rounded-full text-sm transition-colors',
                         isCurrentMonth ? 'text-strong' : 'text-muted/45',
-                        isSelected && 'bg-teal text-white hover:bg-teal',
-                        !isSelected && 'hover:bg-surface-soft',
+                        isSelected ? 'bg-pine text-white hover:bg-pine' : 'hover:bg-surface-soft',
                       )}
                     >
                       {day.getDate()}

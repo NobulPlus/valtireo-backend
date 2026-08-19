@@ -47,7 +47,7 @@ class ModuleEntitlementService
         $subscription = $subscriptions->get($module->id);
         $subscriptionStatus = $subscription?->status ?? 'locked';
         $isSubscribed = in_array($subscriptionStatus, ['active', 'trial'], true);
-        $isAdmin = $user->hasAnyRole(['Super Admin', 'Organization Admin']);
+        $isAdmin = $user->is_platform_admin || $user->can('organizations.administer');
         $canAccess = $this->userCanAccessModule($user, $module, $isSubscribed, $isAdmin);
 
         if (! $isAdmin && ! $canAccess) {
@@ -97,7 +97,7 @@ class ModuleEntitlementService
             return 'manage';
         }
 
-        if ($user->hasRole('Employee') && in_array($module->key, ['employee_self_service', 'leave'], true)) {
+        if ($user->can('leave_requests.create') && in_array($module->key, ['employee_self_service', 'leave'], true)) {
             return 'self';
         }
 

@@ -1,8 +1,9 @@
 /**
  * International dial codes, one entry per country in `COUNTRIES` (lib/countries.ts).
- * Used by PhoneInput's country-code picker. No flag emoji — Windows renders
- * regional-indicator flag emoji as bare two-letter codes instead of a flag
- * glyph, which looks broken; the dial code itself is label enough.
+ * Used by PhoneInput's country-code picker. `iso2` doubles as the flag key
+ * for the `flag-icons` package (`fi fi-{iso2}`, lowercased) — real SVG
+ * flags, not Unicode regional-indicator emoji (which render as bare
+ * two-letter codes on Windows).
  */
 export interface CallingCode {
   iso2: string;

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -8,6 +8,8 @@ export interface SelectMenuOption {
   label: string;
   description?: string;
   disabled?: boolean;
+  /** Small leading visual (e.g. a flag) shown before the label, in both the trigger and the option row. */
+  icon?: ReactNode;
 }
 
 interface SelectMenuProps {
@@ -151,7 +153,10 @@ export function SelectMenu({
           invalid && 'border-danger focus-visible:outline-danger',
         )}
       >
-        <span className={cn('truncate', !selected && 'text-muted')}>{selected?.label ?? placeholder}</span>
+        <span className={cn('flex min-w-0 items-center gap-2', !selected && 'text-muted')}>
+          {selected?.icon}
+          <span className="truncate">{selected?.label ?? placeholder}</span>
+        </span>
         <ChevronDown className={cn('h-4 w-4 flex-shrink-0 text-muted transition-transform', open && 'rotate-180')} />
       </button>
 
@@ -200,9 +205,12 @@ export function SelectMenu({
                       option.disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
                     )}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate">{option.label}</span>
-                      {option.description && <span className="block truncate text-xs text-muted">{option.description}</span>}
+                    <span className="flex min-w-0 items-start gap-2">
+                      {option.icon && <span className="mt-0.5 flex-shrink-0">{option.icon}</span>}
+                      <span className="min-w-0">
+                        <span className="block truncate">{option.label}</span>
+                        {option.description && <span className="block truncate text-xs text-muted">{option.description}</span>}
+                      </span>
                     </span>
                     {active && <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal" />}
                   </button>

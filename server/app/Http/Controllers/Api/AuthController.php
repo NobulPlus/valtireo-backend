@@ -8,16 +8,18 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\OrganizationResource;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\DashboardService;
 use App\Services\ModuleEntitlementService;
 use App\Services\WorkspaceSettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\PermissionRegistrar;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): JsonResponse
+    public function register(RegisterRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): JsonResponse
     {
         $user = User::query()->create([
             'name' => $request->string('name')->toString(),
@@ -29,10 +31,10 @@ class AuthController extends Controller
             $request->string('device_name', 'api')->toString()
         )->plainTextToken;
 
-        return response()->json($this->authPayload($user, $token, $modules, $workspace), 201);
+        return response()->json($this->authPayload($user, $token, $modules, $workspace, $dashboard), 201);
     }
 
-    public function login(LoginRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): JsonResponse
+    public function login(LoginRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): JsonResponse
     {
         $user = User::query()
             ->with('organization')
@@ -55,12 +57,12 @@ class AuthController extends Controller
             $request->string('device_name', 'api')->toString()
         )->plainTextToken;
 
-        return response()->json($this->authPayload($user, $token, $modules, $workspace));
+        return response()->json($this->authPayload($user, $token, $modules, $workspace, $dashboard));
     }
 
-    public function me(Request $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): JsonResponse
+    public function me(Request $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): JsonResponse
     {
-        return response()->json($this->sessionPayload($request->user(), $modules, $workspace));
+        return response()->json($this->sessionPayload($request->user(), $modules, $workspace, $dashboard));
     }
 
     public function logout(Request $request): JsonResponse
@@ -75,20 +77,26 @@ class AuthController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function authPayload(User $user, string $token, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): array
+    private function authPayload(User $user, string $token, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): array
     {
         return [
             'token' => $token,
             'token_type' => 'Bearer',
-            ...$this->sessionPayload($user, $modules, $workspace),
+            ...$this->sessionPayload($user, $modules, $workspace, $dashboard),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function sessionPayload(User $user, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace): array
+    private function sessionPayload(User $user, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): array
     {
+        // login/register sit outside the auth:sanctum route group, so
+        // SetPermissionsTeamId middleware never runs for them — this call
+        // (which loads roles/permissions below) must be self-sufficient
+        // rather than trusting middleware wiring at every possible caller.
+        app(PermissionRegistrar::class)->setPermissionsTeamId($user->organization_id);
+
         $user->loadMissing('organization', 'roles', 'permissions');
 
         return [
@@ -97,7 +105,9 @@ class AuthController extends Controller
             'workspace' => $user->organization ? $workspace->forOrganization($user->organization) : null,
             'roles' => $user->getRoleNames()->values(),
             'permissions' => $user->getAllPermissions()->pluck('name')->values(),
+            'is_platform_admin' => $user->is_platform_admin,
             'modules' => $modules->forUser($user),
+            'has_manager_scope' => $dashboard->hasManagerScope($user),
         ];
     }
 }

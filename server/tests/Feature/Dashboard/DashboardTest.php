@@ -33,25 +33,39 @@ class DashboardTest extends TestCase
                 'recent' => ['employees', 'invitations'],
                 'setup_completion',
             ])
-            ->assertJsonStructure(['trends' => ['onboarding' => ['grain', 'year', 'month', 'label', 'date_from', 'date_to', 'available_years', 'available_months', 'entries' => [['key', 'label', 'created', 'invited', 'submitted', 'activated', 'completion_rate']]]]])
+            ->assertJsonStructure(['trends' => ['onboarding' => ['grain', 'label', 'date_from', 'date_to', 'entries' => [['key', 'label', 'created', 'invited', 'submitted', 'activated', 'completion_rate']]]]])
             ->assertJsonPath('setup_completion.percentage', 100);
     }
 
-    public function test_organization_dashboard_can_show_daily_onboarding_trend_for_selected_month(): void
+    public function test_organization_dashboard_shows_daily_onboarding_trend_for_a_short_date_range(): void
     {
         $this->seed();
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
         Sanctum::actingAs($admin);
 
-        $this->getJson('/api/dashboard/organization?trend_year=2026&trend_month=8')
+        $this->getJson('/api/dashboard/organization?date_from=2026-08-01&date_to=2026-08-31')
             ->assertOk()
-            ->assertJsonPath('filters.trend_year', 2026)
-            ->assertJsonPath('filters.trend_month', 8)
+            ->assertJsonPath('filters.date_from', '2026-08-01')
+            ->assertJsonPath('filters.date_to', '2026-08-31')
             ->assertJsonPath('trends.onboarding.grain', 'day')
-            ->assertJsonPath('trends.onboarding.label', 'August 2026')
-            ->assertJsonStructure(['trends' => ['onboarding' => ['available_years', 'available_months']]])
+            ->assertJsonPath('trends.onboarding.date_from', '2026-08-01')
+            ->assertJsonPath('trends.onboarding.date_to', '2026-08-31')
             ->assertJsonMissingPath('trends.onboarding.entries.30');
+    }
+
+    public function test_organization_dashboard_shows_monthly_onboarding_trend_for_a_long_date_range(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/dashboard/organization?date_from=2026-01-01&date_to=2026-12-31')
+            ->assertOk()
+            ->assertJsonPath('trends.onboarding.grain', 'month')
+            ->assertJsonPath('trends.onboarding.date_from', '2026-01-01')
+            ->assertJsonPath('trends.onboarding.date_to', '2026-12-31');
     }
 
     public function test_organization_dashboard_accepts_filters_and_sort_options(): void
@@ -114,8 +128,8 @@ class DashboardTest extends TestCase
             ->assertJsonPath('scope.type', 'department')
             ->assertJsonPath('scope.department.code', 'HR')
             ->assertJsonPath('scope.source', 'requested_department')
-            ->assertJsonPath('employees.total', 2)
-            ->assertJsonPath('employees.active', 2)
+            ->assertJsonPath('employees.total', 10)
+            ->assertJsonPath('employees.active', 3)
             ->assertJsonStructure([
                 'scope',
                 'filters',
@@ -165,6 +179,117 @@ class DashboardTest extends TestCase
 
         $this->getJson('/api/dashboard/manager')
             ->assertForbidden();
+    }
+
+    public function test_employee_role_with_a_direct_report_still_cannot_view_manager_dashboard(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('work_email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $someoneElse = Employee::query()->where('employee_number', 'EMP-ICT-001')->firstOrFail();
+
+        // Organizational data alone (a direct report) must never be sufficient —
+        // Aisha holds the plain "Employee" role, which has no employees.view_team.
+        $someoneElse->update(['reporting_manager_id' => $employee->id]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertForbidden();
+    }
+
+    public function test_department_head_sees_whole_department_while_supervisor_sees_only_own_reports(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $opsDepartment = Department::query()->where('organization_id', $admin->organization_id)->where('code', 'OPS')->firstOrFail();
+
+        $supervisorUser = User::query()->where('email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $supervisor = Employee::query()->where('work_email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $directReport = Employee::query()->where('employee_number', 'EMP-OPS-002')->firstOrFail();
+        $directReport->update(['reporting_manager_id' => $supervisor->id]);
+
+        $deptHeadUser = User::factory()->create([
+            'organization_id' => $admin->organization_id,
+            'email' => 'ops-head@valtireo.test',
+        ]);
+        $deptHeadUser->assignRole('Department Head');
+        Employee::factory()->create([
+            'organization_id' => $admin->organization_id,
+            'user_id' => $deptHeadUser->id,
+            'department_id' => $opsDepartment->id,
+            'unit_id' => null,
+            'designation_id' => $supervisor->designation_id,
+            'grade_level_id' => null,
+            'employment_type_id' => $supervisor->employment_type_id,
+            'organization_location_id' => $supervisor->organization_location_id,
+            'reporting_manager_id' => null,
+            'status' => 'active',
+        ]);
+
+        $opsDepartmentTotal = Employee::query()->where('department_id', $opsDepartment->id)->count();
+
+        Sanctum::actingAs($deptHeadUser);
+        $this->getJson('/api/dashboard/manager')
+            ->assertOk()
+            ->assertJsonPath('scope.type', 'department')
+            ->assertJsonPath('scope.department.code', 'OPS')
+            ->assertJsonPath('employees.total', $opsDepartmentTotal);
+
+        // A Supervisor inside the same department only ever sees their own
+        // reporting-line chain, never the Department Head's whole-department view.
+        Sanctum::actingAs($supervisorUser);
+        $this->getJson('/api/dashboard/manager')
+            ->assertOk()
+            ->assertJsonPath('scope.type', 'direct_reports')
+            ->assertJsonPath('employees.total', 1)
+            ->assertJsonPath('people.members.0.employee_number', 'EMP-OPS-002');
+    }
+
+    public function test_organization_admin_without_employee_record_cannot_view_manager_dashboard(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $this->assertNull($admin->employee);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertForbidden();
+    }
+
+    public function test_organization_admin_who_is_also_an_employee_with_reports_can_view_manager_dashboard(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $opsDepartment = Department::query()->where('organization_id', $admin->organization_id)->where('code', 'OPS')->firstOrFail();
+        $supervisor = Employee::query()->where('work_email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+
+        $adminEmployee = Employee::factory()->create([
+            'organization_id' => $admin->organization_id,
+            'user_id' => $admin->id,
+            'department_id' => $opsDepartment->id,
+            'unit_id' => null,
+            'designation_id' => $supervisor->designation_id,
+            'grade_level_id' => null,
+            'employment_type_id' => $supervisor->employment_type_id,
+            'organization_location_id' => $supervisor->organization_location_id,
+            'reporting_manager_id' => null,
+            'status' => 'active',
+        ]);
+
+        $supervisor->update(['reporting_manager_id' => $adminEmployee->id]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertOk()
+            ->assertJsonPath('scope.type', 'direct_reports')
+            ->assertJsonPath('scope.manager.employee_number', $adminEmployee->employee_number);
     }
 
     public function test_employee_cannot_view_organization_dashboard(): void

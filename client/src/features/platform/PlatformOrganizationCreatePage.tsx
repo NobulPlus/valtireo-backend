@@ -358,7 +358,7 @@ function PlatformOrganizationCreateForm() {
           </Field>
           <p className="text-xs text-muted sm:col-span-2">
             This person is created as the organization's first Organization Admin. A temporary password is shown once, right
-            after provisioning &mdash; email delivery isn't wired up yet, so you'll need to share it yourself.
+            after provisioning &mdash; if mail delivery is enabled, the invite can also be sent through the configured SMTP provider.
           </p>
         </CardBody>
       </Card>

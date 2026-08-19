@@ -1,10 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, ClipboardList, Download, RotateCcw, Search, UserCheck, Users } from 'lucide-react';
+import {
+  Building2,
+  ClipboardList,
+  Download,
+  MapPin,
+  Plus,
+  RotateCcw,
+  Search,
+  UserCheck,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import { useOrganizationDashboard, type OrganizationDashboardFilters } from '@/features/dashboard/api';
+import { useAuth } from '@/context/AuthContext';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
-import { StatTile } from '@/components/ui/StatTile';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
@@ -12,19 +23,43 @@ import { Input } from '@/components/ui/Input';
 import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Modal } from '@/components/ui/Modal';
-import { CHART_COLORS, ChartLegend, ColumnChart, DonutChart } from '@/components/ui/Charts';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { AreaTrendChart, ChartLegend, DonutChart, RankedBarList } from '@/components/ui/Charts';
 import { useSetupLookups } from '@/features/workspace/api';
 import { downloadEmployeesCsv, useEmployees, type EmployeeFilters } from '@/features/employees/api';
+import { cn } from '@/lib/cn';
 import type { Employee, EmployeeSummary } from '@/types/api';
 
 const EMPLOYEE_STATUS_OPTIONS = ['draft', 'invited', 'onboarding', 'active', 'suspended', 'exited'];
+
+/** Pine/Teal/Blue family only — Gold/Cyan/Bridge Teal are reserved (index.css) and must not appear as general chart colors. */
+const DEPARTMENT_COLORS = [
+  'var(--color-chart-1)',
+  'var(--color-chart-2)',
+  'var(--color-chart-3)',
+  'var(--color-chart-4)',
+  'var(--color-chart-5)',
+  'var(--color-chart-6)',
+];
+
 type TrendMetric = 'created' | 'invited' | 'submitted' | 'activated';
 const TREND_METRIC_OPTIONS: Array<{ value: TrendMetric; label: string; color: string }> = [
-  { value: 'created', label: 'Created', color: CHART_COLORS[0] },
-  { value: 'invited', label: 'Invited', color: CHART_COLORS[1] },
-  { value: 'submitted', label: 'Submitted', color: CHART_COLORS[2] },
-  { value: 'activated', label: 'Activated', color: CHART_COLORS[3] },
+  { value: 'created', label: 'Created', color: 'var(--color-teal)' },
+  { value: 'invited', label: 'Invited', color: 'var(--color-blue)' },
+  { value: 'submitted', label: 'Submitted', color: 'var(--color-chart-4)' },
+  { value: 'activated', label: 'Activated', color: 'var(--color-chart-5)' },
 ];
+
+const SETUP_ITEM_LABELS: Record<string, string> = {
+  locations: 'Locations',
+  departments: 'Departments',
+  units: 'Units',
+  designations: 'Designations',
+  grade_levels: 'Grade levels',
+  employment_types: 'Employment types',
+  employees: 'Employees added',
+};
+
 function lookupOptions<T extends { id: number; name: string }>(items: T[] | undefined, placeholder: string): SelectMenuOption[] {
   return [
     { value: '', label: placeholder },
@@ -32,8 +67,45 @@ function lookupOptions<T extends { id: number; name: string }>(items: T[] | unde
   ];
 }
 
+function HeroStat({
+  icon: Icon,
+  iconClassName,
+  value,
+  label,
+  chip,
+  chipClassName,
+  delayMs,
+}: {
+  icon: LucideIcon;
+  iconClassName: string;
+  value: number | string;
+  label: string;
+  chip: string;
+  chipClassName: string;
+  delayMs: number;
+}) {
+  return (
+    <div
+      className="dashboard-hero-stat group flex flex-col gap-2.5 rounded-2xl bg-surface p-4 shadow-[0_20px_40px_-18px_rgba(15,35,32,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_26px_44px_-16px_rgba(15,35,32,0.4)]"
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className={cn('flex h-9 w-9 items-center justify-center rounded-xl transition-transform group-hover:scale-105', iconClassName)}>
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
+        <span className={cn('whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold', chipClassName)}>{chip}</span>
+      </div>
+      <div>
+        <p className="font-display text-[26px] font-bold leading-none tabular-nums text-strong">{value}</p>
+        <p className="mt-1.5 text-[12.5px] font-medium text-muted">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 export function OrganizationDashboardView() {
   const navigate = useNavigate();
+  const { session } = useAuth();
   const lookups = useSetupLookups();
   const [selectedDepartment, setSelectedDepartment] = useState<{ id: number; name: string; total: number } | null>(null);
   const [showAllRecentEmployees, setShowAllRecentEmployees] = useState(false);
@@ -41,7 +113,6 @@ export function OrganizationDashboardView() {
   const [filters, setFilters] = useState<OrganizationDashboardFilters>({
     date_column: 'created_at',
     recent_limit: 25,
-    trend_year: new Date().getFullYear(),
   });
   const { data, isLoading, isError, error, refetch } = useOrganizationDashboard(filters);
   const [exporting, setExporting] = useState(false);
@@ -105,26 +176,42 @@ export function OrganizationDashboardView() {
     id: entry.id,
     label: entry.name,
     value: entry.total,
-    color: CHART_COLORS[index % CHART_COLORS.length],
+    color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+  }));
+  const employmentTypeEntries = data.breakdowns.by_employment_type.map((entry, index) => ({
+    id: entry.id,
+    label: entry.name,
+    value: entry.total,
+    color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+  }));
+  const locationEntries = data.breakdowns.by_location.map((entry, index) => ({
+    id: entry.id,
+    label: entry.name,
+    value: entry.total,
+    color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
   }));
   const recentEmployees = data.recent.employees.slice(0, 5);
   const onboardingTrend = data.trends.onboarding;
-  const trendYearOptions = onboardingTrend.available_years.length > 0
-    ? onboardingTrend.available_years.map((year) => ({ value: String(year), label: String(year) }))
-    : [{ value: String(filters.trend_year ?? new Date().getFullYear()), label: String(filters.trend_year ?? new Date().getFullYear()) }];
-  const trendMonthOptions = [
-    { value: '', label: 'Monthly trend' },
-    ...onboardingTrend.available_months.map((month) => ({ value: String(month.value), label: month.label })),
-  ];
   const selectedTrendMetric = TREND_METRIC_OPTIONS.find((option) => option.value === trendMetric) ?? TREND_METRIC_OPTIONS[0];
-  const trendEntries = onboardingTrend.entries
-    .map((entry) => ({
-      id: entry.key,
-      label: entry.label,
-      value: entry[trendMetric],
-      color: selectedTrendMetric.color,
-    }))
-    .filter((entry) => entry.value > 0);
+  const trendEntries = onboardingTrend.entries.map((entry) => ({
+    id: entry.key,
+    label: entry.label,
+    value: entry[trendMetric],
+  }));
+
+  const activePercentage = data.employees.total > 0 ? Math.round((data.employees.active / data.employees.total) * 100) : 0;
+  const setupItems = Object.entries(data.setup_completion.items) as Array<[string, boolean]>;
+
+  const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+  const overviewParts = [
+    `${data.employees.total} employee${data.employees.total === 1 ? '' : 's'} across ${data.structure.departments} department${data.structure.departments === 1 ? '' : 's'}`,
+  ];
+  if (data.employees.onboarding > 0) {
+    overviewParts.push(`${data.employees.onboarding} mid-onboarding`);
+  }
+  if (data.onboarding.submitted_profiles > 0) {
+    overviewParts.push(`${data.onboarding.submitted_profiles} profile${data.onboarding.submitted_profiles === 1 ? '' : 's'} awaiting review`);
+  }
 
   async function handleExportEmployees() {
     setExporting(true);
@@ -150,21 +237,77 @@ export function OrganizationDashboardView() {
   }
 
   function resetFilters() {
-    setFilters({ date_column: 'created_at', recent_limit: 25, trend_year: new Date().getFullYear() });
+    setFilters({ date_column: 'created_at', recent_limit: 25 });
   }
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="-mx-6 overflow-hidden rounded-b-[28px] bg-[radial-gradient(120%_140%_at_8%_0%,_#1a544d_0%,_#123f3a_42%,_#0c2c28_100%)] px-6 pb-9 pt-5 text-white sm:px-8">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-[11.5px] font-bold uppercase tracking-wide text-teal-light/80">
+              {todayLabel} &middot; {session?.organization?.name ?? 'Organization'} overview
+            </p>
+            <p className="mt-1.5 max-w-[62ch] text-[15px] font-medium text-white/90">{overviewParts.join(' · ')}.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="onHero" size="sm" onClick={handleExportEmployees} isLoading={exporting}>
+              {!exporting && <Download className="h-4 w-4" />}
+              Export report
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/employees/new')}>
+              <Plus className="h-4 w-4" />
+              Add employee
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <HeroStat
+            icon={Users}
+            iconClassName="bg-teal-light text-pine"
+            value={data.employees.total}
+            label="Total employees"
+            chip={`${data.employees.draft} draft`}
+            chipClassName="bg-draft-bg text-draft"
+            delayMs={40}
+          />
+          <HeroStat
+            icon={UserCheck}
+            iconClassName="bg-success-bg text-success"
+            value={data.employees.active}
+            label="Active"
+            chip={`${activePercentage}% of workforce`}
+            chipClassName="bg-surface-soft text-muted"
+            delayMs={110}
+          />
+          <HeroStat
+            icon={ClipboardList}
+            iconClassName="bg-pending-bg text-pending"
+            value={data.employees.onboarding}
+            label="Onboarding"
+            chip={`${data.onboarding.submitted_profiles} awaiting review`}
+            chipClassName="bg-info-bg text-info"
+            delayMs={180}
+          />
+          <HeroStat
+            icon={Building2}
+            iconClassName="bg-teal-light text-teal"
+            value={data.structure.departments}
+            label="Departments"
+            chip={`${data.structure.locations} locations`}
+            chipClassName="bg-surface-soft text-muted"
+            delayMs={250}
+          />
+        </div>
+      </div>
+
       <Card>
-        <CardHeader className="flex-col items-stretch sm:flex-row sm:items-center">
+        <CardHeader>
           <div>
             <CardTitle>Organization filters</CardTitle>
             <p className="mt-1 text-xs text-muted">Refine employee metrics, charts, recent employees, and the report export.</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={handleExportEmployees} isLoading={exporting}>
-            {!exporting && <Download className="h-4 w-4" />}
-            Report
-          </Button>
         </CardHeader>
         <CardBody className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_130px_160px_210px_36px]">
           <div className="relative min-w-0">
@@ -209,72 +352,27 @@ export function OrganizationDashboardView() {
         </CardBody>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Total employees" value={data.employees.total} icon={Users} />
-        <StatTile label="Active" value={data.employees.active} tone="success" icon={UserCheck} />
-        <StatTile label="Onboarding" value={data.employees.onboarding} icon={ClipboardList} />
-        <StatTile label="Departments" value={data.structure.departments} icon={Building2} />
-      </div>
-
-      <Card>
-        <CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          <div>
-            <CardTitle>Employee onboarding trend</CardTitle>
-            <p className="mt-1 text-xs text-muted">
-              {onboardingTrend.grain === 'day'
-                ? `Daily movement for ${onboardingTrend.label}; days without movement are hidden.`
-                : `Monthly movement for ${onboardingTrend.label}; empty months are hidden.`}
-            </p>
-          </div>
-          <div className="grid gap-2 sm:w-[460px] sm:grid-cols-[1.05fr_1fr_1fr]">
-            <SelectMenu
-              value={trendMetric}
-              onChange={(value) => setTrendMetric(value as TrendMetric)}
-              options={TREND_METRIC_OPTIONS}
-            />
-            <SelectMenu
-              value={String(filters.trend_year ?? onboardingTrend.year)}
-              onChange={(value) => {
-                setFilters((current) => ({ ...current, trend_year: Number(value), trend_month: undefined }));
-              }}
-              options={trendYearOptions}
-            />
-            <SelectMenu
-              value={filters.trend_month ? String(filters.trend_month) : ''}
-              onChange={(value) => updateFilter('trend_month', value ? Number(value) : undefined)}
-              options={trendMonthOptions}
-            />
-          </div>
-        </CardHeader>
-        <CardBody>
-          <ColumnChart
-            valueLabel="Employees"
-            entries={trendEntries}
-          />
-        </CardBody>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Employees by department</CardTitle>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.7fr_1fr]">
+        <Card>
+          <CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <div>
+              <CardTitle>Employee onboarding trend</CardTitle>
+              <p className="mt-1 text-xs text-muted">
+                {onboardingTrend.grain === 'day'
+                  ? `Daily movement for ${onboardingTrend.label}; days without movement are hidden.`
+                  : `Monthly movement for ${onboardingTrend.label}; empty months are hidden.`}
+              </p>
+            </div>
+            <div className="sm:w-[160px]">
+              <SelectMenu
+                value={trendMetric}
+                onChange={(value) => setTrendMetric(value as TrendMetric)}
+                options={TREND_METRIC_OPTIONS}
+              />
+            </div>
           </CardHeader>
-          <CardBody className="grid gap-5 md:grid-cols-[240px_1fr] md:items-center">
-            <DonutChart
-              totalLabel="Employees"
-              entries={departmentEntries}
-              onEntryClick={(entry) => {
-                const department = data.breakdowns.by_department.find((item) => item.id === entry.id);
-                if (department) setSelectedDepartment(department);
-              }}
-            />
-            <ChartLegend
-              entries={departmentEntries}
-              onEntryClick={(entry) => {
-                const department = data.breakdowns.by_department.find((item) => item.id === entry.id);
-                if (department) setSelectedDepartment(department);
-              }}
-            />
+          <CardBody>
+            <AreaTrendChart entries={trendEntries} valueLabel={selectedTrendMetric.label} color={selectedTrendMetric.color} />
           </CardBody>
         </Card>
 
@@ -282,18 +380,29 @@ export function OrganizationDashboardView() {
           <CardHeader>
             <CardTitle>Setup progress</CardTitle>
           </CardHeader>
-          <CardBody>
-            <div className="mb-2 flex items-center justify-between text-xs text-muted">
-              <span>Workspace setup</span>
-              <span>{data.setup_completion.percentage}%</span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-soft">
-              <div className="h-full rounded-full bg-teal" style={{ width: `${data.setup_completion.percentage}%` }} />
+          <CardBody className="flex flex-col items-center">
+            <ProgressRing percentage={data.setup_completion.percentage} />
+            <div className="mt-5 w-full space-y-2">
+              {setupItems.map(([key, done]) => (
+                <div key={key} className="flex items-center gap-2.5 text-[12.5px]">
+                  <span
+                    className={cn(
+                      'flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full text-[10px] font-bold',
+                      done ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning',
+                    )}
+                  >
+                    {done ? '✓' : '•'}
+                  </span>
+                  <span className={cn('font-medium', done ? 'text-strong' : 'text-muted')}>
+                    {SETUP_ITEM_LABELS[key] ?? key}
+                  </span>
+                </div>
+              ))}
             </div>
             <button
               type="button"
               onClick={() => navigate('/workspace')}
-              className="mt-3 text-xs font-medium text-teal hover:underline"
+              className="mt-4 self-start text-xs font-medium text-teal hover:underline"
             >
               Go to workspace setup
             </button>
@@ -301,38 +410,53 @@ export function OrganizationDashboardView() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Card>
           <CardHeader>
-          <CardTitle>By employment type</CardTitle>
+            <CardTitle>By department</CardTitle>
           </CardHeader>
-          <CardBody>
-            <ColumnChart
-              valueLabel="Employees"
-              entries={data.breakdowns.by_employment_type.map((entry, index) => ({
-                id: entry.id,
-                label: entry.name,
-                value: entry.total,
-                color: CHART_COLORS[index % CHART_COLORS.length],
-              }))}
-            />
+          <CardBody className="flex items-center gap-5">
+            <div className="w-[150px] flex-none">
+              <DonutChart
+                totalLabel="Employees"
+                entries={departmentEntries}
+                onEntryClick={(entry) => {
+                  const department = data.breakdowns.by_department.find((item) => item.id === entry.id);
+                  if (department) setSelectedDepartment(department);
+                }}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <ChartLegend
+                entries={departmentEntries}
+                onEntryClick={(entry) => {
+                  const department = data.breakdowns.by_department.find((item) => item.id === entry.id);
+                  if (department) setSelectedDepartment(department);
+                }}
+              />
+            </div>
           </CardBody>
         </Card>
 
         <Card>
           <CardHeader>
-          <CardTitle>By location</CardTitle>
+            <CardTitle>By employment type</CardTitle>
           </CardHeader>
           <CardBody>
-            <ColumnChart
-              valueLabel="Employees"
-              entries={data.breakdowns.by_location.map((entry, index) => ({
-                id: entry.id,
-                label: entry.name,
-                value: entry.total,
-                color: CHART_COLORS[index % CHART_COLORS.length],
-              }))}
-            />
+            <RankedBarList valueLabel="Employees" entries={employmentTypeEntries} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>By location</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <div className="mb-3 flex items-center gap-1.5 text-xs text-muted">
+              <MapPin className="h-3.5 w-3.5" />
+              {data.structure.locations} location{data.structure.locations === 1 ? '' : 's'}
+            </div>
+            <RankedBarList valueLabel="Employees" entries={locationEntries} />
           </CardBody>
         </Card>
       </div>

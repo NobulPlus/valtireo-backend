@@ -226,8 +226,6 @@ class DashboardService
             'sort_by' => in_array($sortBy, $this->sortColumns(), true) ? $sortBy : 'created_at',
             'sort_direction' => $sortDirection,
             'recent_limit' => min(max($request->integer('recent_limit', 5), 1), 25),
-            'trend_year' => min(max($request->integer('trend_year', now()->year), 2000), now()->year + 5),
-            'trend_month' => $request->integer('trend_month') >= 1 && $request->integer('trend_month') <= 12 ? $request->integer('trend_month') : null,
         ];
     }
 
@@ -295,16 +293,24 @@ class DashboardService
             'date_to' => null,
         ];
         $employeeIds = $this->employeeQuery($organization, $scopeFilters)->pluck('id');
-        $year = (int) $filters['trend_year'];
-        $month = $filters['trend_month'] ? (int) $filters['trend_month'] : null;
-        $availableYears = $this->onboardingTrendYears($employeeIds);
-        $availableMonths = $this->onboardingTrendMonths($employeeIds, $year);
-        $periodStart = $month
-            ? CarbonImmutable::create($year, $month, 1)->startOfMonth()
-            : CarbonImmutable::create($year, 1, 1)->startOfYear();
-        $periodEnd = $month ? $periodStart->endOfMonth() : $periodStart->endOfYear();
-        $steps = $month ? range(1, $periodEnd->day) : range(1, 12);
-        $bucketFormat = $month ? 'Y-m-d' : 'Y-m';
+
+        if ($filters['date_from'] || $filters['date_to']) {
+            $periodStart = $filters['date_from']
+                ? CarbonImmutable::parse($filters['date_from'])->startOfDay()
+                : CarbonImmutable::now()->startOfYear();
+            $periodEnd = $filters['date_to']
+                ? CarbonImmutable::parse($filters['date_to'])->endOfDay()
+                : CarbonImmutable::now()->endOfDay();
+        } else {
+            $periodStart = CarbonImmutable::now()->startOfYear();
+            $periodEnd = CarbonImmutable::now()->endOfYear();
+        }
+
+        $daily = $periodStart->diffInDays($periodEnd) <= 62;
+        $bucketFormat = $daily ? 'Y-m-d' : 'Y-m';
+        $steps = $daily
+            ? $periodStart->daysUntil($periodEnd)
+            : $periodStart->startOfMonth()->monthsUntil($periodEnd->startOfMonth());
 
         $employeeTimestamps = Employee::query()
             ->whereIn('id', $employeeIds)
@@ -327,8 +333,7 @@ class DashboardService
         $submittedCounts = $bucketCounts($submittedProfiles, 'updated_at');
 
         $entries = collect($steps)
-            ->map(function (int $step) use ($year, $month, $bucketFormat, $createdCounts, $invitedCounts, $submittedCounts, $activatedCounts): array {
-                $date = $month ? CarbonImmutable::create($year, $month, $step) : CarbonImmutable::create($year, $step, 1);
+            ->map(function (CarbonImmutable $date) use ($daily, $bucketFormat, $createdCounts, $invitedCounts, $submittedCounts, $activatedCounts): array {
                 $key = $date->format($bucketFormat);
                 $created = $createdCounts->get($key, 0);
                 $invited = $invitedCounts->get($key, 0);
@@ -337,7 +342,7 @@ class DashboardService
 
                 return [
                     'key' => $key,
-                    'label' => $month ? $date->format('j') : $date->format('M'),
+                    'label' => $daily ? $date->format('M j') : $date->format('M Y'),
                     'created' => $created,
                     'invited' => $invited,
                     'submitted' => $submitted,
@@ -349,89 +354,17 @@ class DashboardService
             ->values()
             ->all();
 
+        $label = $periodStart->isSameYear($periodEnd)
+            ? sprintf('%s - %s', $periodStart->format('M j'), $periodEnd->format('M j, Y'))
+            : sprintf('%s - %s', $periodStart->format('M j, Y'), $periodEnd->format('M j, Y'));
+
         return [
-            'grain' => $month ? 'day' : 'month',
-            'year' => $year,
-            'month' => $month,
-            'label' => $month ? $periodStart->format('F Y') : (string) $year,
+            'grain' => $daily ? 'day' : 'month',
+            'label' => $label,
             'date_from' => $periodStart->toDateString(),
             'date_to' => $periodEnd->toDateString(),
-            'available_years' => $availableYears,
-            'available_months' => $availableMonths,
             'entries' => $entries,
         ];
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function onboardingTrendYears($employeeIds): array
-    {
-        return collect([
-            ...$this->datePartsForEmployees($employeeIds, 'created_at', 'year'),
-            ...$this->datePartsForEmployees($employeeIds, 'invited_at', 'year'),
-            ...$this->datePartsForEmployees($employeeIds, 'activated_at', 'year'),
-            ...$this->datePartsForProfiles($employeeIds, 'year'),
-        ])
-            ->filter()
-            ->map(fn ($value) => (int) $value)
-            ->unique()
-            ->sortDesc()
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @return array<int, array{value: int, label: string}>
-     */
-    private function onboardingTrendMonths($employeeIds, int $year): array
-    {
-        $months = collect([
-            ...$this->datePartsForEmployees($employeeIds, 'created_at', 'month', $year),
-            ...$this->datePartsForEmployees($employeeIds, 'invited_at', 'month', $year),
-            ...$this->datePartsForEmployees($employeeIds, 'activated_at', 'month', $year),
-            ...$this->datePartsForProfiles($employeeIds, 'month', $year),
-        ])
-            ->filter()
-            ->map(fn ($value) => (int) $value)
-            ->unique()
-            ->sort()
-            ->values();
-
-        return $months
-            ->map(fn (int $month): array => [
-                'value' => $month,
-                'label' => CarbonImmutable::create($year, $month, 1)->format('F'),
-            ])
-            ->all();
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function datePartsForEmployees($employeeIds, string $column, string $part, ?int $year = null): array
-    {
-        return Employee::query()
-            ->whereIn('id', $employeeIds)
-            ->whereNotNull($column)
-            ->when($year, fn (Builder $query, int $year) => $query->whereYear($column, $year))
-            ->pluck($column)
-            ->map(fn ($value) => $part === 'month' ? CarbonImmutable::parse($value)->month : CarbonImmutable::parse($value)->year)
-            ->all();
-    }
-
-    /**
-     * @return array<int, int>
-     */
-    private function datePartsForProfiles($employeeIds, string $part, ?int $year = null): array
-    {
-        return EmployeeProfile::query()
-            ->whereIn('employee_id', $employeeIds)
-            ->whereIn('completion_status', ['submitted', 'approved'])
-            ->when($year, fn (Builder $query, int $year) => $query->whereYear('updated_at', $year))
-            ->pluck('updated_at')
-            ->map(fn ($value) => $part === 'month' ? CarbonImmutable::parse($value)->month : CarbonImmutable::parse($value)->year)
-            ->all();
     }
 
     /**
@@ -592,7 +525,11 @@ class DashboardService
             ];
         }
 
-        if ($employee && $user->hasRole('Department Head') && $employee->department) {
+        if (! $this->hasManagerScope($user, $employee)) {
+            throw new HttpException(403, 'You do not have a department or team dashboard scope.');
+        }
+
+        if ($user->can('employees.view_department') && $employee->department) {
             return [
                 'type' => 'department',
                 'department' => $this->lookupPayload($employee->department),
@@ -600,15 +537,7 @@ class DashboardService
             ];
         }
 
-        if ($employee && $user->hasAnyRole(['Supervisor', 'Department Head'])) {
-            return [
-                'type' => 'direct_reports',
-                'manager' => $this->employeeSummary($employee),
-                'source' => 'reporting_manager_assignment',
-            ];
-        }
-
-        if ($employee && Employee::query()->where('reporting_manager_id', $employee->id)->exists()) {
+        if (Employee::query()->where('reporting_manager_id', $employee->id)->exists()) {
             return [
                 'type' => 'direct_reports',
                 'manager' => $this->employeeSummary($employee),
@@ -616,7 +545,23 @@ class DashboardService
             ];
         }
 
-        throw new HttpException(403, 'You do not have a department or team dashboard scope.');
+        return [
+            'type' => 'direct_reports',
+            'manager' => $this->employeeSummary($employee),
+            'source' => 'no_reports_yet',
+        ];
+    }
+
+    /**
+     * Role/permission + organizational scope, combined: eligible only if the
+     * user is themselves an employee AND holds team-visibility permission —
+     * neither alone is sufficient (see managerScope()).
+     */
+    public function hasManagerScope(User $user, ?Employee $employee = null): bool
+    {
+        $employee ??= $user->employee()->first();
+
+        return $employee !== null && $user->can('employees.view_team');
     }
 
     /**

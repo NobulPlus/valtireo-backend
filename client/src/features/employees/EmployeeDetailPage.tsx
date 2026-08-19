@@ -21,7 +21,7 @@ import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { ModalCancelAction, ModalConfirmAction, ModalSaveAction, ModalSendAction } from '@/components/ui/ModalActions';
+import { ModalCancelAction, ModalSaveAction, ModalSendAction } from '@/components/ui/ModalActions';
 import { AsyncSelect, type AsyncOption } from '@/components/ui/AsyncSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -34,13 +34,13 @@ import { isValidEmail } from '@/lib/validation';
 import {
   downloadEmployeeProfileCsv,
   searchEmployees,
-  useApproveOnboarding,
   useChangeEmployeeManager,
-  useChangeEmployeeStatus,
   useEmployee,
   useRequestEmployeeCorrection,
   useUpdateEmployee,
 } from '@/features/employees/api';
+import { ApproveOnboardingModal } from '@/features/employees/ApproveOnboardingModal';
+import { ChangeStatusModal } from '@/features/employees/ChangeStatusModal';
 import { useSetupLookups } from '@/features/workspace/api';
 import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/apiClient';
@@ -57,8 +57,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'activity', label: 'Activity' },
 ];
 
-const EMPLOYEE_STATUS_OPTIONS = ['draft', 'invited', 'onboarding', 'active', 'probation', 'confirmed', 'suspended', 'exited'];
-const ACTIVE_LIFECYCLE_STATUSES = ['active', 'probation', 'confirmed', 'suspended', 'exited'];
 const GENDER_OPTIONS: SelectMenuOption[] = [
   { value: '', label: 'Not specified' },
   { value: 'female', label: 'Female' },
@@ -131,20 +129,6 @@ function lookupOptions<T extends { id: number; name: string }>(items: T[] | unde
   ];
 }
 
-function statusOptionsFor(employee: Employee): SelectMenuOption[] {
-  const currentStatus = employee.status;
-  const allowed = ACTIVE_LIFECYCLE_STATUSES.includes(currentStatus)
-    ? ACTIVE_LIFECYCLE_STATUSES
-    : EMPLOYEE_STATUS_OPTIONS;
-
-  return allowed.map((status) => ({
-    value: status,
-    label: formatText(status),
-    description: status === 'invited' && currentStatus === 'draft' ? 'Creates and sends an employee invitation.' : undefined,
-    disabled: status === currentStatus || (status === 'invited' && currentStatus === 'draft' && !employee.work_email),
-  }));
-}
-
 function calculateAge(value: string | null | undefined): string {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return '-';
@@ -213,6 +197,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
     employment_type_id: '',
     organization_location_id: '',
     start_date: '',
+    pending_role_id: '',
     date_of_birth: '',
     gender: '',
     personal_email: '',
@@ -224,24 +209,15 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
   });
   const [correctionSection, setCorrectionSection] = useState('Overview');
   const [correctionMessage, setCorrectionMessage] = useState('');
-  const [newStatus, setNewStatus] = useState('');
-  const [statusEffectiveDate, setStatusEffectiveDate] = useState(today());
-  const [statusReason, setStatusReason] = useState('');
-  const [statusNote, setStatusNote] = useState('');
   const [newManager, setNewManager] = useState<AsyncOption | null>(null);
   const [managerEffectiveDate, setManagerEffectiveDate] = useState(today());
   const [managerReason, setManagerReason] = useState('');
   const [managerNote, setManagerNote] = useState('');
-  const approveMutation = useApproveOnboarding(employee.id);
   const updateEmployeeMutation = useUpdateEmployee(employee.id);
-  const statusMutation = useChangeEmployeeStatus(employee.id);
   const managerMutation = useChangeEmployeeManager(employee.id);
   const correctionMutation = useRequestEmployeeCorrection(employee.id);
 
-  const currentStatus = employee.status;
   const canApprove = hasPermission('employees.update') && employee.status === 'onboarding';
-  const profileReadyForApproval = ['submitted', 'approved'].includes(employee.profile?.completion_status ?? '');
-  const canConfirmApprove = canApprove && profileReadyForApproval;
   const canViewEmployee = hasPermission('employees.view');
   const canUpdateEmployee = hasPermission('employees.update');
 
@@ -257,6 +233,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
       employment_type_id: employeeToEdit.employment_type_id ? String(employeeToEdit.employment_type_id) : '',
       organization_location_id: employeeToEdit.organization_location_id ? String(employeeToEdit.organization_location_id) : '',
       start_date: employeeToEdit.start_date ? employeeToEdit.start_date.slice(0, 10) : '',
+      pending_role_id: employeeToEdit.pending_role_id ? String(employeeToEdit.pending_role_id) : '',
       date_of_birth: employeeToEdit.profile?.date_of_birth ? employeeToEdit.profile.date_of_birth.slice(0, 10) : '',
       gender: employeeToEdit.profile?.gender ?? '',
       personal_email: employeeToEdit.profile?.personal_email ?? '',
@@ -282,6 +259,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
         employment_type_id: editForm.employment_type_id ? Number(editForm.employment_type_id) : null,
         organization_location_id: editForm.organization_location_id ? Number(editForm.organization_location_id) : null,
         start_date: editForm.start_date || null,
+        ...(hasPermission('employees.assign_role')
+          ? { pending_role_id: editForm.pending_role_id ? Number(editForm.pending_role_id) : null }
+          : {}),
         profile: {
           date_of_birth: editForm.date_of_birth || null,
           gender: editForm.gender || null,
@@ -312,24 +292,6 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
       toast.success('Correction requested', 'The request has been recorded on the employee activity timeline.');
     } catch (error) {
       toast.error('Could not request correction', actionError(error, 'Could not request correction.'));
-    }
-  }
-
-  async function handleChangeStatus() {
-    try {
-      await statusMutation.mutateAsync({
-        new_status: newStatus || currentStatus,
-        effective_date: statusEffectiveDate,
-        reason: statusReason || undefined,
-        note: statusNote || undefined,
-      });
-      setStatusModalOpen(false);
-      setStatusReason('');
-      setStatusNote('');
-      setTab('status');
-      toast.success('Status updated', 'The employee lifecycle history has been updated.');
-    } catch (error) {
-      toast.error('Could not change status', actionError(error, 'Could not change status.'));
     }
   }
 
@@ -395,14 +357,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                   </DropdownMenuItem>
                 )}
                 {canUpdateEmployee && (
-                  <DropdownMenuItem
-                    icon={UserRoundCheck}
-                    onClick={() => {
-                      setNewStatus(currentStatus);
-                      setStatusEffectiveDate(today());
-                      setStatusModalOpen(true);
-                    }}
-                  >
+                  <DropdownMenuItem icon={UserRoundCheck} onClick={() => setStatusModalOpen(true)}>
                     Change status
                   </DropdownMenuItem>
                 )}
@@ -527,6 +482,16 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                 <OverviewRow label="Invited" value={employee.invited_at ? formatDate(employee.invited_at) : 'Not invited'} />
                 <OverviewRow label="Onboarding completed" value={formatDate(employee.onboarding_completed_at)} />
                 <OverviewRow label="Activated" value={formatDate(employee.activated_at)} />
+                {employee.probation_ends_at && (
+                  <OverviewRow
+                    label="Probation ends"
+                    value={
+                      <span className={new Date(employee.probation_ends_at) < new Date() ? 'text-warning' : undefined}>
+                        {formatDate(employee.probation_ends_at)}
+                      </span>
+                    }
+                  />
+                )}
               </CardBody>
             </Card>
           )}
@@ -647,53 +612,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
         </div>
       </div>
 
-      <Modal
-        open={confirmApprove}
-        onClose={() => setConfirmApprove(false)}
-        title="Approve onboarding"
-        footer={
-          <>
-            <ModalCancelAction onClick={() => setConfirmApprove(false)} />
-            <ModalConfirmAction
-              title="Approve onboarding"
-              isLoading={approveMutation.isPending}
-              disabled={!canConfirmApprove}
-              onClick={async () => {
-                try {
-                  await approveMutation.mutateAsync();
-                  setConfirmApprove(false);
-                  toast.success('Onboarding approved', `${employee?.full_name ?? 'The employee'} is now active.`);
-                } catch (error) {
-                  toast.error('Could not approve onboarding', actionError(error, 'Could not approve onboarding.'));
-                }
-              }}
-            />
-          </>
-        }
-      >
-        <p>
-          This confirms {employee.full_name}'s onboarding is complete and activates their record. This action is
-          recorded to the audit trail.
-        </p>
-        <div className="mt-4 space-y-2 rounded-md border border-border bg-surface-soft p-3">
-          <ApprovalCheck
-            complete={employee.status === 'onboarding'}
-            label="Employee is in onboarding"
-            value={formatText(employee.status)}
-          />
-          <ApprovalCheck
-            complete={profileReadyForApproval}
-            label="Profile is ready"
-            value={formatText(employee.profile?.completion_status)}
-          />
-        </div>
-        {!profileReadyForApproval && (
-          <p className="mt-3 rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-            This employee cannot be approved yet. Ask the employee to complete and submit their profile, or use
-            Edit employee record if HR needs to fill missing biodata before submission.
-          </p>
-        )}
-      </Modal>
+      {confirmApprove && (
+        <ApproveOnboardingModal employee={employee} open onClose={() => setConfirmApprove(false)} />
+      )}
 
       <Modal
         open={editModalOpen}
@@ -773,6 +694,30 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           </div>
 
           <div className="border-t border-border pt-5">
+            <h3 className="text-sm font-semibold text-strong">System access</h3>
+            <p className="mt-1 text-xs text-muted">
+              Separate from designation — controls what this employee can access in Valtireo.
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {(lookups.data?.assignable_roles ?? []).length > 0 ? (
+                <ActionField label="System role">
+                  <SelectMenu
+                    value={editForm.pending_role_id}
+                    onChange={(value) => setEditForm((current) => ({ ...current, pending_role_id: value }))}
+                    options={[{ value: '', label: 'Employee (default)' }, ...(lookups.data?.assignable_roles ?? [])]}
+                  />
+                </ActionField>
+              ) : (
+                <ActionField label="System role">
+                  <p className="py-1.5 text-sm text-muted">
+                    {employee.user?.roles && employee.user.roles.length > 0 ? employee.user.roles.join(', ') : 'Employee'}
+                  </p>
+                </ActionField>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-5">
             <h3 className="text-sm font-semibold text-strong">Biodata</h3>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <ActionField label="Date of birth">
@@ -845,35 +790,14 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
         </div>
       </Modal>
 
-      <Modal
-        open={statusModalOpen}
-        onClose={() => setStatusModalOpen(false)}
-        title="Change employee status"
-        footer={
-          <>
-            <ModalCancelAction onClick={() => setStatusModalOpen(false)} />
-            <ModalSaveAction title="Save status" isLoading={statusMutation.isPending} onClick={handleChangeStatus} />
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <ActionField label="New status">
-            <SelectMenu value={newStatus || employee.status} onChange={setNewStatus} options={statusOptionsFor(employee)} />
-            {employee.status === 'draft' && !employee.work_email && (
-              <p className="mt-1 text-xs text-warning">Add a work email before inviting this employee.</p>
-            )}
-          </ActionField>
-          <ActionField label="Effective date">
-            <DatePicker value={statusEffectiveDate} onChange={setStatusEffectiveDate} />
-          </ActionField>
-          <ActionField label="Reason">
-            <Input value={statusReason} onChange={(event) => setStatusReason(event.target.value)} placeholder="Optional reason" />
-          </ActionField>
-          <ActionField label="Note">
-            <Textarea value={statusNote} onChange={(event) => setStatusNote(event.target.value)} placeholder="Optional internal note" />
-          </ActionField>
-        </div>
-      </Modal>
+      {statusModalOpen && (
+        <ChangeStatusModal
+          employee={employee}
+          open
+          onClose={() => setStatusModalOpen(false)}
+          onChanged={() => setTab('status')}
+        />
+      )}
 
       <Modal
         open={managerModalOpen}
@@ -940,15 +864,6 @@ function OverviewRow({ label, value }: { label: string; value: ReactNode }) {
     <div className="rounded-md bg-surface-soft px-3 py-2.5">
       <span className="block text-xs font-medium text-muted">{label}</span>
       <span className="mt-1 block min-w-0 font-medium text-strong">{value}</span>
-    </div>
-  );
-}
-
-function ApprovalCheck({ complete, label, value }: { complete: boolean; label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className={cn('font-medium', complete ? 'text-success' : 'text-warning')}>{label}</span>
-      <span className="text-muted">{value}</span>
     </div>
   );
 }

@@ -33,6 +33,7 @@ class EmployeeResource extends JsonResource
             'reporting_manager_id' => $this->reporting_manager_id,
             'start_date' => $this->start_date,
             'status' => $this->status,
+            'pending_role_id' => $this->pending_role_id,
             'department' => $this->whenLoaded('department', fn () => [
                 'id' => $this->department->id,
                 'code' => $this->department->code,
@@ -88,6 +89,7 @@ class EmployeeResource extends JsonResource
             'invited_at' => $this->invited_at,
             'onboarding_completed_at' => $this->onboarding_completed_at,
             'activated_at' => $this->activated_at,
+            'probation_ends_at' => $this->probation_ends_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -160,7 +160,7 @@ class ApprovalRequestService
 
     private function ensureActorCanApproveStep(User $actor, ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step): void
     {
-        if ($actor->hasAnyRole(['Super Admin', 'Organization Admin'])) {
+        if ($actor->is_platform_admin || $actor->can('organizations.administer')) {
             return;
         }
 
@@ -171,9 +171,9 @@ class ApprovalRequestService
         $subjectEmployee = $approvalRequest->subjectEmployee;
         $allowed = match ($step->approver_type) {
             'permission' => $step->approver_permission && $actor->can($step->approver_permission),
-            'role' => $step->approver_role && $actor->hasRole($step->approver_role),
+            'role' => $step->approverRole && $actor->hasRole($step->approverRole),
             'direct_manager' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->reporting_manager_id,
-            'department_head' => $subjectEmployee && $actor->hasRole('Department Head') && $actor->employee?->department_id === $subjectEmployee->department_id,
+            'department_head' => $subjectEmployee && $actor->can('employees.view_department') && $actor->employee?->department_id === $subjectEmployee->department_id,
             default => false,
         };
 

@@ -9,7 +9,7 @@ class ProvisionOrganizationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('Super Admin') === true;
+        return $this->user()?->is_platform_admin === true;
     }
 
     protected function prepareForValidation(): void

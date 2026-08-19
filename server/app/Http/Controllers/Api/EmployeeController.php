@@ -8,12 +8,14 @@ use App\Http\Requests\Employees\AcceptEmployeeInvitationRequest;
 use App\Http\Requests\Employees\StoreEmployeeRequest;
 use App\Http\Requests\Employees\UpdateEmployeeProfileRequest;
 use App\Models\Employee;
+use App\Models\Role;
 use App\Http\Resources\EmployeeProfileResource;
 use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\UserResource;
 use App\Services\EmployeeInvitationService;
 use App\Services\EmployeeOnboardingService;
 use App\Services\EmployeeProfileActivityService;
+use App\Services\EmployeeRoleAssignmentService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -162,10 +164,14 @@ class EmployeeController extends Controller
         return new EmployeeResource($employee);
     }
 
-    public function update(Request $request, Employee $employee): EmployeeResource
+    public function update(Request $request, Employee $employee, EmployeeRoleAssignmentService $roleAssignment): EmployeeResource
     {
         abort_unless($request->user()->can('employees.update'), 403, 'You do not have permission to update employees.');
         abort_unless($employee->organization_id === $request->user()->organization_id, 404);
+
+        if ($request->has('pending_role_id')) {
+            abort_unless($request->user()->can('employees.assign_role'), 403, 'You do not have permission to change an employee\'s system role.');
+        }
 
         $organizationId = $request->user()->organization_id;
         $data = $request->validate([
@@ -185,6 +191,7 @@ class EmployeeController extends Controller
             'employment_type_id' => ['nullable', Rule::exists('employment_types', 'id')->where('organization_id', $organizationId)],
             'organization_location_id' => ['nullable', Rule::exists('organization_locations', 'id')->where('organization_id', $organizationId)],
             'start_date' => ['nullable', 'date'],
+            'pending_role_id' => ['sometimes', 'nullable', Rule::exists('roles', 'id')->where('organization_id', $organizationId)],
             'profile' => ['sometimes', 'array'],
             'profile.date_of_birth' => ['nullable', 'date', 'before:today'],
             'profile.gender' => ['nullable', 'string', 'max:50'],
@@ -199,7 +206,21 @@ class EmployeeController extends Controller
         $profileData = $data['profile'] ?? null;
         unset($data['profile']);
 
+        $pendingRoleIdRequested = array_key_exists('pending_role_id', $data);
+        $pendingRoleId = $data['pending_role_id'] ?? null;
+        unset($data['pending_role_id']);
+
         $employee->update($data);
+
+        if ($pendingRoleIdRequested && $pendingRoleId !== null) {
+            if ($employee->user) {
+                $roleAssignment->updateAssignedRole($request->user(), $employee, $employee->user, $pendingRoleId);
+            } else {
+                $role = Role::query()->where('organization_id', $organizationId)->findOrFail($pendingRoleId);
+                $roleAssignment->assertCanAssign($request->user(), $role);
+                $employee->update(['pending_role_id' => $pendingRoleId]);
+            }
+        }
 
         if (is_array($profileData)) {
             $employee->profile()->updateOrCreate(
@@ -418,7 +439,7 @@ class EmployeeController extends Controller
             ->when($request->integer('organization_location_id'), fn (Builder $query, int $locationId) => $query->where('organization_location_id', $locationId))
             ->when($request->integer('reporting_manager_id'), fn (Builder $query, int $managerId) => $query->where('reporting_manager_id', $managerId))
             ->when($request->boolean('manager_roles_only'), function (Builder $query): void {
-                $query->whereHas('user.roles', fn (Builder $query) => $query->whereIn('name', ['Department Head', 'Supervisor']));
+                $query->whereHas('user', fn (Builder $query) => $query->permission(['employees.view_team', 'employees.view_department']));
             })
             ->when($request->string('profile_status')->toString(), fn (Builder $query, string $status) => $query->whereHas('profile', fn (Builder $query) => $query->where('completion_status', $status)))
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate($dateColumn, '>=', $date->toDateString()))

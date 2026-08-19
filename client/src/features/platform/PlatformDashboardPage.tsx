@@ -11,7 +11,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  X,
   Users,
 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -58,14 +57,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
-}
-
-function localDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
 }
 
 function statusLabel(status: string): string {
@@ -244,31 +235,6 @@ function PlatformDashboardContent({
                 onDateToChange(range.dateTo);
               }}
             />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => {
-                const today = new Date();
-                const from = new Date();
-                from.setDate(today.getDate() - 30);
-                onDateFromChange(localDateString(from));
-                onDateToChange(localDateString(today));
-              }}
-            >
-              Last 30 days
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-9 px-0"
-              onClick={() => {
-                onDateFromChange('');
-                onDateToChange('');
-              }}
-              aria-label="Clear reporting window"
-            >
-              <X className="h-4 w-4" />
-            </Button>
           </div>
         </CardBody>
       </Card>

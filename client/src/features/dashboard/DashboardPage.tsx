@@ -14,23 +14,14 @@ const TAB_LABELS: Record<Tab, string> = {
   me: 'My dashboard',
 };
 
-const ORG_LEVEL_ROLES = [
-  'Organization Admin',
-  'HR Director',
-  'HR Officer',
-  'Compliance Officer',
-  'ICT Admin',
-];
-const MANAGER_ROLES = ['Department Head', 'Supervisor'];
-
 export function DashboardPage() {
   const { tab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
-  const { hasPermission, hasAnyRole, session } = useAuth();
+  const { hasPermission, hasManagerScope, session } = useAuth();
 
   const availableTabs: Tab[] = [
     ...(hasPermission('reports.view') ? (['organization'] as Tab[]) : []),
-    ...(hasAnyRole([...ORG_LEVEL_ROLES, ...MANAGER_ROLES]) ? (['manager'] as Tab[]) : []),
+    ...(hasManagerScope ? (['manager'] as Tab[]) : []),
     'me',
   ];
 

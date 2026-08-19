@@ -13,6 +13,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PlatformAdminService
@@ -217,6 +218,13 @@ class PlatformAdminService
      */
     public function organization(Organization $organization): array
     {
+        // This builds a detail view for an organization that may not be the
+        // viewing platform admin's own — the request-scoped team context
+        // (set from the actor's organization_id) would be wrong here, so
+        // scope explicitly to the organization being viewed before any
+        // team-scoped relation (users.roles) is loaded or checked.
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+
         $organization->load([
             'locations',
             'moduleSubscriptions.platformModule',
@@ -273,7 +281,7 @@ class PlatformAdminService
                 })
                 ->values(),
             'admins' => $organization->users
-                ->filter(fn (User $user) => $user->hasRole('Organization Admin'))
+                ->filter(fn (User $user) => $user->can('organizations.administer'))
                 ->map(fn (User $user) => [
                     'id' => $user->id,
                     'name' => $user->name,

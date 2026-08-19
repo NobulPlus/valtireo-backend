@@ -6,7 +6,7 @@ import { Logomark } from '@/components/ui/Logomark';
 import { cn } from '@/lib/cn';
 
 export function Sidebar() {
-  const { hasAnyRole, hasPermission, moduleByKey, session } = useAuth();
+  const { hasPermission, moduleByKey, session, workspaceMode } = useAuth();
   const [orgLogoFailed, setOrgLogoFailed] = useState(false);
   const orgLogoUrl = session?.workspace?.identity?.logo_url;
 
@@ -30,8 +30,11 @@ export function Sidebar() {
 
       <nav className="flex-1 overflow-y-auto px-3 pb-6">
         {NAV_GROUPS.map((group) => {
+          if (group.scope === 'employee' && workspaceMode !== 'employee') return null;
+          if (group.scope !== 'core' && group.scope !== 'employee' && workspaceMode !== 'admin') return null;
+
           const visibleItems = group.items.filter((item) => {
-            if (item.roles && !hasAnyRole(item.roles)) return false;
+            if (item.platformAdminOnly && !session?.is_platform_admin) return false;
             if (item.permission && !hasPermission(item.permission)) return false;
             if (item.moduleKey) {
               const module = moduleByKey(item.moduleKey);

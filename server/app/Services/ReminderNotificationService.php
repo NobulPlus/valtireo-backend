@@ -11,6 +11,7 @@ use App\Models\LeaveRequest;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\PermissionRegistrar;
 
 class ReminderNotificationService
 {
@@ -21,12 +22,13 @@ class ReminderNotificationService
     /**
      * @return array<string, int>
      */
-    public function send(int $documentDays = 30, int $onboardingDays = 2, int $approvalDays = 1): array
+    public function send(int $documentDays = 30, int $onboardingDays = 2, int $approvalDays = 1, int $probationDays = 7): array
     {
         return [
             'document_expiry' => $this->documentExpiryReminders($documentDays),
             'onboarding_follow_up' => $this->onboardingFollowUps($onboardingDays),
             'pending_approvals' => $this->pendingApprovalReminders($approvalDays),
+            'probation_review' => $this->probationReviewReminders($probationDays),
         ];
     }
 
@@ -142,6 +144,11 @@ class ReminderNotificationService
                         ->with('employee')
                         ->get();
 
+                    // This command has no HTTP request/middleware to inherit
+                    // team context from — set it explicitly per organization
+                    // before any hasRole()/can() check runs for its users.
+                    app(PermissionRegistrar::class)->setPermissionsTeamId($approval->organization_id);
+
                     foreach ($this->approvalRecipients($approval, $usersByOrganization[$approval->organization_id]) as $recipient) {
                         $reminderKey = "pending_approval:{$approval->id}:{$approval->current_step_order}:{$recipient->id}";
 
@@ -177,6 +184,81 @@ class ReminderNotificationService
     }
 
     /**
+     * One-time nudges (mirroring the dedup pattern every other reminder here
+     * uses — see alreadySent()) at two distinct moments per employee: once
+     * when their probation end date first comes within $days, and again if
+     * it passes without anyone confirming or extending them. Never changes
+     * status itself — this is a prompt for a human decision, not automation
+     * of the decision.
+     */
+    private function probationReviewReminders(int $days): int
+    {
+        $sent = 0;
+        $usersByOrganization = [];
+
+        Employee::query()
+            ->with(['user', 'reportingManager.user'])
+            ->where('status', 'probation')
+            ->whereNotNull('probation_ends_at')
+            ->whereDate('probation_ends_at', '<=', now()->addDays($days)->toDateString())
+            ->chunk(100, function ($employees) use (&$sent, &$usersByOrganization): void {
+                foreach ($employees as $employee) {
+                    $usersByOrganization[$employee->organization_id] ??= User::query()
+                        ->where('organization_id', $employee->organization_id)
+                        ->get();
+
+                    app(PermissionRegistrar::class)->setPermissionsTeamId($employee->organization_id);
+
+                    $isOverdue = $employee->probation_ends_at->isPast();
+                    $reminderKey = 'probation_review:'.($isOverdue ? 'overdue' : 'upcoming').":{$employee->id}:{$employee->probation_ends_at->toDateString()}";
+
+                    foreach ($this->probationReviewRecipients($employee, $usersByOrganization[$employee->organization_id]) as $recipient) {
+                        if ($this->alreadySent($recipient, $reminderKey)) {
+                            continue;
+                        }
+
+                        $this->notifications->notify($recipient, [
+                            'category' => 'employee_lifecycle',
+                            'event' => 'employee.probation_review_due',
+                            'severity' => $isOverdue ? 'warning' : 'info',
+                            'title' => $isOverdue ? 'Probation review overdue' : 'Probation review coming up',
+                            'message' => $isOverdue
+                                ? "{$employee->first_name} {$employee->last_name}'s probation ended on {$employee->probation_ends_at->toFormattedDateString()} — confirm or extend."
+                                : "{$employee->first_name} {$employee->last_name}'s probation ends on {$employee->probation_ends_at->toFormattedDateString()}.",
+                            'action_label' => 'Review employee',
+                            'action_url' => "/employees/{$employee->id}",
+                            'entity_type' => 'employee',
+                            'entity_id' => $employee->id,
+                            'metadata' => [
+                                'reminder_key' => $reminderKey,
+                                'probation_ends_at' => $employee->probation_ends_at->toDateString(),
+                                'overdue' => $isOverdue,
+                            ],
+                        ]);
+
+                        $sent++;
+                    }
+                }
+            });
+
+        return $sent;
+    }
+
+    /**
+     * @param Collection<int, User> $orgUsers
+     *
+     * @return Collection<int, User>
+     */
+    private function probationReviewRecipients(Employee $employee, Collection $orgUsers): Collection
+    {
+        return collect([$employee->reportingManager?->user])
+            ->filter()
+            ->merge($orgUsers->filter(fn (User $user) => $user->can('employees.update')))
+            ->unique('id')
+            ->values();
+    }
+
+    /**
      * @param Collection<int, User> $users
      *
      * @return Collection<int, User>
@@ -190,7 +272,7 @@ class ReminderNotificationService
 
         return $users
             ->filter(function (User $user) use ($approval, $step): bool {
-                if ($user->hasAnyRole(['Super Admin', 'Organization Admin'])) {
+                if ($user->is_platform_admin || $user->can('organizations.administer')) {
                     return true;
                 }
 
@@ -200,9 +282,9 @@ class ReminderNotificationService
 
                 return match ($step->approver_type) {
                     'permission' => $step->approver_permission && $user->can($step->approver_permission),
-                    'role' => $step->approver_role && $user->hasRole($step->approver_role),
+                    'role' => $step->approverRole && $user->hasRole($step->approverRole),
                     'direct_manager' => $approval->subjectEmployee && $user->employee?->id === $approval->subjectEmployee->reporting_manager_id,
-                    'department_head' => $approval->subjectEmployee && $user->hasRole('Department Head') && $user->employee?->department_id === $approval->subjectEmployee->department_id,
+                    'department_head' => $approval->subjectEmployee && $user->can('employees.view_department') && $user->employee?->department_id === $approval->subjectEmployee->department_id,
                     default => false,
                 };
             })

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflowStep;
 use App\Models\EmployeeInvitation;
+use App\Models\Organization;
 use App\Models\User;
 use App\Notifications\ValtireoNotification;
 use Illuminate\Support\Collection;
@@ -29,6 +30,29 @@ class NotificationDispatchService
             'entity_id' => $data['entity_id'] ?? null,
             'metadata' => $data['metadata'] ?? [],
         ]));
+    }
+
+    public function organizationAdminInvited(
+        User $admin,
+        Organization $organization,
+        string $temporaryPassword,
+        User $createdBy
+    ): void {
+        $this->notify($admin, [
+            'category' => 'organization_onboarding',
+            'event' => 'organization.admin_invited',
+            'title' => "Welcome to {$organization->name} on Valtireo",
+            'message' => "You have been invited as the Organization Admin for {$organization->name}. Use the temporary password below to sign in, then complete your workspace setup.",
+            'action_label' => 'Sign in to Valtireo',
+            'action_url' => '/login',
+            'entity_type' => 'organization',
+            'entity_id' => $organization->id,
+            'metadata' => [
+                'organization_code' => $organization->code,
+                'temporary_password' => $temporaryPassword,
+                'provisioned_by' => $createdBy->email,
+            ],
+        ]);
     }
 
     public function employeeInvited(EmployeeInvitation $invitation, string $plainToken): void
@@ -170,15 +194,15 @@ class NotificationDispatchService
 
         return $users
             ->filter(function (User $user) use ($approvalRequest, $step): bool {
-                if ($user->hasAnyRole(['Super Admin', 'Organization Admin'])) {
+                if ($user->is_platform_admin || $user->can('organizations.administer')) {
                     return true;
                 }
 
                 return match ($step->approver_type) {
                     'permission' => $step->approver_permission && $user->can($step->approver_permission),
-                    'role' => $step->approver_role && $user->hasRole($step->approver_role),
+                    'role' => $step->approverRole && $user->hasRole($step->approverRole),
                     'direct_manager' => $approvalRequest->subjectEmployee && $user->employee?->id === $approvalRequest->subjectEmployee->reporting_manager_id,
-                    'department_head' => $approvalRequest->subjectEmployee && $user->hasRole('Department Head') && $user->employee?->department_id === $approvalRequest->subjectEmployee->department_id,
+                    'department_head' => $approvalRequest->subjectEmployee && $user->can('employees.view_department') && $user->employee?->department_id === $approvalRequest->subjectEmployee->department_id,
                     default => false,
                 };
             })

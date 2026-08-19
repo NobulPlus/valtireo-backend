@@ -75,6 +75,12 @@ class EmployeeLifecycleService
                 'status' => $newStatus,
                 'invited_at' => $newStatus === 'invited' ? ($employee->invited_at ?? now()) : $employee->invited_at,
                 'activated_at' => $newStatus === 'active' ? ($employee->activated_at ?? now()) : $employee->activated_at,
+                // Only meaningful while actually on probation — cleared on
+                // any other transition so a stale date can't linger and
+                // resurface if the employee re-enters probation later
+                // (re-entering always requires setting a fresh date, per
+                // StoreEmployeeStatusHistoryRequest's requiredIf rule).
+                'probation_ends_at' => $newStatus === 'probation' ? ($data['probation_ends_at'] ?? null) : null,
             ]);
 
             $this->activities->record(

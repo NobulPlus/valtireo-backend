@@ -14,7 +14,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'step_order',
     'name',
     'approver_type',
-    'approver_role',
+    'approver_role_id',
     'approver_permission',
     'note_required',
     'is_active',
@@ -27,6 +27,11 @@ class ApprovalWorkflowStep extends Model implements AuditableContract
     public function workflow(): BelongsTo
     {
         return $this->belongsTo(ApprovalWorkflow::class, 'approval_workflow_id');
+    }
+
+    public function approverRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'approver_role_id');
     }
 
     /**

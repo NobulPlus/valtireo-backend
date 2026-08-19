@@ -44,6 +44,11 @@ const STATUS_TONE: Record<string, Tone> = {
   // Notifications
   unread: 'info',
   read: 'draft',
+  // Audit events
+  created: 'success',
+  updated: 'info',
+  deleted: 'danger',
+  restored: 'success',
 };
 
 function toneFor(status: string | null | undefined): Tone {

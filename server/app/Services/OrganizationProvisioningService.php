@@ -7,9 +7,15 @@ use App\Models\PlatformModule;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\Permission\PermissionRegistrar;
 
 class OrganizationProvisioningService
 {
+    public function __construct(
+        private readonly NotificationDispatchService $notifications,
+        private readonly DefaultRoleSeedingService $roleSeeding,
+    ) {
+    }
     /**
      * @param array<string, mixed> $organizationData
      * @param array<string, string> $adminData
@@ -57,6 +63,7 @@ class OrganizationProvisioningService
 
             $workspace = app(WorkspaceSettingsService::class)->update($organization, $workspaceSettings);
             app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
+            $roles = $this->roleSeeding->seedForOrganization($organization);
 
             $modules = PlatformModule::query()
                 ->whereIn('key', array_values(array_unique($moduleKeys)))
@@ -82,7 +89,10 @@ class OrganizationProvisioningService
                 'password' => $temporaryPassword,
             ]);
 
-            $admin->assignRole('Organization Admin');
+            app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+            $admin->assignRole($roles->get('organization_admin'));
+
+            $deliveryStatus = $this->deliverAdminInvitation($admin, $organization, $temporaryPassword, $createdBy);
 
             return [
                 'organization' => $organization->refresh(),
@@ -93,8 +103,8 @@ class OrganizationProvisioningService
                 'invitation' => [
                     'email' => $admin->email,
                     'temporary_password' => $temporaryPassword,
-                    'login_hint' => 'Use this temporary password until the mail/password setup flow is connected.',
-                    'delivery_status' => 'pending_mail_provider',
+                    'login_hint' => 'The admin can sign in with this temporary password and should change it after first login.',
+                    'delivery_status' => $deliveryStatus,
                 ],
                 'created_by' => [
                     'id' => $createdBy->id,
@@ -103,5 +113,29 @@ class OrganizationProvisioningService
                 ],
             ];
         });
+    }
+
+    private function deliverAdminInvitation(
+        User $admin,
+        Organization $organization,
+        string $temporaryPassword,
+        User $createdBy
+    ): string {
+        if (! config('services.valtireo_notifications.mail_enabled')) {
+            return 'skipped';
+        }
+
+        try {
+            $this->notifications->organizationAdminInvited(
+                $admin,
+                $organization,
+                $temporaryPassword,
+                $createdBy
+            );
+
+            return 'sent';
+        } catch (\Throwable) {
+            return 'failed';
+        }
     }
 }

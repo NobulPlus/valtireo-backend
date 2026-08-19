@@ -2,16 +2,17 @@
 
 namespace Database\Seeders;
 
+use App\Models\Permission;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
+/**
+ * Seeds only the global permission catalog. Roles are organization-owned —
+ * see DefaultRoleSeedingService, called once per organization (at
+ * provisioning, and by DatabaseSeeder/demo seeders), not from here.
+ */
 class RolePermissionSeeder extends Seeder
 {
-    /**
-     * Seed the application's roles and permissions.
-     */
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -23,28 +24,25 @@ class RolePermissionSeeder extends Seeder
             ]);
         }
 
-        foreach ($this->rolePermissions() as $roleName => $permissions) {
-            $role = Role::query()->firstOrCreate([
-                'name' => $roleName,
-                'guard_name' => 'web',
-            ]);
-
-            $role->syncPermissions($permissions);
-        }
-
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 
     /**
      * @return array<int, string>
      */
-    private function permissions(): array
+    public function permissions(): array
     {
         return [
             'organizations.view',
             'organizations.create',
             'organizations.update',
             'organizations.delete',
+            // Blanket "this is the org's top authority" bypass — used in a
+            // handful of places (approval routing, module access) instead of
+            // a hardcoded role-name check. Only the seeded Organization Admin
+            // role carries this by default; an org is free to grant it to
+            // any custom role it creates.
+            'organizations.administer',
             'workspace_settings.view',
             'workspace_settings.update',
             'organization_locations.view',
@@ -84,6 +82,9 @@ class RolePermissionSeeder extends Seeder
             'employees.create',
             'employees.update',
             'employees.delete',
+            'employees.view_team',
+            'employees.view_department',
+            'employees.assign_role',
             'employee_documents.view',
             'employee_documents.create',
             'employee_documents.update',
@@ -112,170 +113,6 @@ class RolePermissionSeeder extends Seeder
             'assets.view',
             'financial_admin.view',
             'ai_assistant.use',
-        ];
-    }
-
-    /**
-     * @return array<string, array<int, string>>
-     */
-    private function rolePermissions(): array
-    {
-        $all = $this->permissions();
-
-        return [
-            'Super Admin' => $all,
-            'Organization Admin' => $all,
-            'HR Director' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'workspace_settings.update',
-                'organization_locations.view',
-                'organization_locations.create',
-                'organization_locations.update',
-                'users.view',
-                'users.create',
-                'users.update',
-                'roles.view',
-                'departments.view',
-                'departments.create',
-                'departments.update',
-                'units.view',
-                'units.create',
-                'units.update',
-                'designations.view',
-                'designations.create',
-                'designations.update',
-                'grade_levels.view',
-                'grade_levels.create',
-                'grade_levels.update',
-                'employment_types.view',
-                'employment_types.create',
-                'employment_types.update',
-                'employees.view',
-                'employees.create',
-                'employees.update',
-                'employee_documents.view',
-                'employee_documents.create',
-                'employee_documents.update',
-                'approval_workflows.view',
-                'approval_workflows.create',
-                'approval_workflows.update',
-                'approvals.view',
-                'approvals.action',
-                'leave_requests.view',
-                'leave_requests.create',
-                'leave_requests.approve',
-                'attendance.view',
-                'attendance.create',
-                'attendance.update',
-                'attendance.correct',
-                'reports.view',
-                'audit_logs.view',
-            ],
-            'HR Officer' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'organization_locations.view',
-                'users.view',
-                'departments.view',
-                'units.view',
-                'designations.view',
-                'grade_levels.view',
-                'employment_types.view',
-                'employees.view',
-                'employees.create',
-                'employees.update',
-                'employee_documents.view',
-                'employee_documents.create',
-                'employee_documents.update',
-                'approval_workflows.view',
-                'approvals.view',
-                'approvals.action',
-                'leave_requests.view',
-                'leave_requests.create',
-                'attendance.view',
-                'attendance.create',
-                'attendance.update',
-                'attendance.correct',
-                'reports.view',
-            ],
-            'Compliance Officer' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'organization_locations.view',
-                'users.view',
-                'departments.view',
-                'units.view',
-                'designations.view',
-                'grade_levels.view',
-                'employment_types.view',
-                'employees.view',
-                'employee_documents.view',
-                'employee_documents.create',
-                'employee_documents.update',
-                'approval_workflows.view',
-                'approvals.view',
-                'approvals.action',
-                'leave_requests.view',
-                'attendance.view',
-                'attendance.correct',
-                'reports.view',
-                'audit_logs.view',
-            ],
-            'ICT Admin' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'users.view',
-                'users.create',
-                'users.update',
-                'roles.view',
-                'permissions.view',
-                'audit_logs.view',
-            ],
-            'Department Head' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'organization_locations.view',
-                'departments.view',
-                'units.view',
-                'designations.view',
-                'grade_levels.view',
-                'employment_types.view',
-                'employees.view',
-                'employee_documents.view',
-                'approvals.view',
-                'approvals.action',
-                'leave_requests.view',
-                'leave_requests.approve',
-                'attendance.view',
-                'attendance.correct',
-                'reports.view',
-            ],
-            'Supervisor' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'organization_locations.view',
-                'departments.view',
-                'units.view',
-                'designations.view',
-                'grade_levels.view',
-                'employment_types.view',
-                'employees.view',
-                'approvals.view',
-                'approvals.action',
-                'leave_requests.view',
-                'leave_requests.approve',
-                'attendance.view',
-                'attendance.correct',
-            ],
-            'Employee' => [
-                'organizations.view',
-                'workspace_settings.view',
-                'leave_requests.create',
-                'leave_requests.cancel',
-                'attendance.create',
-                'attendance.correct',
-            ],
         ];
     }
 }

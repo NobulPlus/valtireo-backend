@@ -129,7 +129,10 @@ export interface SessionPayload {
   workspace: WorkspaceSettings | null;
   roles: string[];
   permissions: string[];
+  /** Platform-console authority — independent of organization/role entirely. */
+  is_platform_admin: boolean;
   modules: EntitledModule[];
+  has_manager_scope: boolean;
 }
 
 export interface LoginResponse extends SessionPayload {
@@ -246,6 +249,7 @@ export interface Employee {
   reporting_manager_id: number | null;
   start_date: string | null;
   status: EmployeeStatus;
+  pending_role_id?: number | null;
   department?: LookupRef | null;
   unit?: LookupRef | null;
   designation?: LookupRef | null;
@@ -265,6 +269,7 @@ export interface Employee {
   invited_at: string | null;
   onboarding_completed_at: string | null;
   activated_at: string | null;
+  probation_ends_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -470,6 +475,7 @@ export interface CreateEmployeePayload {
   organization_location_id: number;
   reporting_manager_id?: number | null;
   start_date?: string | null;
+  pending_role_id?: number | null;
   send_invitation?: boolean;
 }
 
@@ -539,6 +545,11 @@ export interface LocationLookup {
   is_primary: boolean;
 }
 
+export interface AssignableRoleOption {
+  value: string;
+  label: string;
+}
+
 export interface AllSetupLookups {
   departments: DepartmentLookup[];
   units: UnitLookup[];
@@ -546,6 +557,84 @@ export interface AllSetupLookups {
   grade_levels: GradeLevelLookup[];
   employment_types: EmploymentTypeLookup[];
   locations: LocationLookup[];
+  assignable_roles: AssignableRoleOption[];
+}
+
+/* ---------------------------------------------------------------------- */
+/* Roles & permissions                                                    */
+/* ---------------------------------------------------------------------- */
+
+export interface Role {
+  id: number;
+  /** Internal bootstrapping identifier for the seeded starter roles (e.g. "organization_admin") — never shown as-is in the UI, never meaningful for authorization. Null for any custom role an organization creates. */
+  key: string | null;
+  name: string;
+  description: string | null;
+  permissions: string[];
+  user_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Permission {
+  id: number;
+  /** Immutable code key (e.g. "employees.view_department") — never editable from this page. */
+  name: string;
+  label: string | null;
+  description: string | null;
+  group: string | null;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Audit & activity                                                       */
+/* ---------------------------------------------------------------------- */
+
+/** Pagination envelope shared by the audit-logs/activity-feed endpoints — same shape as `Paginated<T>['meta']`, minus the link URLs those endpoints don't return. */
+export interface SimplePage<T> {
+  data: T[];
+  meta: {
+    current_page: number;
+    from: number | null;
+    last_page: number;
+    per_page: number;
+    to: number | null;
+    total: number;
+  };
+}
+
+export interface AuditLogEntry {
+  id: number;
+  event: string;
+  auditable_type: string;
+  auditable_class: string;
+  auditable_id: number;
+  user: { id: number; name: string; email: string } | null;
+  old_values: Record<string, unknown>;
+  new_values: Record<string, unknown>;
+  url: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  tags: string | null;
+  created_at: string;
+}
+
+export interface ActivityFeedEntry {
+  id: number;
+  event: string;
+  title: string;
+  description: string | null;
+  employee: {
+    id: number;
+    employee_number: string;
+    full_name: string;
+    department: { id: number; name: string; code: string | null } | null;
+  };
+  actor: { id: number; name: string; email: string } | null;
+  subject_type: string | null;
+  subject_class: string | null;
+  subject_id: number | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -586,13 +675,9 @@ export interface OnboardingTrendEntry {
 
 export interface OnboardingTrend {
   grain: 'month' | 'day';
-  year: number;
-  month: number | null;
   label: string;
   date_from: string;
   date_to: string;
-  available_years: number[];
-  available_months: Array<{ value: number; label: string }>;
   entries: OnboardingTrendEntry[];
 }
 

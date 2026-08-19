@@ -19,6 +19,7 @@ use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
+use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -141,7 +142,12 @@ class RichDemoDataSeeder extends Seeder
                 );
 
                 $user->update(['organization_id' => $organization->id]);
-                $user->assignRole($employeeData['role']);
+
+                $role = Role::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('key', $employeeData['role_key'])
+                    ->firstOrFail();
+                $user->syncRoles([$role]);
             }
 
             $employee = Employee::query()->firstOrCreate(
@@ -509,7 +515,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL07',
                 'employment_type_code' => 'PERM',
                 'location_code' => 'HQ',
-                'role' => 'HR Director',
+                'role_key' => 'hr_director',
                 'create_user' => true,
                 'status' => 'active',
                 'start_date' => '2024-01-15',
@@ -534,7 +540,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL04',
                 'employment_type_code' => 'PERM',
                 'location_code' => 'IKEJA',
-                'role' => 'HR Officer',
+                'role_key' => 'hr_officer',
                 'create_user' => true,
                 'status' => 'active',
                 'start_date' => '2024-03-04',
@@ -559,7 +565,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL05',
                 'employment_type_code' => 'PERM',
                 'location_code' => 'HQ',
-                'role' => 'Employee',
+                'role_key' => 'employee',
                 'create_user' => true,
                 'status' => 'active',
                 'start_date' => '2023-11-20',
@@ -584,7 +590,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL06',
                 'employment_type_code' => 'PERM',
                 'location_code' => 'LEKKI',
-                'role' => 'Supervisor',
+                'role_key' => 'supervisor',
                 'create_user' => true,
                 'status' => 'active',
                 'start_date' => '2024-05-10',
@@ -609,7 +615,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL04',
                 'employment_type_code' => 'CONT',
                 'location_code' => 'HQ',
-                'role' => 'ICT Admin',
+                'role_key' => 'ict_admin',
                 'create_user' => true,
                 'status' => 'active',
                 'start_date' => '2025-01-06',
@@ -634,7 +640,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL05',
                 'employment_type_code' => 'PERM',
                 'location_code' => 'ABJ',
-                'role' => 'Compliance Officer',
+                'role_key' => 'compliance_officer',
                 'create_user' => true,
                 'status' => 'active',
                 'start_date' => '2024-09-01',
@@ -659,7 +665,7 @@ class RichDemoDataSeeder extends Seeder
                 'grade_level_code' => 'GL03',
                 'employment_type_code' => 'TEMP',
                 'location_code' => 'LEKKI',
-                'role' => 'Employee',
+                'role_key' => 'employee',
                 'create_user' => false,
                 'status' => 'draft',
                 'start_date' => '2026-08-01',

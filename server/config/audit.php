@@ -26,9 +26,16 @@ return [
 
     'user' => [
         'morph_prefix' => 'user',
+        // Every API request authenticates through 'sanctum' (see
+        // routes/api.php's auth:sanctum middleware) — without it here,
+        // UserResolver's Auth::guard($guard)->check() never finds the
+        // actual actor for any of these guards, and every audit entry
+        // silently attributes to nobody ("System"), regardless of who
+        // performed the action.
         'guards' => [
             'web',
             'api',
+            'sanctum',
         ],
         'resolver' => OwenIt\Auditing\Resolvers\UserResolver::class,
     ],

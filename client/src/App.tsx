@@ -14,7 +14,10 @@ import { MyAttendancePage } from '@/features/attendance/MyAttendancePage';
 import { PlatformDashboardPage } from '@/features/platform/PlatformDashboardPage';
 import { PlatformOrganizationCreatePage } from '@/features/platform/PlatformOrganizationCreatePage';
 import { PlatformOrganizationDetailPage } from '@/features/platform/PlatformOrganizationDetailPage';
+import { AuditActivityPage } from '@/features/audit/AuditActivityPage';
 import { ControlCenterPage } from '@/features/settings/ControlCenterPage';
+import { CustomFieldsPage } from '@/features/settings/CustomFieldsPage';
+import { RolesPermissionsPage } from '@/features/settings/RolesPermissionsPage';
 import {
   ApprovalsControlPage,
   AttendanceControlPage,
@@ -59,11 +62,14 @@ export default function App() {
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="settings/control-center" element={<ControlCenterPage />} />
         <Route path="settings/structure" element={<StructureSettingsPage />} />
+        <Route path="settings/roles" element={<RolesPermissionsPage />} />
+        <Route path="settings/custom-fields" element={<CustomFieldsPage />} />
         <Route path="documents" element={<DocumentsControlPage />} />
         <Route path="approvals" element={<ApprovalsControlPage />} />
         <Route path="leave" element={<LeaveControlPage />} />
         <Route path="attendance" element={<AttendanceControlPage />} />
         <Route path="reports" element={<ReportsControlPage />} />
+        <Route path="audit" element={<AuditActivityPage />} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />

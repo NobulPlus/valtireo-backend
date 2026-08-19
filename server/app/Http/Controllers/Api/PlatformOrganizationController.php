@@ -22,21 +22,21 @@ class PlatformOrganizationController extends Controller
 {
     public function dashboard(Request $request, PlatformAdminService $platform): JsonResponse
     {
-        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        abort_unless($request->user()->is_platform_admin, 403);
 
         return response()->json($platform->dashboard($request));
     }
 
     public function index(Request $request, PlatformAdminService $platform): JsonResponse
     {
-        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        abort_unless($request->user()->is_platform_admin, 403);
 
         return response()->json($platform->organizations($request));
     }
 
     public function export(Request $request, PlatformAdminService $platform): StreamedResponse
     {
-        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        abort_unless($request->user()->is_platform_admin, 403);
 
         return $platform->exportOrganizations($request);
     }
@@ -46,7 +46,7 @@ class PlatformOrganizationController extends Controller
         Organization $organization,
         PlatformAdminService $platform
     ): JsonResponse {
-        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        abort_unless($request->user()->is_platform_admin, 403);
 
         return response()->json($platform->organization($organization));
     }

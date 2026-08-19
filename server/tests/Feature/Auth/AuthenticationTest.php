@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -81,7 +82,37 @@ class AuthenticationTest extends TestCase
                 'roles',
                 'permissions',
                 'modules',
+                'has_manager_scope',
             ]);
+    }
+
+    public function test_session_has_manager_scope_false_for_organization_admin_without_employee_record(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $this->assertNull($admin->employee);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('has_manager_scope', false);
+    }
+
+    public function test_session_has_manager_scope_true_for_supervisor_with_real_scope(): void
+    {
+        $this->seed();
+
+        $supervisorUser = User::query()->where('email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $supervisor = Employee::query()->where('work_email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        Employee::query()->where('employee_number', 'EMP-OPS-002')->update(['reporting_manager_id' => $supervisor->id]);
+
+        Sanctum::actingAs($supervisorUser);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('has_manager_scope', true);
     }
 
     public function test_authenticated_user_can_logout(): void

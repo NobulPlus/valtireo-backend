@@ -161,6 +161,11 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(User::class);
     }
 
+    public function roles(): HasMany
+    {
+        return $this->hasMany(Role::class);
+    }
+
     public function modules(): BelongsToMany
     {
         return $this->belongsToMany(PlatformModule::class, 'organization_modules', 'organization_id', 'platform_module_id')

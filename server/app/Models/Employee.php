@@ -30,9 +30,11 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'reporting_manager_id',
     'start_date',
     'status',
+    'pending_role_id',
     'invited_at',
     'onboarding_completed_at',
     'activated_at',
+    'probation_ends_at',
 ])]
 class Employee extends Model implements AuditableContract
 {
@@ -82,6 +84,11 @@ class Employee extends Model implements AuditableContract
     public function reportingManager(): BelongsTo
     {
         return $this->belongsTo(Employee::class, 'reporting_manager_id');
+    }
+
+    public function pendingRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'pending_role_id');
     }
 
     public function directReports(): HasMany
@@ -164,6 +171,7 @@ class Employee extends Model implements AuditableContract
             'invited_at' => 'datetime',
             'onboarding_completed_at' => 'datetime',
             'activated_at' => 'datetime',
+            'probation_ends_at' => 'date',
         ];
     }
 }

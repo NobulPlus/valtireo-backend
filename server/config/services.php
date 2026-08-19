@@ -36,7 +36,7 @@ return [
     ],
 
     'valtireo_notifications' => [
-        'mail_enabled' => env('VALTIREO_MAIL_NOTIFICATIONS', false),
+        'mail_enabled' => env('VALTIREO_MAIL_NOTIFICATIONS', true),
         'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
     ],
 

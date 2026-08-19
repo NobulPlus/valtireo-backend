@@ -8,7 +8,7 @@ class UpdateOrganizationWorkspaceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasRole('Super Admin') ?? false;
+        return $this->user()?->is_platform_admin ?? false;
     }
 
     /**

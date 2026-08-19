@@ -13,8 +13,6 @@ export interface OrganizationDashboardFilters {
   status?: string;
   search?: string;
   recent_limit?: number;
-  trend_year?: number;
-  trend_month?: number;
 }
 
 function cleanParams<T extends object>(filters: T): Partial<T> {

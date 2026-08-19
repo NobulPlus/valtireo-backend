@@ -22,6 +22,12 @@ class StoreEmployeeStatusHistoryRequest extends FormRequest
             'effective_date' => ['required', 'date'],
             'reason' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'probation_ends_at' => [
+                Rule::requiredIf($this->input('new_status') === 'probation'),
+                'nullable',
+                'date',
+                'after:effective_date',
+            ],
         ];
     }
 }

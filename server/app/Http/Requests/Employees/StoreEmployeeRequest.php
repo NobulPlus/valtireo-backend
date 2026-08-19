@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Employees;
 
 use App\Models\Unit;
+use App\Services\EmployeeRoleAssignmentService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -66,6 +67,10 @@ class StoreEmployeeRequest extends FormRequest
                 Rule::exists('employees', 'id')->where('organization_id', $organizationId),
             ],
             'start_date' => ['nullable', 'date'],
+            'pending_role_id' => [
+                'nullable',
+                Rule::in(app(EmployeeRoleAssignmentService::class)->assignableRolesFor($this->user())->pluck('id')),
+            ],
             'send_invitation' => ['sometimes', 'boolean'],
         ];
     }
@@ -110,6 +115,7 @@ class StoreEmployeeRequest extends FormRequest
             'organization_location_id',
             'reporting_manager_id',
             'start_date',
+            'pending_role_id',
         ]);
     }
 }

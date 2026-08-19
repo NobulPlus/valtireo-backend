@@ -3,7 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Download, FileSpreadsheet, Upload, UserPlus, X } from 'lucide-react';
+import {
+  Building2,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  MailCheck,
+  PencilLine,
+  ShieldCheck,
+  UserRound,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Alert } from '@/components/ui/Alert';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -27,6 +38,7 @@ import {
   type TemplateImportResult,
 } from '@/features/employees/api';
 import { ApiError } from '@/lib/apiClient';
+import { cn } from '@/lib/cn';
 
 const schema = z.object({
   employee_number: z.string().min(1, 'Employee number is required'),
@@ -42,6 +54,7 @@ const schema = z.object({
   employment_type_id: z.string().min(1, 'Employment type is required'),
   organization_location_id: z.string().min(1, 'Location is required'),
   start_date: z.string().optional(),
+  pending_role_id: z.string().optional(),
   send_invitation: z.boolean(),
 });
 
@@ -54,6 +67,15 @@ function lookupOptions<T extends { id: number; name: string }>(items: T[] | unde
   ];
 }
 
+/** Small square icon chip used to give each form section a scannable identity. */
+function SectionIcon({ icon: Icon }: { icon: typeof UserRound }) {
+  return (
+    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-teal/10 text-teal">
+      <Icon className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
 function EmployeeCreateContent() {
   const navigate = useNavigate();
   const lookupsQuery = useSetupLookups();
@@ -63,6 +85,7 @@ function EmployeeCreateContent() {
   const [reportingManager, setReportingManager] = useState<AsyncOption | null>(null);
   const [importResult, setImportResult] = useState<TemplateImportResult | null>(null);
   const [invitationLink, setInvitationLink] = useState<{ url: string; employeeId: number } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const {
     register,
@@ -87,6 +110,7 @@ function EmployeeCreateContent() {
       employment_type_id: '',
       organization_location_id: '',
       start_date: '',
+      pending_role_id: '',
       send_invitation: true,
     },
   });
@@ -98,7 +122,11 @@ function EmployeeCreateContent() {
   const selectedGradeLevelId = watch('grade_level_id') ?? '';
   const selectedEmploymentTypeId = watch('employment_type_id') ?? '';
   const selectedLocationId = watch('organization_location_id') ?? '';
+  const selectedPendingRoleId = watch('pending_role_id') ?? '';
+  const sendInvitation = watch('send_invitation');
   const phone = watch('phone') ?? '';
+  const assignableRoles = lookupsQuery.data?.assignable_roles ?? [];
+  const selectedRoleLabel = assignableRoles.find((role) => role.value === selectedPendingRoleId)?.label ?? null;
   const units = useMemo(
     () =>
       (lookupsQuery.data?.units ?? []).filter(
@@ -124,6 +152,7 @@ function EmployeeCreateContent() {
         organization_location_id: Number(values.organization_location_id),
         reporting_manager_id: reportingManager?.value ?? null,
         start_date: values.start_date || null,
+        pending_role_id: values.pending_role_id ? Number(values.pending_role_id) : null,
         send_invitation: values.send_invitation,
       });
       toast.success('Employee created', `${result.employee.full_name} has been added successfully.`);
@@ -198,31 +227,29 @@ function EmployeeCreateContent() {
     <div>
       <PageHeader
         title="Add employee"
+        subtitle="Create a single employee record below, or switch to bulk import for a whole list at once."
         breadcrumbs={[{ label: 'Employees', to: '/employees' }, { label: 'Add employee' }]}
       />
 
-      <Card className="mb-5">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle>Bulk employee upload</CardTitle>
-            <p className="mt-1 text-xs text-muted">
-              Download the template, fill it in Excel, then upload the completed CSV to create multiple employees.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" onClick={handleDownloadTemplate}>
+      <Card className="mb-5 border-dashed bg-surface-soft/60">
+        <div className="flex w-full flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => setImportOpen((current) => !current)}
+            className="flex min-w-0 items-center gap-3 text-left"
+          >
+            <SectionIcon icon={FileSpreadsheet} />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-strong">Adding many employees?</span>
+              <span className="block text-xs text-muted">Download the CSV template, fill it in Excel, then upload it here.</span>
+            </span>
+          </button>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={handleDownloadTemplate}>
               <Download className="h-3.5 w-3.5" /> Template
             </Button>
-            <label className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-white px-4 text-sm font-medium text-strong transition-colors hover:bg-surface-soft">
-              {importMutation.isPending ? (
-                <>
-                  <Upload className="h-3.5 w-3.5 animate-pulse" /> Importing
-                </>
-              ) : (
-                <>
-                  <Upload className="h-3.5 w-3.5" /> Upload
-                </>
-              )}
+            <label className="relative inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-white px-3 text-[13px] font-medium text-strong transition-colors hover:bg-surface-soft">
+              {importMutation.isPending ? 'Importing…' : 'Upload CSV'}
               <input
                 type="file"
                 accept=".csv,text/csv,text/plain"
@@ -235,56 +262,61 @@ function EmployeeCreateContent() {
               />
             </label>
           </div>
-        </CardHeader>
-        <CardBody className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 text-sm text-muted md:grid-cols-3">
-            <div className="rounded-md bg-surface-soft p-3">
-              <FileSpreadsheet className="mb-2 h-4 w-4 text-teal" />
-              <span className="block font-medium text-strong">Use structure codes</span>
-              <span>Departments, units, designations, grade levels, employment types, and locations use their codes.</span>
-            </div>
-            <div className="rounded-md bg-surface-soft p-3">
-              <span className="block font-medium text-strong">Required fields</span>
-              <span>Employee number, names, work email, department, designation, employment type, and location.</span>
-            </div>
-            <div className="rounded-md bg-surface-soft p-3">
-              <span className="block font-medium text-strong">Invitation control</span>
-              <span>Set send_invitation to true or false per row.</span>
-            </div>
-          </div>
+        </div>
 
-          {importResult && (
-            <div className="rounded-md border border-border bg-white p-3 text-sm">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-medium text-strong">
-                  Imported {importResult.summary.imported_rows} of {importResult.summary.total_rows} rows
-                </span>
-                <span className="text-muted">Valid: {importResult.summary.valid_rows}</span>
-                <span className="text-muted">Failed: {importResult.summary.failed_rows}</span>
-              </div>
-              {importResult.summary.failed_rows > 0 && (
-                <div className="mt-3 space-y-1">
-                  {importResult.rows
-                    .filter((row) => !row.valid)
-                    .slice(0, 3)
-                    .map((row) => (
-                      <p key={row.row_number} className="text-xs text-danger">
-                        Row {row.row_number}: {Object.values(row.errors).join(' ')}
-                      </p>
-                    ))}
+        {importOpen && (
+          <CardBody className="space-y-3 border-t border-border pt-4">
+            <p className="text-xs text-muted">
+              Departments, units, designations, grade levels, employment types, and locations are matched by their codes.
+              Required columns: employee number, names, work email, department, designation, employment type, and location.
+              Set <code className="rounded bg-white px-1 py-0.5 text-[11px]">send_invitation</code> to true or false per row.
+            </p>
+
+            {importResult && (
+              <div className="rounded-md border border-border bg-white p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-medium text-strong">
+                    Imported {importResult.summary.imported_rows} of {importResult.summary.total_rows} rows
+                  </span>
+                  <span className="text-muted">Valid: {importResult.summary.valid_rows}</span>
+                  <span className="text-muted">Failed: {importResult.summary.failed_rows}</span>
                 </div>
-              )}
-            </div>
-          )}
-        </CardBody>
+                {importResult.summary.failed_rows > 0 && (
+                  <div className="mt-3 space-y-1">
+                    {importResult.rows
+                      .filter((row) => !row.valid)
+                      .slice(0, 3)
+                      .map((row) => (
+                        <p key={row.row_number} className="text-xs text-danger">
+                          Row {row.row_number}: {Object.values(row.errors).join(' ')}
+                        </p>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardBody>
+        )}
       </Card>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
         <Card>
-          <CardHeader>
-            <CardTitle>Identity</CardTitle>
+          <CardHeader className="gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <SectionIcon icon={UserRound} />
+              <CardTitle>Identity</CardTitle>
+            </div>
           </CardHeader>
           <CardBody className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} required>
+              <Input id="first_name" invalid={Boolean(errors.first_name)} {...register('first_name')} />
+            </Field>
+            <Field label="Middle name" htmlFor="middle_name" error={errors.middle_name?.message}>
+              <Input id="middle_name" {...register('middle_name')} />
+            </Field>
+            <Field label="Last name" htmlFor="last_name" error={errors.last_name?.message} required>
+              <Input id="last_name" invalid={Boolean(errors.last_name)} {...register('last_name')} />
+            </Field>
             <Field label="Employee number" htmlFor="employee_number" error={errors.employee_number?.message} required>
               <Input id="employee_number" invalid={Boolean(errors.employee_number)} {...register('employee_number')} />
             </Field>
@@ -299,21 +331,15 @@ function EmployeeCreateContent() {
                 invalid={Boolean(errors.phone)}
               />
             </Field>
-            <Field label="First name" htmlFor="first_name" error={errors.first_name?.message} required>
-              <Input id="first_name" invalid={Boolean(errors.first_name)} {...register('first_name')} />
-            </Field>
-            <Field label="Middle name" htmlFor="middle_name" error={errors.middle_name?.message}>
-              <Input id="middle_name" {...register('middle_name')} />
-            </Field>
-            <Field label="Last name" htmlFor="last_name" error={errors.last_name?.message} required>
-              <Input id="last_name" invalid={Boolean(errors.last_name)} {...register('last_name')} />
-            </Field>
           </CardBody>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Structure & assignment</CardTitle>
+          <CardHeader className="gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <SectionIcon icon={Building2} />
+              <CardTitle>Structure & assignment</CardTitle>
+            </div>
           </CardHeader>
           <CardBody className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Department" htmlFor="department_id" error={errors.department_id?.message} required>
@@ -399,34 +425,111 @@ function EmployeeCreateContent() {
           </CardBody>
         </Card>
 
+        {assignableRoles.length > 0 && (
+          <Card>
+            <CardHeader className="gap-2.5">
+              <div className="flex items-center gap-2.5">
+                <SectionIcon icon={ShieldCheck} />
+                <CardTitle>System access</CardTitle>
+              </div>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              <Field label="System role" htmlFor="pending_role_id" error={errors.pending_role_id?.message} className="max-w-sm">
+                <SelectMenu
+                  value={selectedPendingRoleId}
+                  onChange={(value) => setValue('pending_role_id', value, { shouldDirty: true, shouldValidate: true })}
+                  options={[{ value: '', label: 'Employee (default)' }, ...assignableRoles]}
+                />
+              </Field>
+              <div className="flex items-start gap-2.5 rounded-md bg-surface-soft px-3 py-2.5 text-xs leading-5 text-muted">
+                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-teal" />
+                <span>
+                  Separate from designation — this controls what the employee can access in Valtireo, not their job title.{' '}
+                  {selectedRoleLabel ? (
+                    <>
+                      This employee will get <span className="font-medium text-strong">{selectedRoleLabel}</span> access once
+                      they activate their account.
+                    </>
+                  ) : (
+                    'Leave unset and they default to the standard Employee role.'
+                  )}
+                </span>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
         <Card>
-          <CardHeader>
-            <CardTitle>Onboarding</CardTitle>
+          <CardHeader className="gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <SectionIcon icon={MailCheck} />
+              <CardTitle>Onboarding</CardTitle>
+            </div>
           </CardHeader>
-          <CardBody>
-            <label className="flex items-start gap-3 text-sm">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-border" {...register('send_invitation')} />
-              <span>
-                <span className="block font-medium text-strong">Send invitation</span>
-                <span className="block text-muted">
-                  Generates a link the employee uses to set a password and complete their profile &mdash; email delivery
-                  isn't wired up yet, so you'll get the link to share yourself. Leave this unchecked to create a draft
-                  record you can invite later.
+          <CardBody className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label
+              className={cn(
+                'relative flex cursor-pointer items-start gap-3 rounded-md border px-3.5 py-3 transition-colors',
+                sendInvitation ? 'border-teal bg-teal/5' : 'border-border hover:bg-surface-soft',
+              )}
+            >
+              <input
+                type="radio"
+                className="sr-only"
+                checked={sendInvitation}
+                onChange={() => setValue('send_invitation', true, { shouldDirty: true })}
+              />
+              <MailCheck className={cn('mt-0.5 h-4 w-4 flex-shrink-0', sendInvitation ? 'text-teal' : 'text-muted')} />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-strong">Send invitation now</span>
+                <span className="block text-xs text-muted">
+                  Generates a link the employee uses to set a password and complete their profile. Email delivery isn't wired
+                  up yet, so you'll get the link to share yourself.
                 </span>
               </span>
+              {sendInvitation && <CheckCircle2 className="ml-auto h-4 w-4 flex-shrink-0 text-teal" />}
+            </label>
+
+            <label
+              className={cn(
+                'relative flex cursor-pointer items-start gap-3 rounded-md border px-3.5 py-3 transition-colors',
+                !sendInvitation ? 'border-teal bg-teal/5' : 'border-border hover:bg-surface-soft',
+              )}
+            >
+              <input
+                type="radio"
+                className="sr-only"
+                checked={!sendInvitation}
+                onChange={() => setValue('send_invitation', false, { shouldDirty: true })}
+              />
+              <PencilLine className={cn('mt-0.5 h-4 w-4 flex-shrink-0', !sendInvitation ? 'text-teal' : 'text-muted')} />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-strong">Save as draft</span>
+                <span className="block text-xs text-muted">
+                  Creates the record without inviting anyone yet — useful when you're not ready to onboard this person. You
+                  can invite them later from the employee record.
+                </span>
+              </span>
+              {!sendInvitation && <CheckCircle2 className="ml-auto h-4 w-4 flex-shrink-0 text-teal" />}
             </label>
           </CardBody>
         </Card>
 
-        <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" isLoading={isSubmitting}>
-            <UserPlus className="h-3.5 w-3.5" />
-            Create employee
-          </Button>
-          <Button type="button" variant="ghost" onClick={() => navigate('/employees')}>
-            <X className="h-3.5 w-3.5" />
-            Cancel
-          </Button>
+        <div className="flex items-center justify-between gap-3 border-t border-border pt-5">
+          <p className="text-xs text-muted">
+            <span className="text-danger">*</span> Required fields. Everything else can be filled in later from the employee's
+            profile.
+          </p>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <Button type="button" variant="ghost" onClick={() => navigate('/employees')}>
+              <X className="h-3.5 w-3.5" />
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" isLoading={isSubmitting}>
+              <UserPlus className="h-3.5 w-3.5" />
+              Create employee
+            </Button>
+          </div>
         </div>
       </form>
 

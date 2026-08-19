@@ -1,41 +1,30 @@
 <?php
 
+use App\Models\Organization;
+use App\Models\Permission;
+use App\Models\Role;
 use Spatie\Permission\DefaultTeamResolver;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 
 return [
 
     'models' => [
 
         /*
-         * When using the "HasPermissions" trait from this package, we need to know which
-         * Eloquent model should be used to retrieve your permissions. Of course, it
-         * is often just the "Permission" model but you may use whatever you like.
-         *
-         * The model you want to use as a Permission model needs to implement the
-         * `Spatie\Permission\Contracts\Permission` contract.
+         * Custom subclasses of Spatie's Permission/Role models (see app/Models),
+         * so that roles/permissions can be Auditable and Role can carry an
+         * organization_id + key + description like every other app model.
          */
 
         'permission' => Permission::class,
 
-        /*
-         * When using the "HasRoles" trait from this package, we need to know which
-         * Eloquent model should be used to retrieve your roles. Of course, it
-         * is often just the "Role" model but you may use whatever you like.
-         *
-         * The model you want to use as a Role model needs to implement the
-         * `Spatie\Permission\Contracts\Role` contract.
-         */
-
         'role' => Role::class,
 
         /*
-         * When using the "Teams" feature from this package, we need to know which
-         * Eloquent model should be used to retrieve your teams. Of course, it
-         * is often just the "Team" model but you may use whatever you like.
+         * Teams feature: each Role belongs to one Organization ("team"). The
+         * global permission catalog itself stays un-teamed — see column_names
+         * below and app/Models/Permission.php.
          */
-        'team' => null,
+        'team' => Organization::class,
 
         /*
          * When using the "HasModels" trait and passing raw IDs to syncModels,
@@ -106,11 +95,11 @@ return [
         'model_morph_key' => 'model_id',
 
         /*
-         * Change this if you want to use the teams feature and your related model's
-         * foreign key is other than `team_id`.
+         * The physical column is named organization_id (not the generic
+         * team_id) to match every other tenant-scoped table in this app.
          */
 
-        'team_foreign_key' => 'team_id',
+        'team_foreign_key' => 'organization_id',
     ],
 
     /*
@@ -139,16 +128,13 @@ return [
     'events_enabled' => false,
 
     /*
-     * Teams Feature.
-     * When set to true the package implements teams using the 'team_foreign_key'.
-     * If you want the migrations to register the 'team_foreign_key', you must
-     * set this to true before doing the migration.
-     * If you already did the migration then you must make a new migration to also
-     * add 'team_foreign_key' to 'roles', 'model_has_roles', and 'model_has_permissions'
-     * (view the latest version of this package's migration file)
+     * Teams Feature — enabled. Roles are organization-scoped ("team" =
+     * Organization, foreign key organization_id); the permissions catalog
+     * itself stays global (permissions/role_has_permissions never get a
+     * team column — see the migration for the exact gating).
      */
 
-    'teams' => false,
+    'teams' => true,
 
     /*
      * The class to use to resolve the permissions team id

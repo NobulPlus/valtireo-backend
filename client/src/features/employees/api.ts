@@ -96,6 +96,7 @@ export interface UpdateEmployeePayload {
   employment_type_id?: number | null;
   organization_location_id?: number | null;
   start_date?: string | null;
+  pending_role_id?: number | null;
   profile?: {
     date_of_birth?: string | null;
     gender?: string | null;
@@ -176,8 +177,14 @@ export function useUpdateEmployee(employeeId: number) {
 export function useChangeEmployeeStatus(employeeId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { new_status: string; effective_date: string; reason?: string; note?: string }) =>
-      api.post(`/employees/${employeeId}/status-history`, payload),
+    mutationFn: (payload: {
+      new_status: string;
+      effective_date: string;
+      reason?: string;
+      note?: string;
+      /** Required when new_status is "probation" — powers the probation review reminder. */
+      probation_ends_at?: string;
+    }) => api.post(`/employees/${employeeId}/status-history`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees', employeeId] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });

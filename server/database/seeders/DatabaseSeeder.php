@@ -4,8 +4,10 @@ namespace Database\Seeders;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\DefaultRoleSeedingService;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
@@ -83,6 +85,12 @@ class DatabaseSeeder extends Seeder
         $this->call(PlatformModuleSeeder::class);
         $this->call(ApprovalWorkflowSeeder::class);
 
+        // Roles are organization-owned — seed this org's starter role set
+        // (and point Spatie's team context at it) before any assignRole()
+        // call below.
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+        $roles = app(DefaultRoleSeedingService::class)->seedForOrganization($organization);
+
         $admin = User::query()->firstOrCreate(
             ['email' => 'admin@valtireo.test'],
             [
@@ -96,9 +104,22 @@ class DatabaseSeeder extends Seeder
             'organization_id' => $organization->id,
         ]);
 
-        $admin->assignRole('Super Admin');
+        $admin->syncRoles([$roles->get('organization_admin')]);
+
+        $superAdmin = User::query()->firstOrCreate(
+            ['email' => 'superadmin@valtireo.test'],
+            [
+                'organization_id' => $organization->id,
+                'name' => 'Valtireo Super Admin',
+                'password' => 'Password1!',
+            ]
+        );
+        // Platform authority is a plain boolean now, independent of the
+        // (retired) global "Super Admin" role — see App\Models\User.
+        $superAdmin->update(['is_platform_admin' => true]);
 
         $this->call(RichDemoDataSeeder::class);
+        $this->call(EmployeeVarietySeeder::class);
         $this->call(LeaveSeeder::class);
         $this->call(AttendanceSeeder::class);
         $this->call(CustomerOrganizationDemoSeeder::class);

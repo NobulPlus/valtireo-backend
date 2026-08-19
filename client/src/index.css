@@ -15,6 +15,11 @@
 @import '@fontsource/manrope/700.css';
 @import '@fontsource/manrope/800.css';
 
+/* Self-hosted flag SVGs for country/phone pickers — avoids Unicode
+   regional-indicator flag emoji, which render as broken two-letter codes
+   on Windows. */
+@import 'flag-icons/css/flag-icons.min.css';
+
 /*
  * Valtireo design tokens.
  * Source of truth: docs/valtireo-brand-guide-v1.pdf
@@ -45,6 +50,17 @@
   --color-bridge-teal: #65c7c4;
   --color-gold: #ffcc29;
   --color-cyan: #16b6c9;
+
+  /* Chart palette — Pine/Teal/Blue family only. Gold/Cyan/Bridge Teal are
+     reserved (see above) and must not leak into general chart series, so
+     multi-category charts alternate each brand hue with a lighter tint of
+     itself instead. Stays muted/institutional by construction. */
+  --color-chart-1: #2f8f8a; /* teal */
+  --color-chart-2: #244f7a; /* blue */
+  --color-chart-3: #123f3a; /* pine */
+  --color-chart-4: #7ebab6; /* teal, tinted */
+  --color-chart-5: #7792ad; /* blue, tinted */
+  --color-chart-6: #76908d; /* pine, tinted */
 
   /* Neutrals */
   --color-canvas: #f7faf9;
@@ -396,8 +412,33 @@ body {
   }
 }
 
+/* ==========================================================================
+   Organization dashboard — hero stat cards
+   Fade+rise in on load, staggered via inline animation-delay. Disabled
+   entirely under reduced motion below, matching the login treatment.
+   ========================================================================== */
+
+.dashboard-hero-stat {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: dashboard-hero-stat-rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes dashboard-hero-stat-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-fade-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .dashboard-hero-stat {
     animation: none;
     opacity: 1;
     transform: none;

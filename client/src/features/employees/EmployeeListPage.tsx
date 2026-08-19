@@ -1,12 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BriefcaseBusiness, Building2, Download, GripVertical, LayoutGrid, Mail, MapPin, Plus, Search, Table2, UserRound } from 'lucide-react';
+import {
+  BriefcaseBusiness,
+  Building2,
+  CalendarClock,
+  CheckCircle2,
+  Download,
+  Eye,
+  GripVertical,
+  LayoutGrid,
+  Mail,
+  MapPin,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Table2,
+  UserCog,
+  UserRound,
+} from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { DataTable, type Column } from '@/components/ui/DataTable';
+import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { Pagination } from '@/components/ui/Pagination';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -15,11 +33,13 @@ import { RequirePermission } from '@/components/shell/RequirePermission';
 import { useAuth } from '@/context/AuthContext';
 import { useSetupLookups } from '@/features/workspace/api';
 import { downloadEmployeesCsv, useEmployees, useMoveEmployeeStatus, type EmployeeFilters } from '@/features/employees/api';
+import { ApproveOnboardingModal } from '@/features/employees/ApproveOnboardingModal';
+import { ChangeStatusModal } from '@/features/employees/ChangeStatusModal';
+import { EMPLOYEE_STATUS_OPTIONS, isReadyForOnboardingApproval, statusLabel } from '@/features/employees/statusHelpers';
 import { ApiError } from '@/lib/apiClient';
 import { cn } from '@/lib/cn';
 import type { Employee } from '@/types/api';
 
-const STATUS_OPTIONS = ['draft', 'invited', 'onboarding', 'active', 'probation', 'confirmed', 'suspended', 'exited'];
 const BOARD_COLUMNS = [
   { status: 'draft', title: 'Draft', hint: 'Created by HR, not invited yet.' },
   { status: 'invited', title: 'Invited', hint: 'Invitation sent, waiting for acceptance.' },
@@ -60,13 +80,6 @@ function today(): string {
   return `${year}-${month}-${day}`;
 }
 
-function statusLabel(status: string): string {
-  return status
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
 function EmployeeListContent() {
   const navigate = useNavigate();
   const { hasPermission } = useAuth();
@@ -85,6 +98,8 @@ function EmployeeListContent() {
   const [visibleBoardCounts, setVisibleBoardCounts] = useState<BoardVisibleCounts>(() =>
     Object.fromEntries(BOARD_COLUMNS.map((column) => [column.status, BOARD_BATCH_SIZE])),
   );
+  const [statusTarget, setStatusTarget] = useState<Employee | null>(null);
+  const [approveTarget, setApproveTarget] = useState<Employee | null>(null);
 
   const filters: EmployeeFilters = useMemo(
     () => ({
@@ -122,6 +137,14 @@ function EmployeeListContent() {
 
     if (targetStatus === 'invited' && employee.status === 'draft' && !employee.work_email) {
       toast.error('Invitation blocked', 'Add a work email before inviting this employee.');
+      return;
+    }
+
+    if (targetStatus === 'probation') {
+      // Moving into probation requires a probation_ends_at date, which
+      // drag-and-drop has nowhere to collect — redirect to the form that has
+      // the field instead of letting this 422.
+      toast.error('Set a probation end date', 'Use "Change status" from the employee table to move someone into probation.');
       return;
     }
 
@@ -185,6 +208,53 @@ function EmployeeListContent() {
     },
   ];
 
+  if (hasPermission('employees.update')) {
+    columns.push({
+      key: 'actions',
+      header: 'Actions',
+      headerClassName: 'text-right',
+      className: 'text-right',
+      render: (row) => (
+        // DataTable's onRowClick navigates the whole row, and Dropdown's
+        // panel isn't a portal — without this, clicking a menu item would
+        // bubble up and fire the row navigation in the same tick as the
+        // action itself.
+        <div onClick={(event) => event.stopPropagation()}>
+          <Dropdown
+            align="right"
+            trigger={({ toggle }) => (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggle}
+                aria-label={`Actions for ${row.full_name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            )}
+          >
+            <DropdownMenuItem icon={Eye} onClick={() => navigate(`/employees/${row.id}`)}>
+              View details
+            </DropdownMenuItem>
+            <DropdownMenuItem icon={UserCog} onClick={() => setStatusTarget(row)}>
+              Change status
+            </DropdownMenuItem>
+            {row.status === 'onboarding' && (
+              <DropdownMenuItem
+                icon={CheckCircle2}
+                onClick={() => setApproveTarget(row)}
+                disabled={!isReadyForOnboardingApproval(row)}
+              >
+                Approve onboarding
+              </DropdownMenuItem>
+            )}
+          </Dropdown>
+        </div>
+      ),
+    });
+  }
+
   return (
     <div>
       <PageHeader
@@ -226,7 +296,7 @@ function EmployeeListContent() {
             }}
             options={[
               { value: '', label: 'All statuses' },
-              ...STATUS_OPTIONS.map((option) => ({ value: option, label: option.charAt(0).toUpperCase() + option.slice(1) })),
+              ...EMPLOYEE_STATUS_OPTIONS.map((option) => ({ value: option, label: statusLabel(option) })),
             ]}
             className="sm:w-44"
           />
@@ -365,6 +435,13 @@ function EmployeeListContent() {
           </>
         )}
       </Card>
+
+      {statusTarget && (
+        <ChangeStatusModal employee={statusTarget} open onClose={() => setStatusTarget(null)} />
+      )}
+      {approveTarget && (
+        <ApproveOnboardingModal employee={approveTarget} open onClose={() => setApproveTarget(null)} />
+      )}
     </div>
   );
 }
@@ -420,6 +497,12 @@ function EmployeeKanbanCard({
           <Mail className="h-3.5 w-3.5 flex-shrink-0" />
           <span className="truncate">{employee.work_email || 'No work email'}</span>
         </p>
+        {employee.probation_ends_at && (
+          <p className={cn('flex items-center gap-1.5', new Date(employee.probation_ends_at) < new Date() && 'text-warning')}>
+            <CalendarClock className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">Probation ends {new Date(employee.probation_ends_at).toLocaleDateString()}</span>
+          </p>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">

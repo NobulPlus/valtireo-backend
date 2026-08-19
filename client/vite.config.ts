@@ -17,7 +17,7 @@ export default defineConfig({
       // Forwards /api/* to the local Laravel backend so the browser never
       // has to deal with cross-origin requests during development.
       '/api': {
-        target: 'http://valtireo.test',
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
     },

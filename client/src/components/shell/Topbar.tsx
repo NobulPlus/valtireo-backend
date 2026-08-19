@@ -1,15 +1,25 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, LogOut, User } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, User, UserRound, Gauge } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 
 export function Topbar() {
-  const { session, logout } = useAuth();
+  const { session, logout, canChooseWorkspaceMode, workspaceMode, setWorkspaceMode, adminLandingRoute } = useAuth();
   const navigate = useNavigate();
 
   async function handleLogout() {
     await logout();
     navigate('/login', { replace: true });
+  }
+
+  function handleSwitchWorkspaceMode() {
+    if (workspaceMode === 'admin') {
+      setWorkspaceMode('employee');
+      navigate('/dashboard/me');
+    } else {
+      setWorkspaceMode('admin');
+      navigate(adminLandingRoute);
+    }
   }
 
   return (
@@ -59,6 +69,11 @@ export function Topbar() {
           <div className="border-b border-border px-3 py-2">
             <p className="truncate text-[13px] font-medium text-strong">{session?.user.email}</p>
           </div>
+          {canChooseWorkspaceMode && (
+            <DropdownMenuItem icon={workspaceMode === 'admin' ? UserRound : Gauge} onClick={handleSwitchWorkspaceMode}>
+              {workspaceMode === 'admin' ? 'Switch to employee view' : 'Switch to admin view'}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem icon={LogOut} onClick={handleLogout}>
             Log out
           </DropdownMenuItem>

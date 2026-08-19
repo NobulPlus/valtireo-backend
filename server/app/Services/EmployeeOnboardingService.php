@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\EmployeeInvitation;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -11,8 +12,10 @@ use Illuminate\Validation\ValidationException;
 
 class EmployeeOnboardingService
 {
-    public function __construct(private readonly NotificationDispatchService $notifications)
-    {
+    public function __construct(
+        private readonly NotificationDispatchService $notifications,
+        private readonly EmployeeRoleAssignmentService $roleAssignment,
+    ) {
     }
 
     /**
@@ -22,6 +25,11 @@ class EmployeeOnboardingService
      */
     public function createEmployee(User $actor, array $data, bool $sendInvitation): array
     {
+        if (! empty($data['pending_role_id'])) {
+            $role = Role::query()->where('organization_id', $actor->organization_id)->findOrFail($data['pending_role_id']);
+            $this->roleAssignment->assertCanAssign($actor, $role);
+        }
+
         return DB::transaction(function () use ($actor, $data, $sendInvitation): array {
             $employee = Employee::query()->create([
                 ...$data,
@@ -86,7 +94,7 @@ class EmployeeOnboardingService
             'name' => trim($employee->first_name.' '.$employee->last_name),
         ]);
 
-        $user->assignRole('Employee');
+        $this->roleAssignment->applyRoleSelection($actor, $employee, $user);
 
         $employee->update([
             'user_id' => $user->id,

@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,6 +15,15 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         //
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        // Document expiry, onboarding follow-up, pending approval, and
+        // probation review reminders all live behind this one command —
+        // without this entry it only ever runs if someone triggers it by
+        // hand. Still requires the server's own cron to call
+        // `php artisan schedule:run` every minute (standard Laravel
+        // deployment requirement, not something this file alone can do).
+        $schedule->command('valtireo:send-reminders')->daily();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -24,7 +24,10 @@ class OrganizationAndRoleSeedTest extends TestCase
         $this->assertTrue($organization->locations()->where('code', 'HQ')->exists());
 
         $this->assertSame($organization->id, $admin->organization_id);
-        $this->assertTrue($admin->hasRole('Super Admin'));
+        $this->assertTrue($admin->hasRole('Organization Admin'));
+
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
+        $this->assertTrue($superAdmin->hasRole('Super Admin'));
 
         $this->assertDatabaseHas('roles', [
             'name' => 'HR Officer',

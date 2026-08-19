@@ -9,13 +9,14 @@ use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\OrganizationLocation;
 use App\Models\Unit;
+use App\Services\EmployeeRoleAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SetupLookupController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, EmployeeRoleAssignmentService $roleAssignment): JsonResponse
     {
         return response()->json([
             'departments' => $this->departments($request)->getData(true)['data'],
@@ -24,6 +25,16 @@ class SetupLookupController extends Controller
             'grade_levels' => $this->gradeLevels($request)->getData(true)['data'],
             'employment_types' => $this->employmentTypes($request)->getData(true)['data'],
             'locations' => $this->locations($request)->getData(true)['data'],
+            'assignable_roles' => $this->assignableRoles($request, $roleAssignment)->getData(true)['data'],
+        ]);
+    }
+
+    public function assignableRoles(Request $request, EmployeeRoleAssignmentService $roleAssignment): JsonResponse
+    {
+        return response()->json([
+            'data' => $roleAssignment->assignableRolesFor($request->user())
+                ->map(fn ($role) => ['value' => (string) $role->id, 'label' => $role->name])
+                ->values(),
         ]);
     }
 

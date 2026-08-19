@@ -33,7 +33,10 @@ use App\Http\Controllers\Api\SetupLookupController;
 use App\Http\Controllers\Api\TemplateController;
 use App\Http\Controllers\Api\WorkspaceController;
 use App\Http\Controllers\Api\WorkShiftController;
+use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Middleware\EnsureOrganizationIsActive;
+use App\Http\Middleware\SetPermissionsTeamId;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -47,13 +50,13 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
 
-    Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(function () {
+    Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(function () {
+Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class])->group(function () {
     Route::prefix('platform')->group(function () {
         Route::get('/dashboard', [PlatformOrganizationController::class, 'dashboard']);
         Route::get('/modules', [PlatformModuleController::class, 'index']);
@@ -64,6 +67,7 @@ Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(fu
         Route::patch('/organizations/{organization}/status', [PlatformOrganizationController::class, 'updateStatus']);
         Route::patch('/organizations/{organization}/modules/{platformModule}', [PlatformOrganizationController::class, 'updateModule']);
         Route::patch('/organizations/{organization}/workspace', [PlatformOrganizationController::class, 'updateWorkspace']);
+        Route::patch('/permissions/{permission}', [PermissionController::class, 'update']);
     });
 
     Route::get('/workspace', [WorkspaceController::class, 'show']);
@@ -129,7 +133,17 @@ Route::middleware(['auth:sanctum', EnsureOrganizationIsActive::class])->group(fu
         Route::get('/locations', [SetupLookupController::class, 'locations']);
         Route::post('/locations', [SetupLookupController::class, 'storeLocation']);
         Route::patch('/locations/{location}', [SetupLookupController::class, 'updateLocation']);
+        Route::get('/assignable-roles', [SetupLookupController::class, 'assignableRoles']);
     });
+
+    Route::prefix('roles')->group(function () {
+        Route::get('/', [RoleController::class, 'index']);
+        Route::post('/', [RoleController::class, 'store']);
+        Route::patch('/{role}', [RoleController::class, 'update']);
+        Route::delete('/{role}', [RoleController::class, 'destroy']);
+    });
+
+    Route::get('/permissions', [PermissionController::class, 'index']);
 
     Route::prefix('documents')->group(function () {
         Route::get('/types', [DocumentTypeController::class, 'index']);

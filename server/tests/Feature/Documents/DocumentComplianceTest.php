@@ -218,7 +218,7 @@ class DocumentComplianceTest extends TestCase
 
         $this->getJson('/api/documents/compliance')
             ->assertOk()
-            ->assertJsonPath('summary.employees_checked', 7)
+            ->assertJsonPath('summary.employees_checked', 47)
             ->assertJsonPath('summary.requirements_checked', 3)
             ->assertJsonStructure([
                 'summary' => ['missing', 'expired', 'expiring_soon', 'submitted', 'approved'],

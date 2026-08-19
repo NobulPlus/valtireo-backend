@@ -9,8 +9,10 @@ import {
   Clock,
   FileStack,
   Gauge,
+  ListChecks,
   ScrollText,
   Settings,
+  ShieldPlus,
   SlidersHorizontal,
   ShieldCheck,
   UserRound,
@@ -23,8 +25,8 @@ export interface NavItem {
   icon: LucideIcon;
   /** Permission required to see this item. Omit for always-visible items. */
   permission?: string;
-  /** User role required to see this item. */
-  roles?: string[];
+  /** Visible only to platform (cross-organization) admins. */
+  platformAdminOnly?: boolean;
   /** Module key required to see this item (hidden entirely if not entitled). */
   moduleKey?: string;
   /** Screens not yet built in this pass — shown for roadmap context, disabled. */
@@ -34,6 +36,14 @@ export interface NavItem {
 export interface NavGroup {
   label: string;
   items: NavItem[];
+  /**
+   * Which workspace mode this group shows in (see AuthContext's
+   * `workspaceMode`). `'core'` = always visible in both modes. `'employee'`
+   * = only in employee mode. Omitted = admin-only (the default for every
+   * group except the two tagged below) — not repeated on each one since
+   * it's the common case.
+   */
+  scope?: 'core' | 'employee';
 }
 
 /**
@@ -47,13 +57,15 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Core',
+    scope: 'core',
     items: [
-      { label: 'Valtireo console', to: '/platform', icon: ShieldCheck, roles: ['Super Admin'] },
+      { label: 'Valtireo console', to: '/platform', icon: ShieldCheck, platformAdminOnly: true },
       { label: 'Dashboard', to: '/dashboard', icon: Gauge },
     ],
   },
   {
     label: 'My workspace',
+    scope: 'employee',
     items: [
       { label: 'My profile', to: '/me/profile', icon: UserRound },
       { label: 'My leave', to: '/me/leave', icon: CalendarCheck2 },
@@ -119,7 +131,6 @@ export const NAV_GROUPS: NavGroup[] = [
         to: '/audit',
         icon: ScrollText,
         permission: 'audit_logs.view',
-        comingSoon: true,
       },
     ],
   },
@@ -143,6 +154,18 @@ export const NAV_GROUPS: NavGroup[] = [
         to: '/settings/structure',
         icon: Building2,
         permission: 'workspace_settings.view',
+      },
+      {
+        label: 'Roles & permissions',
+        to: '/settings/roles',
+        icon: ShieldPlus,
+        permission: 'roles.view',
+      },
+      {
+        label: 'Custom fields',
+        to: '/settings/custom-fields',
+        icon: ListChecks,
+        permission: 'employees.view',
       },
     ],
   },

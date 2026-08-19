@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { Logomark } from '@/components/ui/Logomark';
+import { WorkspaceModeModal } from '@/components/shell/WorkspaceModeModal';
 
 const schema = z.object({
   email: z.string().min(1, 'Enter your email address').email('Enter a valid email address'),
@@ -27,6 +28,7 @@ export function LoginPage() {
   const location = useLocation();
   const toast = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [showWorkspaceModal, setShowWorkspaceModal] = useState(false);
   const emailErrorId = useId();
   const passwordErrorId = useId();
 
@@ -40,15 +42,19 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   });
 
-  if (isAuthenticated) {
+  if (isAuthenticated && !showWorkspaceModal) {
     const redirectTo = (location.state as { from?: string } | null)?.from ?? defaultRoute;
     return <Navigate to={redirectTo} replace />;
   }
 
   async function onSubmit(values: FormValues) {
     try {
-      await login(values.email, values.password);
-      navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true });
+      const canChooseWorkspaceMode = await login(values.email, values.password);
+      if (canChooseWorkspaceMode) {
+        setShowWorkspaceModal(true);
+      } else {
+        navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true });
+      }
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 422) {
@@ -65,6 +71,7 @@ export function LoginPage() {
   }
 
   return (
+    <>
     <main className="min-h-screen bg-[#f4f8f7] text-strong">
       <section className="grid min-h-screen lg:grid-cols-[minmax(0,1fr)_minmax(420px,520px)]">
         <aside className="login-brand-panel relative hidden min-h-screen overflow-hidden bg-pine text-white lg:flex">
@@ -190,13 +197,19 @@ export function LoginPage() {
 
             {import.meta.env.DEV && (
               <div className="mt-5 rounded-md border border-dashed border-border-strong bg-white/70 px-3 py-2.5 text-[11px] leading-5 text-muted">
-                <span className="font-medium text-strong">Development only:</span> admin@valtireo.test / Password1!
+                <span className="font-medium text-strong">Development only</span>
+                <br />
+                Organization Admin: admin@valtireo.test / Password1!
+                <br />
+                Super Admin (platform console): superadmin@valtireo.test / Password1!
               </div>
             )}
           </div>
         </div>
       </section>
     </main>
+    {showWorkspaceModal && <WorkspaceModeModal />}
+    </>
   );
 }
 

@@ -17,7 +17,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        Sanctum::actingAs(User::query()->where('email', 'admin@valtireo.test')->firstOrFail());
+        Sanctum::actingAs(User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail());
 
         $response = $this->getJson('/api/platform/dashboard')
             ->assertOk()
@@ -52,7 +52,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        Sanctum::actingAs(User::query()->where('email', 'admin@valtireo.test')->firstOrFail());
+        Sanctum::actingAs(User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail());
 
         $this->getJson('/api/platform/organizations?search=Sterling%20Grove&status=active')
             ->assertOk()
@@ -65,7 +65,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        Sanctum::actingAs(User::query()->where('email', 'admin@valtireo.test')->firstOrFail());
+        Sanctum::actingAs(User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail());
 
         $response = $this->get('/api/platform/organizations/export?search=Sterling%20Grove&status=active&sort_by=name&sort_direction=asc')
             ->assertOk()
@@ -84,7 +84,7 @@ class PlatformAdminDashboardTest extends TestCase
 
         $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
 
-        Sanctum::actingAs(User::query()->where('email', 'admin@valtireo.test')->firstOrFail());
+        Sanctum::actingAs(User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail());
 
         $this->getJson("/api/platform/organizations/{$organization->id}")
             ->assertOk()
@@ -114,7 +114,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
         $organizationAdmin = User::query()->where('organization_id', $organization->id)->firstOrFail();
         $organizationAdmin->createToken('api')->plainTextToken;
@@ -131,7 +131,7 @@ class PlatformAdminDashboardTest extends TestCase
             ->assertJsonPath('status_history.0.previous_status', 'active')
             ->assertJsonPath('status_history.0.new_status', 'suspended')
             ->assertJsonPath('status_history.0.reason', 'Subscription payment issue.')
-            ->assertJsonPath('status_history.0.changed_by', 'Valtireo Admin');
+            ->assertJsonPath('status_history.0.changed_by', 'Valtireo Super Admin');
 
         $this->assertSame('suspended', $organization->refresh()->status);
         $this->assertDatabaseCount('personal_access_tokens', 0);
@@ -159,7 +159,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'BLUEBRIDGE')->firstOrFail();
         $organizationAdmin = User::query()->where('organization_id', $organization->id)->firstOrFail();
 
@@ -182,7 +182,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $platformOrganization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
 
         Sanctum::actingAs($superAdmin);
@@ -200,7 +200,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
         $module = PlatformModule::query()->where('key', 'assets')->firstOrFail();
 
@@ -224,7 +224,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
         $module = PlatformModule::query()->where('key', 'assets')->firstOrFail();
         $expiresAt = now()->addMonths(3)->toDateString();
@@ -247,7 +247,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
         $module = PlatformModule::query()->where('key', 'assets')->firstOrFail();
 
@@ -263,7 +263,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
         $module = PlatformModule::query()->where('key', 'attendance')->firstOrFail();
 
@@ -300,7 +300,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
 
         Sanctum::actingAs($superAdmin);
@@ -327,7 +327,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $organization = Organization::query()->where('code', 'STERLINGGROVE')->firstOrFail();
 
         Sanctum::actingAs($superAdmin);
@@ -355,7 +355,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         $inactiveModule = PlatformModule::query()->where('key', 'assets')->firstOrFail();
         $inactiveModule->update(['is_active' => false]);
 
@@ -386,7 +386,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
 
         Sanctum::actingAs($superAdmin);
 
@@ -420,7 +420,7 @@ class PlatformAdminDashboardTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
 
         Sanctum::actingAs($superAdmin);
 

@@ -5,6 +5,7 @@ namespace Tests\Feature\Platform;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -16,8 +17,10 @@ class OrganizationProvisioningTest extends TestCase
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         Sanctum::actingAs($superAdmin);
+
+        Notification::fake();
 
         $response = $this->postJson('/api/platform/organizations', [
             'organization' => [
@@ -64,7 +67,7 @@ class OrganizationProvisioningTest extends TestCase
             ->assertJsonPath('admin.email', 'paul@leadingdigitals.test')
             ->assertJsonPath('workspace.theme.primary_color', '#0F766E')
             ->assertJsonPath('workspace.identity.welcome_message', 'Welcome to Leading Digitals.')
-            ->assertJsonPath('invitation.delivery_status', 'pending_mail_provider')
+            ->assertJsonPath('invitation.delivery_status', 'sent')
             ->assertJsonStructure([
                 'organization',
                 'main_location',
@@ -86,13 +89,19 @@ class OrganizationProvisioningTest extends TestCase
             'code' => 'MAIN',
             'is_primary' => true,
         ]);
+
+        Notification::assertSentTo(
+            $admin,
+            \App\Notifications\ValtireoNotification::class,
+            fn ($notification) => $notification->toArray($admin)['event'] === 'organization.admin_invited'
+        );
     }
 
     public function test_provisioned_admin_can_login_with_temporary_password(): void
     {
         $this->seed();
 
-        $superAdmin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         Sanctum::actingAs($superAdmin);
 
         $temporaryPassword = $this->postJson('/api/platform/organizations', [
