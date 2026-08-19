@@ -26,7 +26,7 @@ class EmployeeRoleAssignmentService
 {
     public function __construct(
         private readonly OrganizationRoleGuardrailService $guardrail,
-        private readonly RoleActivityService $activity,
+        private readonly EmployeeProfileActivityService $activity,
     ) {
     }
 
@@ -103,7 +103,7 @@ class EmployeeRoleAssignmentService
 
         $targetUser->syncRoles([$role]);
         $employee->update(['pending_role_id' => null]);
-        $this->activity->record($employee->organization, $role, $actor, 'employee_role_assigned', "Assigned the {$role->name} role to {$targetUser->name}.");
+        $this->activity->record($employee, $actor, 'employee_role_assigned', "Assigned the {$role->name} role.", subject: $role);
     }
 
     /**
@@ -138,7 +138,7 @@ class EmployeeRoleAssignmentService
 
         $targetUser->syncRoles([$role]);
         $employee->update(['pending_role_id' => null]);
-        $this->activity->record($employee->organization, $role, $actor, 'employee_role_changed', "Changed {$targetUser->name}'s role to {$role->name}.");
+        $this->activity->record($employee, $actor, 'employee_role_changed', "Role changed to {$role->name}.", subject: $role);
     }
 
     private function assignDefault(Employee $employee, User $targetUser): void

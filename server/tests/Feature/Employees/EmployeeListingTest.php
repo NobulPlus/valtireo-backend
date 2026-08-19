@@ -84,6 +84,7 @@ class EmployeeListingTest extends TestCase
         $this->seed();
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($admin->organization_id);
         $manager = Employee::query()
             ->where('organization_id', $admin->organization_id)
             ->whereHas('user.roles', fn ($query) => $query->whereIn('name', ['Department Head', 'Supervisor']))

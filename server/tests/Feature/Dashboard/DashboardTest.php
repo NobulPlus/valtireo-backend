@@ -215,6 +215,7 @@ class DashboardTest extends TestCase
             'organization_id' => $admin->organization_id,
             'email' => 'ops-head@valtireo.test',
         ]);
+        $this->setPermissionsTeamId($admin->organization_id);
         $deptHeadUser->assignRole('Department Head');
         Employee::factory()->create([
             'organization_id' => $admin->organization_id,
@@ -261,7 +262,7 @@ class DashboardTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_organization_admin_who_is_also_an_employee_with_reports_can_view_manager_dashboard(): void
+    public function test_organization_admin_who_is_also_an_employee_gets_department_scope_from_view_department_permission(): void
     {
         $this->seed();
 
@@ -286,10 +287,16 @@ class DashboardTest extends TestCase
 
         Sanctum::actingAs($admin);
 
+        // Organization Admin's seeded role carries every permission,
+        // including employees.view_department — so scope resolution picks
+        // the department-wide view before it ever gets to checking direct
+        // reports (see DashboardService::managerScope()). Direct-report-only
+        // scoping for a permission holder without employees.view_department
+        // is covered separately by test_supervisor_can_view_direct_reports_dashboard.
         $this->getJson('/api/dashboard/manager')
             ->assertOk()
-            ->assertJsonPath('scope.type', 'direct_reports')
-            ->assertJsonPath('scope.manager.employee_number', $adminEmployee->employee_number);
+            ->assertJsonPath('scope.type', 'department')
+            ->assertJsonPath('scope.department.code', 'OPS');
     }
 
     public function test_employee_cannot_view_organization_dashboard(): void

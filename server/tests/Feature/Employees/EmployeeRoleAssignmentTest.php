@@ -9,6 +9,7 @@ use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
+use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,7 +20,7 @@ class EmployeeRoleAssignmentTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_invite_without_a_chosen_system_role_still_defaults_to_employee(): void
+    public function test_invite_without_a_chosen_pending_role_still_defaults_to_employee(): void
     {
         $this->seed();
 
@@ -46,12 +47,21 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->postJson('/api/employees', $this->payload([
             'employee_number' => 'EMP-ROLE-002',
             'work_email' => 'role-supervisor@valtireo.test',
-            'system_role' => 'Supervisor',
+            'pending_role_id' => $this->roleId('supervisor'),
         ]))->assertCreated();
 
         $user = User::query()->where('email', 'role-supervisor@valtireo.test')->firstOrFail();
         $this->assertTrue($user->hasRole('Supervisor'));
         $this->assertFalse($user->hasRole('Employee'));
+
+        // Role assignment is recorded on the employee's own activity
+        // timeline (via EmployeeProfileActivityService), not a separate,
+        // unsurfaced log — so it shows up wherever the rest of an
+        // employee's lifecycle history does.
+        $employee = Employee::query()->where('employee_number', 'EMP-ROLE-002')->firstOrFail();
+        $this->getJson("/api/employees/{$employee->id}/profile-activities")
+            ->assertOk()
+            ->assertJsonFragment(['event' => 'employee_role_assigned']);
     }
 
     public function test_designation_alone_never_grants_elevated_access(): void
@@ -64,7 +74,7 @@ class EmployeeRoleAssignmentTest extends TestCase
 
         Sanctum::actingAs($hrDirector);
 
-        // "Department Head" designation (job title) — no system_role chosen.
+        // "Department Head" designation (job title) — no pending_role_id chosen.
         $this->postJson('/api/employees', $this->payload([
             'employee_number' => 'EMP-ROLE-003',
             'work_email' => 'role-designation@valtireo.test',
@@ -89,7 +99,7 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->postJson('/api/employees', $this->payload([
             'employee_number' => 'EMP-ROLE-004',
             'work_email' => 'role-stable@valtireo.test',
-            'system_role' => 'Supervisor',
+            'pending_role_id' => $this->roleId('supervisor'),
         ]))->assertCreated();
 
         $employee = Employee::query()->where('employee_number', 'EMP-ROLE-004')->firstOrFail();
@@ -102,7 +112,7 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->assertTrue($user->hasRole('Supervisor'));
     }
 
-    public function test_hr_director_can_update_an_existing_employees_system_role(): void
+    public function test_hr_director_can_update_an_existing_employees_pending_role(): void
     {
         $this->seed();
 
@@ -117,7 +127,7 @@ class EmployeeRoleAssignmentTest extends TestCase
         $employee = Employee::query()->where('employee_number', 'EMP-ROLE-005')->firstOrFail();
 
         $this->patchJson("/api/employees/{$employee->id}", [
-            'system_role' => 'Department Head',
+            'pending_role_id' => $this->roleId('department_head'),
         ])->assertOk();
 
         $user = User::query()->where('email', 'role-promoted@valtireo.test')->firstOrFail();
@@ -125,7 +135,7 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->assertFalse($user->hasRole('Employee'));
     }
 
-    public function test_hr_officer_cannot_change_an_employees_system_role(): void
+    public function test_hr_officer_cannot_change_an_employees_pending_role(): void
     {
         $this->seed();
 
@@ -135,7 +145,7 @@ class EmployeeRoleAssignmentTest extends TestCase
         Sanctum::actingAs($hrOfficer);
 
         $this->patchJson("/api/employees/{$employee->id}", [
-            'system_role' => 'Supervisor',
+            'pending_role_id' => $this->roleId('supervisor'),
         ])->assertForbidden();
     }
 
@@ -160,12 +170,17 @@ class EmployeeRoleAssignmentTest extends TestCase
         $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
         Sanctum::actingAs($hrDirector);
 
+        // HR Director holds employees.assign_role (so the endpoint itself is
+        // reachable) but not every permission Organization Admin's role
+        // carries — the generalized escalation rule in
+        // EmployeeRoleAssignmentService blocks it on that permission-subset
+        // check, not on any hardcoded role name.
         $this->postJson('/api/employees', $this->payload([
             'employee_number' => 'EMP-ROLE-006',
             'work_email' => 'role-escalation@valtireo.test',
-            'system_role' => 'Organization Admin',
+            'pending_role_id' => $this->roleId('organization_admin'),
         ]))->assertUnprocessable()
-            ->assertJsonValidationErrors(['system_role']);
+            ->assertJsonValidationErrors(['pending_role_id']);
 
         $this->assertDatabaseMissing('users', ['email' => 'role-escalation@valtireo.test']);
     }
@@ -180,26 +195,31 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->postJson('/api/employees', $this->payload([
             'employee_number' => 'EMP-ROLE-007',
             'work_email' => 'role-new-admin@valtireo.test',
-            'system_role' => 'Organization Admin',
+            'pending_role_id' => $this->roleId('organization_admin'),
         ]))->assertCreated();
 
         $user = User::query()->where('email', 'role-new-admin@valtireo.test')->firstOrFail();
         $this->assertTrue($user->hasRole('Organization Admin'));
     }
 
-    public function test_super_admin_role_is_never_assignable_through_the_employee_flow(): void
+    public function test_an_invalid_role_id_is_rejected_even_for_an_organization_admin(): void
     {
         $this->seed();
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
         Sanctum::actingAs($admin);
 
+        // Platform authority (is_platform_admin) has no relationship to the
+        // Role system at all — there's no "Super Admin" role id to even
+        // attempt sending, so the remaining escalation surface to check is
+        // injecting a role id that doesn't correspond to any real,
+        // assignable role, even as the organization's own top administrator.
         $this->postJson('/api/employees', $this->payload([
             'employee_number' => 'EMP-ROLE-008',
-            'work_email' => 'role-super@valtireo.test',
-            'system_role' => 'Super Admin',
+            'work_email' => 'role-invalid@valtireo.test',
+            'pending_role_id' => 999999999,
         ]))->assertUnprocessable()
-            ->assertJsonValidationErrors(['system_role']);
+            ->assertJsonValidationErrors(['pending_role_id']);
     }
 
     public function test_organization_a_cannot_change_role_for_an_employee_in_organization_b(): void
@@ -212,7 +232,7 @@ class EmployeeRoleAssignmentTest extends TestCase
         Sanctum::actingAs($hrDirector);
 
         $this->patchJson("/api/employees/{$tenantB->id}", [
-            'system_role' => 'Supervisor',
+            'pending_role_id' => $this->roleId('supervisor'),
         ])->assertNotFound();
     }
 
@@ -223,12 +243,14 @@ class EmployeeRoleAssignmentTest extends TestCase
         $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
         Sanctum::actingAs($hrDirector);
 
+        // /setup/assignable-roles now returns role ids as the option value
+        // (roles are freely renameable, so names can't be the wire
+        // identifier) — assert against the label instead.
         $response = $this->getJson('/api/setup/assignable-roles')->assertOk();
-        $roles = collect($response->json('data'))->pluck('value');
+        $labels = collect($response->json('data'))->pluck('label');
 
-        $this->assertTrue($roles->contains('Supervisor'));
-        $this->assertFalse($roles->contains('Organization Admin'));
-        $this->assertFalse($roles->contains('Super Admin'));
+        $this->assertTrue($labels->contains('Supervisor'));
+        $this->assertFalse($labels->contains('Organization Admin'));
 
         $hrOfficer = User::query()->where('email', 'kelechi.nwosu@valtireo.test')->firstOrFail();
         Sanctum::actingAs($hrOfficer);
@@ -236,6 +258,17 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->getJson('/api/setup/assignable-roles')
             ->assertOk()
             ->assertJsonPath('data', []);
+    }
+
+    private function roleId(string $key): int
+    {
+        $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
+
+        return Role::query()
+            ->where('organization_id', $organization->id)
+            ->where('key', $key)
+            ->firstOrFail()
+            ->id;
     }
 
     private function createTenantBEmployee(): Employee

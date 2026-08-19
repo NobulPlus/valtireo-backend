@@ -37,6 +37,7 @@ use App\Models\LeaveWorkDay;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
 use App\Models\OrganizationStatusHistory;
+use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkShift;
@@ -191,6 +192,7 @@ class AuditVisibilityService
             LeaveWorkDay::class => 'leave_work_days',
             OrganizationLocation::class => 'organization_locations',
             OrganizationStatusHistory::class => 'organization_status_histories',
+            Role::class => 'roles',
             Unit::class => 'units',
             WorkShift::class => 'work_shifts',
         ];

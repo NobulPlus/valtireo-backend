@@ -3,10 +3,10 @@
 namespace Tests\Feature\Foundation;
 
 use App\Models\Organization;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class OrganizationAndRoleSeedTest extends TestCase
@@ -24,12 +24,17 @@ class OrganizationAndRoleSeedTest extends TestCase
         $this->assertTrue($organization->locations()->where('code', 'HQ')->exists());
 
         $this->assertSame($organization->id, $admin->organization_id);
+
+        $this->setPermissionsTeamId($organization->id);
         $this->assertTrue($admin->hasRole('Organization Admin'));
 
+        // Platform authority is a plain boolean now, independent of any
+        // Spatie role — the global "Super Admin" role is retired.
         $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
-        $this->assertTrue($superAdmin->hasRole('Super Admin'));
+        $this->assertTrue($superAdmin->is_platform_admin);
 
         $this->assertDatabaseHas('roles', [
+            'organization_id' => $organization->id,
             'name' => 'HR Officer',
             'guard_name' => 'web',
         ]);
@@ -39,7 +44,7 @@ class OrganizationAndRoleSeedTest extends TestCase
             'guard_name' => 'web',
         ]);
 
-        $this->assertTrue(Role::query()->where('name', 'Organization Admin')->exists());
+        $this->assertTrue(Role::query()->where('organization_id', $organization->id)->where('name', 'Organization Admin')->exists());
         $this->assertTrue(Permission::query()->where('name', 'audit_logs.view')->exists());
     }
 }

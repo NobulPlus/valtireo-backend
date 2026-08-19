@@ -40,6 +40,7 @@ class ModuleEntitlementTest extends TestCase
             'email' => 'employee@valtireo.test',
             'password' => 'Password1!',
         ]);
+        $this->setPermissionsTeamId($admin->organization_id);
         $employee->assignRole('Employee');
 
         $response = $this->postJson('/api/auth/login', [

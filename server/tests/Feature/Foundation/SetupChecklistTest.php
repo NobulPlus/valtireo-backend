@@ -4,6 +4,7 @@ namespace Tests\Feature\Foundation;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\DefaultRoleSeedingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -46,7 +47,13 @@ class SetupChecklistTest extends TestCase
             'email' => 'admin@northstar.test',
             'password' => 'Password1!',
         ]);
-        $admin->assignRole('Organization Admin');
+
+        // Roles are organization-owned — this org was created directly
+        // (bypassing OrganizationProvisioningService, which normally does
+        // this), so it has no roles of its own yet without seeding them here.
+        $this->setPermissionsTeamId($organization->id);
+        $roles = app(DefaultRoleSeedingService::class)->seedForOrganization($organization);
+        $admin->assignRole($roles->get('organization_admin'));
 
         Sanctum::actingAs($admin);
 

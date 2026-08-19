@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\EmployeeProfileActivity;
 use App\Models\LeaveType;
 use App\Models\Organization;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -160,6 +161,51 @@ class AuditVisibilityTest extends TestCase
         $this->getJson('/api/audit-logs?auditable_type=leave_type')
             ->assertOk()
             ->assertJsonFragment(['auditable_id' => $leaveType->id]);
+    }
+
+    public function test_role_audits_are_visible_and_isolated_by_organization(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($admin->organization_id);
+        $role = Role::query()->where('organization_id', $admin->organization_id)->where('key', 'supervisor')->firstOrFail();
+
+        $otherOrganization = Organization::query()->create([
+            'name' => 'Role Audit Other Tenant',
+            'code' => 'ROLEOTHER',
+            'status' => 'active',
+            'country' => 'Nigeria',
+            'settings' => [],
+        ]);
+        $otherRole = Role::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'guard_name' => 'web',
+            'name' => 'Other Org Role',
+        ]);
+
+        foreach ([$role, $otherRole] as $record) {
+            Audit::query()->create([
+                'user_type' => User::class,
+                'user_id' => null,
+                'event' => 'updated',
+                'auditable_type' => Role::class,
+                'auditable_id' => $record->id,
+                'old_values' => ['name' => $record->name],
+                'new_values' => ['name' => 'Renamed'],
+                'url' => null,
+                'ip_address' => null,
+                'user_agent' => null,
+                'tags' => null,
+            ]);
+        }
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/audit-logs?auditable_type=role')
+            ->assertOk()
+            ->assertJsonFragment(['auditable_id' => $role->id])
+            ->assertJsonMissing(['auditable_id' => $otherRole->id]);
     }
 
     public function test_nested_scope_audits_are_visible_and_isolated_by_organization(): void
