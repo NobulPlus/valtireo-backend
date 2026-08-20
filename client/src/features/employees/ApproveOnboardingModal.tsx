@@ -1,5 +1,8 @@
+import { useState } from 'react';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction, ModalConfirmAction } from '@/components/ui/ModalActions';
+import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/apiClient';
 import { cn } from '@/lib/cn';
@@ -16,6 +19,12 @@ function ApprovalCheck({ complete, label, value }: { complete: boolean; label: s
   );
 }
 
+const STAGE_OPTIONS: SelectMenuOption[] = [
+  { value: 'probation', label: 'Probation', description: 'Starts on probation with a review date. Most new hires start here.' },
+  { value: 'confirmed', label: 'Confirmed', description: 'Skips probation — this employee is confirmed immediately.' },
+  { value: 'active', label: 'Active (no stage tracking)', description: "For roles where your organization doesn't track probation or confirmation." },
+];
+
 export function ApproveOnboardingModal({
   employee,
   open,
@@ -30,11 +39,32 @@ export function ApproveOnboardingModal({
   const toast = useToast();
   const mutation = useApproveOnboarding(employee.id);
   const profileReady = isReadyForOnboardingApproval(employee);
+  const [newStatus, setNewStatus] = useState('');
+  const [probationEndsAt, setProbationEndsAt] = useState('');
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [probationEndsAtError, setProbationEndsAtError] = useState<string | null>(null);
 
   async function handleApprove() {
+    setStageError(null);
+    setProbationEndsAtError(null);
+
+    if (!newStatus) {
+      setStageError('Choose the stage this employee starts at.');
+      return;
+    }
+    if (newStatus === 'probation' && !probationEndsAt) {
+      setProbationEndsAtError('Set when probation ends — this drives the review reminder.');
+      return;
+    }
+
     try {
-      await mutation.mutateAsync();
-      toast.success('Onboarding approved', `${employee.full_name} is now active.`);
+      await mutation.mutateAsync({
+        new_status: newStatus as 'active' | 'probation' | 'confirmed',
+        probation_ends_at: newStatus === 'probation' ? probationEndsAt : undefined,
+      });
+      toast.success('Onboarding approved', `${employee.full_name} is now ${statusLabel(newStatus).toLowerCase()}.`);
+      setNewStatus('');
+      setProbationEndsAt('');
       onClose();
       onApproved?.();
     } catch (error) {
@@ -60,8 +90,7 @@ export function ApproveOnboardingModal({
       }
     >
       <p>
-        This confirms {employee.full_name}'s onboarding is complete and activates their record. This action is
-        recorded to the audit trail.
+        This confirms {employee.full_name}'s onboarding is complete. This action is recorded to the audit trail.
       </p>
       <div className="mt-4 space-y-2 rounded-md border border-border bg-surface-soft p-3">
         <ApprovalCheck
@@ -76,6 +105,26 @@ export function ApproveOnboardingModal({
           This employee cannot be approved yet. Ask the employee to complete and submit their profile, or use
           Edit employee record if HR needs to fill missing biodata before submission.
         </p>
+      )}
+      {profileReady && (
+        <div className="mt-4 space-y-3">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Starting stage</span>
+            <SelectMenu value={newStatus} onChange={setNewStatus} options={STAGE_OPTIONS} placeholder="Select a stage..." />
+            {stageError && <p className="mt-1 text-xs text-danger">{stageError}</p>}
+          </label>
+          {newStatus === 'probation' && (
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Probation ends</span>
+              <DatePicker value={probationEndsAt} onChange={setProbationEndsAt} />
+              {probationEndsAtError ? (
+                <p className="mt-1 text-xs text-danger">{probationEndsAtError}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted">HR gets a reminder as this date approaches and again if it passes.</p>
+              )}
+            </label>
+          )}
+        </div>
       )}
     </Modal>
   );

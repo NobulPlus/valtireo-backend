@@ -16,6 +16,8 @@ class LeaveTypeResource extends JsonResource
             'name' => $this->name,
             'code' => $this->code,
             'description' => $this->description,
+            'default_days_per_year' => $this->default_days_per_year,
+            'auto_grant_on_activation' => $this->auto_grant_on_activation,
             'is_paid' => $this->is_paid,
             'requires_attachment' => $this->requires_attachment,
             'minimum_notice_days' => $this->minimum_notice_days,

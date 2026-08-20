@@ -32,6 +32,8 @@ class UpdateLeaveTypeRequest extends FormRequest
                     ->ignore($leaveType?->id),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
+            'default_days_per_year' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'auto_grant_on_activation' => ['sometimes', 'boolean'],
             'is_paid' => ['sometimes', 'boolean'],
             'requires_attachment' => ['sometimes', 'boolean'],
             'minimum_notice_days' => ['sometimes', 'integer', 'min:0', 'max:365'],

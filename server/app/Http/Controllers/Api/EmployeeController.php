@@ -375,7 +375,7 @@ class EmployeeController extends Controller
             abort(404);
         }
 
-        $employee = $onboarding->approve($employee);
+        $employee = $onboarding->approve($employee, $request->user(), $request->validated());
 
         return response()->json([
             'employee' => new EmployeeResource($employee),

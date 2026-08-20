@@ -154,10 +154,15 @@ export async function downloadEmployeeImportTemplate(): Promise<void> {
 export function useApproveOnboarding(employeeId: number) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.patch<{ employee: Employee }>(`/employees/${employeeId}/approve-onboarding`),
+    mutationFn: (payload: {
+      new_status: 'active' | 'probation' | 'confirmed';
+      /** Required when new_status is "probation" — powers the probation review reminder. */
+      probation_ends_at?: string;
+    }) => api.patch<{ employee: Employee }>(`/employees/${employeeId}/approve-onboarding`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees', employeeId] });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

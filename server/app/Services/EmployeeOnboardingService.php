@@ -15,6 +15,8 @@ class EmployeeOnboardingService
     public function __construct(
         private readonly NotificationDispatchService $notifications,
         private readonly EmployeeRoleAssignmentService $roleAssignment,
+        private readonly LeaveEntitlementProvisioningService $leaveEntitlements,
+        private readonly EmployeeProfileActivityService $activities,
     ) {
     }
 
@@ -119,9 +121,12 @@ class EmployeeOnboardingService
         ];
     }
 
-    public function approve(Employee $employee): Employee
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function approve(Employee $employee, User $actor, array $data): Employee
     {
-        return DB::transaction(function () use ($employee): Employee {
+        return DB::transaction(function () use ($employee, $actor, $data): Employee {
             $employee->loadMissing('profile');
 
             if ($employee->status !== 'onboarding') {
@@ -137,16 +142,43 @@ class EmployeeOnboardingService
             }
 
             $now = now();
+            $newStatus = $data['new_status'];
 
             $employee->profile->update([
                 'completion_status' => 'approved',
             ]);
 
             $employee->update([
-                'status' => 'active',
+                'status' => $newStatus,
                 'onboarding_completed_at' => $now,
                 'activated_at' => $now,
+                'probation_ends_at' => $newStatus === 'probation' ? $data['probation_ends_at'] : null,
             ]);
+
+            $history = $employee->statusHistories()->create([
+                'organization_id' => $employee->organization_id,
+                'changed_by_id' => $actor->id,
+                'previous_status' => 'onboarding',
+                'new_status' => $newStatus,
+                'effective_date' => $now->toDateString(),
+                'reason' => 'Onboarding approved.',
+            ]);
+
+            $this->activities->record(
+                $employee,
+                $actor,
+                'status_changed',
+                'Employment status changed',
+                "Onboarding approved — status changed from onboarding to {$newStatus}.",
+                $history,
+                [
+                    'previous_status' => 'onboarding',
+                    'new_status' => $newStatus,
+                    'effective_date' => $now->toDateString(),
+                ]
+            );
+
+            $this->leaveEntitlements->grantDefaultsForActivation($employee);
 
             return $employee->refresh()->load('profile');
         });

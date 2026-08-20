@@ -1,11 +1,33 @@
 import { Fragment, type ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
-import { BarChart3, Building2, ClipboardCheck, FileCheck2, FileClock, FileText, Pencil, Plus, Power, Settings, ShieldCheck } from 'lucide-react';
+import {
+  BarChart3,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  Download,
+  FileCheck2,
+  FileClock,
+  FileText,
+  Pencil,
+  Plus,
+  Power,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  Users,
+  UserX,
+  XCircle,
+} from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { DataTable, type Column } from '@/components/ui/DataTable';
 import { StatTile } from '@/components/ui/StatTile';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -19,8 +41,9 @@ import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
 import { useAuth } from '@/context/AuthContext';
 import { useActOnApprovalRequest, useApprovalRequests, type ApprovalDecisionAction } from '@/features/approvals/api';
+import { useEmployees } from '@/features/employees/api';
 import { useSetupLookups } from '@/features/workspace/api';
-import { api, ApiError } from '@/lib/apiClient';
+import { api, apiClient, ApiError } from '@/lib/apiClient';
 import type { AllSetupLookups, ApprovalRequest, Paginated } from '@/types/api';
 
 type Row = Record<string, unknown>;
@@ -34,6 +57,7 @@ interface PanelConfig {
   action?: ActionConfig;
   edit?: RowActionConfig;
   deactivate?: RowActionConfig;
+  delete?: RowActionConfig;
 }
 
 type FieldType = 'text' | 'number' | 'date' | 'time' | 'email' | 'textarea' | 'checkbox' | 'select';
@@ -80,6 +104,10 @@ function formatValue(value: unknown): string {
     return String(record.name ?? record.label ?? record.title ?? record.code ?? '-');
   }
   return String(value);
+}
+
+function describeRow(row: Row): string {
+  return formatValue(row.name ?? row.title ?? row.full_name ?? valueAt(row, 'employee.full_name') ?? row.code);
 }
 
 function rowsFromResponse(response: unknown, responseKey?: string): Row[] {
@@ -294,7 +322,7 @@ function InlineRowAction({
 }: {
   row: Row;
   config: RowActionConfig;
-  variant?: 'edit' | 'deactivate';
+  variant?: 'edit' | 'deactivate' | 'delete';
   onDone?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -303,11 +331,15 @@ function InlineRowAction({
   const toast = useToast();
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.patch(
+    mutationFn: () => {
+      if (variant === 'delete') {
+        return api.delete(config.endpoint(row));
+      }
+      return api.patch(
         config.endpoint(row),
         payloadFromForm(config.fields, variant === 'deactivate' ? initialForm(config.fields) : form),
-      ),
+      );
+    },
     onSuccess: () => {
       toast.success(config.successMessage);
       config.invalidateKeys?.forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
@@ -319,10 +351,11 @@ function InlineRowAction({
     },
   });
 
-  if (!isOpen && variant === 'deactivate') {
+  if (!isOpen && (variant === 'deactivate' || variant === 'delete')) {
+    const label = variant === 'delete' ? 'Delete' : 'Deactivate';
     return (
-      <Button type="button" size="sm" variant="danger" onClick={() => setIsOpen(true)} title="Deactivate" aria-label="Deactivate">
-        <Power className="h-3.5 w-3.5" />
+      <Button type="button" size="sm" variant="danger" onClick={() => setIsOpen(true)} title={label} aria-label={label}>
+        {variant === 'delete' ? <Trash2 className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
       </Button>
     );
   }
@@ -335,7 +368,8 @@ function InlineRowAction({
     );
   }
 
-  if (variant === 'deactivate') {
+  if (variant === 'deactivate' || variant === 'delete') {
+    const label = variant === 'delete' ? 'Delete' : 'Deactivate';
     return (
       <Modal
         open={isOpen}
@@ -345,20 +379,21 @@ function InlineRowAction({
           <>
             <ModalCancelAction onClick={() => setIsOpen(false)} />
             <ModalConfirmAction
-              title="Deactivate"
+              title={label}
               variant="danger"
               isLoading={mutation.isPending}
               onClick={() => mutation.mutate()}
-              icon={Power}
+              icon={variant === 'delete' ? Trash2 : Power}
             />
           </>
         }
       >
         <div className="rounded-md border border-danger-bg bg-danger-bg/40 p-4">
-          <p className="text-sm font-semibold text-strong">{formatValue(row.name ?? row.title ?? row.code)}</p>
+          <p className="text-sm font-semibold text-strong">{describeRow(row)}</p>
           <p className="mt-2 text-sm leading-6 text-muted">
-            For now this safely deactivates the record instead of hard deleting it, so historical employees,
-            documents, attendance, and reports do not lose their references.
+            {variant === 'delete'
+              ? 'This permanently removes the record. This cannot be undone.'
+              : 'For now this safely deactivates the record instead of hard deleting it, so historical employees, documents, attendance, and reports do not lose their references.'}
           </p>
         </div>
       </Modal>
@@ -388,7 +423,7 @@ function InlineRowAction({
         }}
       >
         <div className="mb-4 rounded-md border border-border bg-surface-soft px-4 py-3">
-          <p className="text-sm font-medium text-strong">{formatValue(row.name ?? row.title ?? row.code)}</p>
+          <p className="text-sm font-medium text-strong">{describeRow(row)}</p>
           <p className="mt-1 text-xs leading-5 text-muted">
             Update this record without leaving the control surface. Changes remain scoped to this organization.
           </p>
@@ -399,7 +434,7 @@ function InlineRowAction({
   );
 }
 
-function DataPanel({ config }: { config: PanelConfig }) {
+function DataPanel({ config, extraActions }: { config: PanelConfig; extraActions?: ReactNode }) {
   const [selectedRow, setSelectedRow] = useState<Row | null>(null);
   const query = useQuery({
     queryKey: ['control-panel', config.endpoint],
@@ -423,7 +458,12 @@ function DataPanel({ config }: { config: PanelConfig }) {
         </span>
       </CardHeader>
       <CardBody>
-        {config.action && <ActionForm action={config.action} onDone={() => query.refetch()} />}
+        {(config.action || extraActions) && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {config.action && <ActionForm action={config.action} onDone={() => query.refetch()} />}
+            {extraActions}
+          </div>
+        )}
         {rows.length === 0 ? (
           <EmptyState title="No records yet" description="This control area has no organization data yet." />
         ) : (
@@ -463,6 +503,7 @@ function DataPanel({ config }: { config: PanelConfig }) {
           columns={config.columns}
           edit={config.edit}
           deactivate={config.deactivate}
+          deleteAction={config.delete}
           onClose={() => setSelectedRow(null)}
           onDone={() => query.refetch()}
         />
@@ -477,6 +518,7 @@ function RecordDetailModal({
   columns,
   edit,
   deactivate,
+  deleteAction,
   onClose,
   onDone,
 }: {
@@ -485,12 +527,13 @@ function RecordDetailModal({
   columns: Array<{ key: string; label: string }>;
   edit?: RowActionConfig;
   deactivate?: RowActionConfig;
+  deleteAction?: RowActionConfig;
   onClose: () => void;
   onDone?: () => void;
 }) {
   if (!row) return null;
 
-  const heading = formatValue(row.name ?? row.title ?? row.full_name ?? row.code ?? title);
+  const heading = describeRow(row) === '-' ? title : describeRow(row);
 
   return (
     <Modal
@@ -502,6 +545,17 @@ function RecordDetailModal({
         <>
           {edit && <InlineRowAction row={row} config={edit} onDone={onDone} />}
           {deactivate && <InlineRowAction row={row} config={deactivate} variant="deactivate" onDone={onDone} />}
+          {deleteAction && (
+            <InlineRowAction
+              row={row}
+              config={deleteAction}
+              variant="delete"
+              onDone={() => {
+                onDone?.();
+                onClose();
+              }}
+            />
+          )}
         </>
       }
     >
@@ -1479,421 +1533,1027 @@ function ApprovalRequestsPanel() {
   );
 }
 
+function ApprovalWorkflowsPanel() {
+  return (
+    <DataPanel
+      config={{
+        title: 'Approval workflows',
+        description: 'Workflow definitions owned by this organization.',
+        endpoint: '/approval-workflows',
+        columns: [
+          { key: 'id', label: 'ID' },
+          { key: 'name', label: 'Name' },
+          { key: 'module', label: 'Module' },
+          { key: 'action', label: 'Action' },
+          { key: 'is_active', label: 'Active' },
+        ],
+        action: {
+          label: 'Create workflow',
+          endpoint: '/approval-workflows',
+          successMessage: 'Approval workflow created',
+          invalidateKeys: [['control-panel', '/approval-workflows']],
+          fields: [
+            {
+              name: 'module',
+              label: 'Module',
+              type: 'select',
+              required: true,
+              options: [
+                { label: 'Documents', value: 'documents' },
+                { label: 'Leave', value: 'leave' },
+                { label: 'Attendance', value: 'attendance' },
+                { label: 'Employees', value: 'employees' },
+              ],
+            },
+            { name: 'action', label: 'Action', required: true, placeholder: 'review, approve, correction' },
+            { name: 'name', label: 'Name', required: true },
+            { name: 'description', label: 'Description', type: 'textarea' },
+            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            { name: 'require_note_on_reject', label: 'Require note on reject', type: 'checkbox', defaultValue: true },
+          ],
+        },
+        edit: {
+          label: 'Edit workflow',
+          endpoint: (row) => `/approval-workflows/${row.id}`,
+          method: 'patch',
+          successMessage: 'Approval workflow updated',
+          invalidateKeys: [['control-panel', '/approval-workflows']],
+          fields: [
+            {
+              name: 'module',
+              label: 'Module',
+              type: 'select',
+              required: true,
+              options: [
+                { label: 'Documents', value: 'documents' },
+                { label: 'Leave', value: 'leave' },
+                { label: 'Attendance', value: 'attendance' },
+                { label: 'Employees', value: 'employees' },
+              ],
+            },
+            { name: 'action', label: 'Action', required: true },
+            { name: 'name', label: 'Name', required: true },
+            { name: 'description', label: 'Description' },
+            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            { name: 'require_note_on_reject', label: 'Require note on reject', type: 'checkbox' },
+          ],
+        },
+        deactivate: {
+          label: 'Deactivate workflow',
+          endpoint: (row) => `/approval-workflows/${row.id}`,
+          method: 'patch',
+          successMessage: 'Approval workflow deactivated',
+          invalidateKeys: [['control-panel', '/approval-workflows']],
+          fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+        },
+      }}
+    />
+  );
+}
+
 export function ApprovalsControlPage() {
   const { hasPermission } = useAuth();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const canManageWorkflows = hasPermission('approval_workflows.view');
+
+  const workflowsQuery = useQuery({
+    queryKey: ['control-panel', '/approval-workflows'],
+    queryFn: () => api.get<unknown>('/approval-workflows'),
+    enabled: canManageWorkflows,
+  });
+  const allRequestsQuery = useApprovalRequests({ per_page: 100 });
+
+  const workflowRows = rowsFromResponse(workflowsQuery.data);
+  const activeWorkflows = workflowRows.filter((row) => Boolean(row.is_active)).length;
+  const requests = allRequestsQuery.data?.data ?? [];
+  const pendingCount = requests.filter((request) => request.status === 'pending').length;
+  const approvedCount = requests.filter((request) => request.status === 'approved').length;
+  const attentionCount = requests.filter((request) => ['rejected', 'changes_requested'].includes(request.status)).length;
 
   return (
     <AreaShell
       title="Approvals"
       subtitle="Review pending approval requests and control the workflow definitions that route them."
       permission="approvals.view"
+      actions={
+        canManageWorkflows && (
+          <Button type="button" size="icon" onClick={() => setSettingsOpen(true)} title="Approval settings" aria-label="Approval settings">
+            <Settings className="h-4 w-4" />
+          </Button>
+        )
+      }
     >
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        {hasPermission('approval_workflows.view') && (
-          <DataPanel
-          config={{
-            title: 'Approval workflows',
-            description: 'Workflow definitions owned by this organization.',
-            endpoint: '/approval-workflows',
-            columns: [
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'module', label: 'Module' },
-              { key: 'action', label: 'Action' },
-              { key: 'is_active', label: 'Active' },
-            ],
-            action: {
-              label: 'Create workflow',
-              endpoint: '/approval-workflows',
-              successMessage: 'Approval workflow created',
-              invalidateKeys: [['control-panel', '/approval-workflows']],
-              fields: [
-                {
-                  name: 'module',
-                  label: 'Module',
-                  type: 'select',
-                  required: true,
-                  options: [
-                    { label: 'Documents', value: 'documents' },
-                    { label: 'Leave', value: 'leave' },
-                    { label: 'Attendance', value: 'attendance' },
-                    { label: 'Employees', value: 'employees' },
-                  ],
-                },
-                { name: 'action', label: 'Action', required: true, placeholder: 'review, approve, correction' },
-                { name: 'name', label: 'Name', required: true },
-                { name: 'description', label: 'Description', type: 'textarea' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-                { name: 'require_note_on_reject', label: 'Require note on reject', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            edit: {
-              label: 'Edit workflow',
-              endpoint: (row) => `/approval-workflows/${row.id}`,
-              method: 'patch',
-              successMessage: 'Approval workflow updated',
-              invalidateKeys: [['control-panel', '/approval-workflows']],
-              fields: [
-                {
-                  name: 'module',
-                  label: 'Module',
-                  type: 'select',
-                  required: true,
-                  options: [
-                    { label: 'Documents', value: 'documents' },
-                    { label: 'Leave', value: 'leave' },
-                    { label: 'Attendance', value: 'attendance' },
-                    { label: 'Employees', value: 'employees' },
-                  ],
-                },
-                { name: 'action', label: 'Action', required: true },
-                { name: 'name', label: 'Name', required: true },
-                { name: 'description', label: 'Description' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-                { name: 'require_note_on_reject', label: 'Require note on reject', type: 'checkbox' },
-              ],
-            },
-            deactivate: {
-              label: 'Deactivate workflow',
-              endpoint: (row) => `/approval-workflows/${row.id}`,
-              method: 'patch',
-              successMessage: 'Approval workflow deactivated',
-              invalidateKeys: [['control-panel', '/approval-workflows']],
-              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-            },
-          }}
-          />
-        )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Pending" value={pendingCount} icon={ClipboardCheck} tone={pendingCount ? 'warning' : 'success'} />
+        <StatTile label="Approved" value={approvedCount} icon={CheckCircle2} tone="success" />
+        <StatTile
+          label="Rejected / changes requested"
+          value={attentionCount}
+          icon={XCircle}
+          tone={attentionCount ? 'danger' : 'default'}
+        />
+        <StatTile label="Active workflows" value={activeWorkflows} icon={Settings} />
+      </div>
+
+      <div className="mt-5">
         <ApprovalRequestsPanel />
       </div>
+
+      {canManageWorkflows && (
+        <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Approval settings" size="lg">
+          <div className="mb-4 rounded-md border border-border bg-surface-soft px-4 py-3">
+            <p className="text-sm font-semibold text-strong">Configuration lives here</p>
+            <p className="mt-1 text-xs leading-5 text-muted">
+              Define which workflows route which decisions without turning the main approvals page into a settings screen.
+            </p>
+          </div>
+          <ApprovalWorkflowsPanel />
+        </Modal>
+      )}
     </AreaShell>
+  );
+}
+
+function BulkGrantEntitlementButton({
+  leaveTypeOptions,
+  leavePeriodOptions,
+  leaveTypes,
+}: {
+  leaveTypeOptions: Array<{ label: string; value: string }>;
+  leavePeriodOptions: Array<{ label: string; value: string }>;
+  leaveTypes: Row[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [leaveTypeId, setLeaveTypeId] = useState('');
+  const [leavePeriodId, setLeavePeriodId] = useState('');
+  const [daysAllocated, setDaysAllocated] = useState('');
+  const [notes, setNotes] = useState('');
+  const queryClient = useQueryClient();
+  const toast = useToast();
+
+  const selectedType = leaveTypes.find((type) => String(type.id) === leaveTypeId);
+  const defaultDays = selectedType ? (selectedType.default_days_per_year as number | null | undefined) : null;
+
+  function reset() {
+    setLeaveTypeId('');
+    setLeavePeriodId('');
+    setDaysAllocated('');
+    setNotes('');
+  }
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.post<{ granted: number; skipped: number; days_allocated: number }>('/leave/entitlements/bulk', {
+        leave_type_id: Number(leaveTypeId),
+        leave_period_id: Number(leavePeriodId),
+        days_allocated: daysAllocated === '' ? undefined : Number(daysAllocated),
+        notes: notes || undefined,
+      }),
+    onSuccess: (result) => {
+      const skippedNote = result.skipped ? ` ${result.skipped} employee${result.skipped === 1 ? '' : 's'} already had one and were left untouched.` : '';
+      toast.success(
+        'Bulk grant complete',
+        `Granted ${result.granted} employee${result.granted === 1 ? '' : 's'} ${result.days_allocated} days.${skippedNote}`,
+      );
+      queryClient.invalidateQueries({ queryKey: ['control-panel', '/leave/entitlements'] });
+      setIsOpen(false);
+      reset();
+    },
+    onError: (error) => {
+      toast.error('Bulk grant failed', error instanceof ApiError ? error.message : 'Could not grant entitlements.');
+    },
+  });
+
+  if (!isOpen) {
+    return (
+      <Button type="button" size="sm" variant="secondary" onClick={() => setIsOpen(true)}>
+        <Users className="h-3.5 w-3.5" />
+        Bulk grant
+      </Button>
+    );
+  }
+
+  const formId = 'bulk-grant-leave-entitlement';
+
+  return (
+    <Modal
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      title="Bulk grant entitlement"
+      size="lg"
+      footer={
+        <>
+          <ModalCancelAction onClick={() => setIsOpen(false)} />
+          <ModalSaveAction form={formId} isLoading={mutation.isPending} title="Grant to all active employees" />
+        </>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={(event) => {
+          event.preventDefault();
+          mutation.mutate();
+        }}
+      >
+        <div className="mb-4 rounded-md border border-border bg-surface-soft px-4 py-3">
+          <p className="text-sm font-medium text-strong">Grants every active employee at once</p>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            Employees who already have an entitlement for this leave type and period are left untouched — this only fills the gaps.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Leave type" required>
+            <SelectMenu
+              value={leaveTypeId}
+              onChange={setLeaveTypeId}
+              options={[{ value: '', label: 'Select...' }, ...leaveTypeOptions]}
+            />
+          </Field>
+          <Field label="Leave period" required>
+            <SelectMenu
+              value={leavePeriodId}
+              onChange={setLeavePeriodId}
+              options={[{ value: '', label: 'Select...' }, ...leavePeriodOptions]}
+            />
+          </Field>
+          <Field
+            label="Days allocated"
+            hint={
+              defaultDays != null
+                ? `Leave blank to use this leave type's default of ${defaultDays} days.`
+                : selectedType
+                  ? 'This leave type has no default days set — enter a value or set one on the leave type first.'
+                  : undefined
+            }
+          >
+            <Input
+              type="number"
+              min={0}
+              value={daysAllocated}
+              onChange={(event) => setDaysAllocated(event.target.value)}
+              placeholder={defaultDays != null ? String(defaultDays) : undefined}
+            />
+          </Field>
+          <Field label="Notes">
+            <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+          </Field>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function LeaveSettingsPanels() {
+  return (
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      <DataPanel
+        config={{
+          title: 'Leave types',
+          description: 'The categories employees can request and HR can govern.',
+          endpoint: '/leave/types',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'name', label: 'Name' },
+            { key: 'code', label: 'Code' },
+            { key: 'default_days_per_year', label: 'Default days/year' },
+            { key: 'auto_grant_on_activation', label: 'Auto-grant' },
+            { key: 'is_paid', label: 'Paid' },
+          ],
+          action: {
+            label: 'Add leave type',
+            endpoint: '/leave/types',
+            successMessage: 'Leave type created',
+            invalidateKeys: [['control-panel', '/leave/types']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'code', label: 'Code', required: true },
+              { name: 'description', label: 'Description', type: 'textarea' },
+              {
+                name: 'default_days_per_year',
+                label: 'Default days per year',
+                type: 'number',
+                help: 'The standard entitlement for this leave type, e.g. 20 for Annual Leave or 90 for Maternity Leave. Individual employees can still be granted a different amount.',
+              },
+              {
+                name: 'auto_grant_on_activation',
+                label: 'Auto-grant when an employee is activated',
+                type: 'checkbox',
+                help: 'Automatically grants every employee this type\'s default days the moment they become active, on probation, or confirmed. Only turn this on for universal types like Annual or Sick Leave — leave it off for situational types like Maternity or Compassionate Leave, which should stay a manual, per-case grant.',
+              },
+              { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
+              { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
+              { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
+              { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          edit: {
+            label: 'Edit leave type',
+            endpoint: (row) => `/leave/types/${row.id}`,
+            method: 'patch',
+            successMessage: 'Leave type updated',
+            invalidateKeys: [['control-panel', '/leave/types']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'code', label: 'Code', required: true },
+              { name: 'description', label: 'Description' },
+              {
+                name: 'default_days_per_year',
+                label: 'Default days per year',
+                type: 'number',
+                help: 'The standard entitlement for this leave type. Individual employees can still be granted a different amount.',
+              },
+              {
+                name: 'auto_grant_on_activation',
+                label: 'Auto-grant when an employee is activated',
+                type: 'checkbox',
+                help: 'Automatically grants every employee this type\'s default days the moment they become active, on probation, or confirmed. Only turn this on for universal types like Annual or Sick Leave.',
+              },
+              { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
+              { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
+              { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
+              { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          deactivate: {
+            label: 'Deactivate leave type',
+            endpoint: (row) => `/leave/types/${row.id}`,
+            method: 'patch',
+            successMessage: 'Leave type deactivated',
+            invalidateKeys: [['control-panel', '/leave/types']],
+            fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+          },
+        }}
+      />
+      <DataPanel
+        config={{
+          title: 'Leave periods',
+          description: 'The leave years or periods used for balances and requests.',
+          endpoint: '/leave/periods',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'name', label: 'Name' },
+            { key: 'starts_on', label: 'Starts' },
+            { key: 'ends_on', label: 'Ends' },
+          ],
+          action: {
+            label: 'Add period',
+            endpoint: '/leave/periods',
+            successMessage: 'Leave period created',
+            invalidateKeys: [['control-panel', '/leave/periods']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'starts_on', label: 'Starts on', type: 'date', required: true },
+              { name: 'ends_on', label: 'Ends on', type: 'date', required: true },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          edit: {
+            label: 'Edit period',
+            endpoint: (row) => `/leave/periods/${row.id}`,
+            method: 'patch',
+            successMessage: 'Leave period updated',
+            invalidateKeys: [['control-panel', '/leave/periods']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'starts_on', label: 'Starts on', type: 'date', required: true },
+              { name: 'ends_on', label: 'Ends on', type: 'date', required: true },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          deactivate: {
+            label: 'Deactivate period',
+            endpoint: (row) => `/leave/periods/${row.id}`,
+            method: 'patch',
+            successMessage: 'Leave period deactivated',
+            invalidateKeys: [['control-panel', '/leave/periods']],
+            fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+          },
+        }}
+      />
+      <DataPanel
+        config={{
+          title: 'Holidays',
+          description: 'Company holidays and location-specific non-working dates.',
+          endpoint: '/leave/holidays',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'name', label: 'Name' },
+            { key: 'date', label: 'Date' },
+            { key: 'location.name', label: 'Location' },
+          ],
+          action: {
+            label: 'Add holiday',
+            endpoint: '/leave/holidays',
+            successMessage: 'Holiday created',
+            invalidateKeys: [['control-panel', '/leave/holidays'], ['leave', 'holidays', 'upcoming']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'date', label: 'Date', type: 'date', required: true },
+              { name: 'organization_location_id', label: 'Location ID', type: 'number' },
+              { name: 'is_recurring', label: 'Recurring yearly', type: 'checkbox' },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          edit: {
+            label: 'Edit holiday',
+            endpoint: (row) => `/leave/holidays/${row.id}`,
+            method: 'patch',
+            successMessage: 'Holiday updated',
+            invalidateKeys: [['control-panel', '/leave/holidays'], ['leave', 'holidays', 'upcoming']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'date', label: 'Date', type: 'date', required: true },
+              { name: 'organization_location_id', label: 'Location ID', type: 'number' },
+              { name: 'is_recurring', label: 'Recurring yearly', type: 'checkbox' },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          deactivate: {
+            label: 'Deactivate holiday',
+            endpoint: (row) => `/leave/holidays/${row.id}`,
+            method: 'patch',
+            successMessage: 'Holiday deactivated',
+            invalidateKeys: [['control-panel', '/leave/holidays'], ['leave', 'holidays', 'upcoming']],
+            fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+          },
+        }}
+      />
+    </div>
+  );
+}
+
+function LeaveEntitlementsPanel({
+  leaveTypeOptions,
+  leavePeriodOptions,
+  employeeOptions,
+  leaveTypeRows,
+}: {
+  leaveTypeOptions: Array<{ label: string; value: string }>;
+  leavePeriodOptions: Array<{ label: string; value: string }>;
+  employeeOptions: Array<{ label: string; value: string }>;
+  leaveTypeRows: Row[];
+}) {
+  const query = useQuery({
+    queryKey: ['control-panel', '/leave/entitlements'],
+    queryFn: () => api.get<unknown>('/leave/entitlements'),
+  });
+
+  const grantAction: ActionConfig = {
+    label: 'Grant entitlement',
+    endpoint: '/leave/entitlements',
+    successMessage: 'Leave entitlement saved',
+    invalidateKeys: [['control-panel', '/leave/entitlements']],
+    fields: [
+      { name: 'employee_id', label: 'Employee', type: 'select', required: true, options: employeeOptions },
+      {
+        name: 'leave_type_id',
+        label: 'Leave type',
+        type: 'select',
+        required: true,
+        options: leaveTypeOptions,
+        help: 'Check the leave type’s default days per year in Leave settings.',
+      },
+      { name: 'leave_period_id', label: 'Leave period', type: 'select', required: true, options: leavePeriodOptions },
+      { name: 'days_allocated', label: 'Days allocated', type: 'number', required: true, help: 'e.g. 20, 25, or 30 for Annual Leave, or whatever was agreed for Maternity Leave.' },
+      { name: 'notes', label: 'Notes', type: 'textarea' },
+    ],
+  };
+
+  const deleteAction: RowActionConfig = {
+    label: 'Delete entitlement',
+    endpoint: (row) => `/leave/entitlements/${row.id}`,
+    successMessage: 'Leave entitlement deleted',
+    invalidateKeys: [['control-panel', '/leave/entitlements']],
+    fields: [],
+  };
+
+  const rows = rowsFromResponse(query.data);
+
+  const columns: Column<Row>[] = [
+    { key: 'employee', header: 'Employee', render: (row) => formatValue(valueAt(row, 'employee.full_name')) },
+    { key: 'leave_type', header: 'Leave type', render: (row) => formatValue(valueAt(row, 'leave_type.name')) },
+    { key: 'leave_period', header: 'Period', render: (row) => formatValue(valueAt(row, 'leave_period.name')) },
+    { key: 'days_allocated', header: 'Allocated', render: (row) => formatValue(row.days_allocated) },
+    { key: 'days_used', header: 'Used', render: (row) => formatValue(row.days_used) },
+    { key: 'days_available', header: 'Available', render: (row) => formatValue(row.days_available) },
+    {
+      key: 'actions',
+      header: 'Actions',
+      headerClassName: 'text-right',
+      className: 'text-right',
+      render: (row) => (
+        <div className="flex justify-end">
+          <InlineRowAction row={row} config={deleteAction} variant="delete" onDone={() => query.refetch()} />
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="items-start">
+        <div>
+          <CardTitle>Leave entitlements</CardTitle>
+          <p className="mt-1 max-w-xl text-xs leading-5 text-muted">
+            How many days each employee is granted per leave type and leave period. Re-grant to change an amount.
+          </p>
+        </div>
+        <span className="rounded-full bg-surface-soft px-2 py-0.5 text-xs font-medium text-muted">
+          {rows.length} record{rows.length === 1 ? '' : 's'}
+        </span>
+      </CardHeader>
+      <CardBody>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <ActionForm action={grantAction} onDone={() => query.refetch()} />
+          <BulkGrantEntitlementButton
+            leaveTypeOptions={leaveTypeOptions}
+            leavePeriodOptions={leavePeriodOptions}
+            leaveTypes={leaveTypeRows}
+          />
+        </div>
+        {query.isLoading ? (
+          <LoadingState label="Loading leave entitlements..." />
+        ) : query.isError ? (
+          <ErrorState error={query.error} onRetry={() => query.refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState title="No entitlements yet" description="Grant an entitlement to get started." />
+        ) : (
+          <DataTable columns={columns} rows={rows} rowKey={(row) => String(row.id)} />
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
 export function LeaveControlPage() {
+  const { hasPermission } = useAuth();
+  const canManageEntitlements = hasPermission('leave_requests.approve');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [entitlementsOpen, setEntitlementsOpen] = useState(false);
+  const typesQuery = useQuery({
+    queryKey: ['control-panel', '/leave/types'],
+    queryFn: () => api.get<unknown>('/leave/types'),
+  });
+  const holidaysQuery = useQuery({
+    queryKey: ['leave', 'holidays', 'upcoming'],
+    queryFn: () => api.get<unknown>('/leave/holidays?per_page=100'),
+  });
+  const requestsQuery = useQuery({
+    queryKey: ['leave', 'requests', 'recent'],
+    queryFn: () => api.get<unknown>('/leave/requests?per_page=20'),
+  });
+  const periodsQuery = useQuery({
+    queryKey: ['control-panel', '/leave/periods'],
+    queryFn: () => api.get<unknown>('/leave/periods'),
+    enabled: canManageEntitlements,
+  });
+  const employeesQuery = useEmployees(
+    { status: 'active', per_page: 200, sort_by: 'first_name', sort_direction: 'asc' },
+    canManageEntitlements,
+  );
+
+  const typeRows = rowsFromResponse(typesQuery.data);
+  const activeTypes = typeRows.filter((row) => Boolean(row.is_active)).length;
+  const requestRows = rowsFromResponse(requestsQuery.data);
+  const pendingCount = requestRows.filter((row) => row.status === 'submitted').length;
+  const approvedCount = requestRows.filter((row) => row.status === 'approved').length;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const upcomingHolidays = rowsFromResponse(holidaysQuery.data)
+    .filter((row) => Boolean(row.is_active) && typeof row.date === 'string' && row.date >= today && row.date <= in30Days)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  const leaveTypeOptions = typeRows.map((type) => ({ label: formatValue(type.name), value: String(type.id) }));
+  const leavePeriodOptions = rowsFromResponse(periodsQuery.data).map((period) => ({
+    label: formatValue(period.name),
+    value: String(period.id),
+  }));
+  const employeeOptions = (employeesQuery.data?.data ?? []).map((employee) => ({
+    label: `${employee.full_name} (${employee.employee_number})`,
+    value: String(employee.id),
+  }));
+
   return (
     <AreaShell
-      title="Leave setup"
-      subtitle="Control leave definitions, periods, holidays, entitlements, and organization leave requests."
+      title="Leave"
+      subtitle="Track leave requests and the upcoming calendar, and control leave types, periods, and holidays."
       permission="leave_requests.view"
+      actions={
+        <>
+          {canManageEntitlements && (
+            <Button type="button" size="sm" variant="secondary" onClick={() => setEntitlementsOpen((current) => !current)}>
+              <Users className="h-3.5 w-3.5" />
+              {entitlementsOpen ? 'Hide entitlements' : 'Manage entitlements'}
+            </Button>
+          )}
+          <Button type="button" size="icon" onClick={() => setSettingsOpen(true)} title="Leave settings" aria-label="Leave settings">
+            <Settings className="h-4 w-4" />
+          </Button>
+        </>
+      }
     >
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <DataPanel
-          config={{
-            title: 'Leave types',
-            description: 'The categories employees can request and HR can govern.',
-            endpoint: '/leave/types',
-            columns: [
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'code', label: 'Code' },
-              { key: 'is_paid', label: 'Paid' },
-            ],
-            action: {
-              label: 'Add leave type',
-              endpoint: '/leave/types',
-              successMessage: 'Leave type created',
-              invalidateKeys: [['control-panel', '/leave/types']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'code', label: 'Code', required: true },
-                { name: 'description', label: 'Description', type: 'textarea' },
-                { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
-                { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
-                { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
-                { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            edit: {
-              label: 'Edit leave type',
-              endpoint: (row) => `/leave/types/${row.id}`,
-              method: 'patch',
-              successMessage: 'Leave type updated',
-              invalidateKeys: [['control-panel', '/leave/types']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'code', label: 'Code', required: true },
-                { name: 'description', label: 'Description' },
-                { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
-                { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
-                { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
-                { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            deactivate: {
-              label: 'Deactivate leave type',
-              endpoint: (row) => `/leave/types/${row.id}`,
-              method: 'patch',
-              successMessage: 'Leave type deactivated',
-              invalidateKeys: [['control-panel', '/leave/types']],
-              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-            },
-          }}
-        />
-        <DataPanel
-          config={{
-            title: 'Leave periods',
-            description: 'The leave years or periods used for balances and requests.',
-            endpoint: '/leave/periods',
-            columns: [
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'starts_on', label: 'Starts' },
-              { key: 'ends_on', label: 'Ends' },
-            ],
-            action: {
-              label: 'Add period',
-              endpoint: '/leave/periods',
-              successMessage: 'Leave period created',
-              invalidateKeys: [['control-panel', '/leave/periods']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'starts_on', label: 'Starts on', type: 'date', required: true },
-                { name: 'ends_on', label: 'Ends on', type: 'date', required: true },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            edit: {
-              label: 'Edit period',
-              endpoint: (row) => `/leave/periods/${row.id}`,
-              method: 'patch',
-              successMessage: 'Leave period updated',
-              invalidateKeys: [['control-panel', '/leave/periods']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'starts_on', label: 'Starts on', type: 'date', required: true },
-                { name: 'ends_on', label: 'Ends on', type: 'date', required: true },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            deactivate: {
-              label: 'Deactivate period',
-              endpoint: (row) => `/leave/periods/${row.id}`,
-              method: 'patch',
-              successMessage: 'Leave period deactivated',
-              invalidateKeys: [['control-panel', '/leave/periods']],
-              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-            },
-          }}
-        />
-        <DataPanel
-          config={{
-            title: 'Holidays',
-            description: 'Company holidays and location-specific non-working dates.',
-            endpoint: '/leave/holidays',
-            columns: [
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'date', label: 'Date' },
-              { key: 'location.name', label: 'Location' },
-            ],
-            action: {
-              label: 'Add holiday',
-              endpoint: '/leave/holidays',
-              successMessage: 'Holiday created',
-              invalidateKeys: [['control-panel', '/leave/holidays']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'date', label: 'Date', type: 'date', required: true },
-                { name: 'organization_location_id', label: 'Location ID', type: 'number' },
-                { name: 'is_recurring', label: 'Recurring yearly', type: 'checkbox' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            edit: {
-              label: 'Edit holiday',
-              endpoint: (row) => `/leave/holidays/${row.id}`,
-              method: 'patch',
-              successMessage: 'Holiday updated',
-              invalidateKeys: [['control-panel', '/leave/holidays']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'date', label: 'Date', type: 'date', required: true },
-                { name: 'organization_location_id', label: 'Location ID', type: 'number' },
-                { name: 'is_recurring', label: 'Recurring yearly', type: 'checkbox' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            deactivate: {
-              label: 'Deactivate holiday',
-              endpoint: (row) => `/leave/holidays/${row.id}`,
-              method: 'patch',
-              successMessage: 'Holiday deactivated',
-              invalidateKeys: [['control-panel', '/leave/holidays']],
-              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-            },
-          }}
-        />
-        <DataPanel
-          config={{
-            title: 'Leave requests',
-            description: 'Employee requests moving through the leave workflow.',
-            endpoint: '/leave/requests',
-            columns: [
-              { key: 'employee.full_name', label: 'Employee' },
-              { key: 'leave_type.name', label: 'Type' },
-              { key: 'status', label: 'Status' },
-            ],
-          }}
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Pending requests" value={pendingCount} icon={CalendarClock} tone={pendingCount ? 'warning' : 'success'} />
+        <StatTile label="Approved requests" value={approvedCount} icon={CheckCircle2} tone="success" />
+        <StatTile label="Active leave types" value={activeTypes} icon={ClipboardCheck} />
+        <StatTile label="Holidays in next 30 days" value={upcomingHolidays.length} icon={CalendarDays} />
       </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent leave requests</CardTitle>
+            <CalendarClock className="h-4 w-4 text-muted" />
+          </CardHeader>
+          <CardBody>
+            {requestsQuery.isLoading ? (
+              <LoadingState label="Loading leave requests..." />
+            ) : requestsQuery.isError ? (
+              <ErrorState error={requestsQuery.error} onRetry={() => requestsQuery.refetch()} />
+            ) : requestRows.length === 0 ? (
+              <EmptyState title="No leave requests yet" description="Employee leave requests will appear here as they come in." />
+            ) : (
+              <div className="divide-y divide-border">
+                {requestRows.slice(0, 8).map((request, index) => (
+                  <div key={String(request.id ?? index)} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-strong">{formatValue(valueAt(request, 'employee.full_name'))}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted">
+                        {formatValue(valueAt(request, 'leave_type.name'))} · {formatValue(request.starts_on)} - {formatValue(request.ends_on)}
+                      </p>
+                    </div>
+                    <StatusBadge status={String(request.status)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Upcoming holidays</CardTitle>
+            <CalendarDays className="h-4 w-4 text-muted" />
+          </CardHeader>
+          <CardBody>
+            {holidaysQuery.isLoading ? (
+              <LoadingState label="Loading holidays..." />
+            ) : holidaysQuery.isError ? (
+              <ErrorState error={holidaysQuery.error} onRetry={() => holidaysQuery.refetch()} />
+            ) : upcomingHolidays.length === 0 ? (
+              <EmptyState title="No holidays in the next 30 days" description="Open settings to add company holidays." />
+            ) : (
+              <div className="space-y-2">
+                {upcomingHolidays.map((holiday, index) => (
+                  <div key={String(holiday.id ?? index)} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-strong">{formatValue(holiday.name)}</p>
+                      <p className="text-xs text-muted">{formatValue(valueAt(holiday, 'location.name')) === '-' ? 'All locations' : formatValue(valueAt(holiday, 'location.name'))}</p>
+                    </div>
+                    <p className="flex-shrink-0 text-xs font-medium text-strong">{formatValue(holiday.date)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      {canManageEntitlements && entitlementsOpen && (
+        <div className="mt-5">
+          <LeaveEntitlementsPanel
+            leaveTypeOptions={leaveTypeOptions}
+            leavePeriodOptions={leavePeriodOptions}
+            employeeOptions={employeeOptions}
+            leaveTypeRows={typeRows}
+          />
+        </div>
+      )}
+
+      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Leave settings" size="lg">
+        <div className="mb-4 rounded-md border border-border bg-surface-soft px-4 py-3">
+          <p className="text-sm font-semibold text-strong">Configuration lives here</p>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            Define leave types, periods, and the company calendar without turning the main leave page into a settings screen.
+          </p>
+        </div>
+        <LeaveSettingsPanels />
+      </Modal>
     </AreaShell>
+  );
+}
+
+function AttendanceSettingsPanels() {
+  return (
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      <DataPanel
+        config={{
+          title: 'Attendance settings',
+          description: 'The policy that controls clock-in behavior, grace periods, and corrections.',
+          endpoint: '/attendance/settings',
+          responseKey: 'attendance_settings',
+          columns: [
+            { key: 'timezone', label: 'Timezone' },
+            { key: 'allow_employee_clock_in', label: 'Employee clock-in' },
+            { key: 'allow_employee_corrections', label: 'Corrections' },
+          ],
+          action: {
+            label: 'Update settings',
+            endpoint: '/attendance/settings',
+            method: 'patch',
+            successMessage: 'Attendance settings updated',
+            invalidateKeys: [['control-panel', '/attendance/settings']],
+            fields: [
+              { name: 'timezone', label: 'Timezone', defaultValue: 'Africa/Lagos' },
+              { name: 'late_grace_minutes', label: 'Late grace minutes', type: 'number', defaultValue: 0 },
+              { name: 'early_checkout_grace_minutes', label: 'Early checkout grace', type: 'number', defaultValue: 0 },
+              { name: 'rounding_minutes', label: 'Rounding minutes', type: 'number', defaultValue: 0 },
+              { name: 'allow_employee_clock_in', label: 'Employee clock-in', type: 'checkbox', defaultValue: true },
+              { name: 'allow_employee_corrections', label: 'Employee corrections', type: 'checkbox', defaultValue: true },
+              { name: 'require_approval_for_corrections', label: 'Approval for corrections', type: 'checkbox', defaultValue: true },
+            ],
+          },
+        }}
+      />
+      <DataPanel
+        config={{
+          title: 'Work shifts',
+          description: 'Reusable working schedules for attendance calculations.',
+          endpoint: '/attendance/shifts',
+          columns: [
+            { key: 'id', label: 'ID' },
+            { key: 'name', label: 'Name' },
+            { key: 'starts_at', label: 'Starts' },
+            { key: 'ends_at', label: 'Ends' },
+          ],
+          action: {
+            label: 'Add shift',
+            endpoint: '/attendance/shifts',
+            successMessage: 'Work shift created',
+            invalidateKeys: [['control-panel', '/attendance/shifts']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'code', label: 'Code', required: true },
+              { name: 'starts_at', label: 'Starts at', type: 'time', required: true },
+              { name: 'ends_at', label: 'Ends at', type: 'time', required: true },
+              { name: 'break_minutes', label: 'Break minutes', type: 'number', defaultValue: 0 },
+              { name: 'is_overnight', label: 'Overnight shift', type: 'checkbox' },
+              { name: 'is_default', label: 'Default shift', type: 'checkbox' },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          edit: {
+            label: 'Edit shift',
+            endpoint: (row) => `/attendance/shifts/${row.id}`,
+            method: 'patch',
+            successMessage: 'Work shift updated',
+            invalidateKeys: [['control-panel', '/attendance/shifts']],
+            fields: [
+              { name: 'name', label: 'Name', required: true },
+              { name: 'code', label: 'Code', required: true },
+              { name: 'starts_at', label: 'Starts at', type: 'time', required: true },
+              { name: 'ends_at', label: 'Ends at', type: 'time', required: true },
+              { name: 'break_minutes', label: 'Break minutes', type: 'number', defaultValue: 0 },
+              { name: 'is_overnight', label: 'Overnight shift', type: 'checkbox' },
+              { name: 'is_default', label: 'Default shift', type: 'checkbox' },
+              { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+            ],
+          },
+          deactivate: {
+            label: 'Deactivate shift',
+            endpoint: (row) => `/attendance/shifts/${row.id}`,
+            method: 'patch',
+            successMessage: 'Work shift deactivated',
+            invalidateKeys: [['control-panel', '/attendance/shifts']],
+            fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+          },
+        }}
+      />
+    </div>
   );
 }
 
 export function AttendanceControlPage() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const recordsQuery = useQuery({
+    queryKey: ['attendance', 'records', 'recent'],
+    queryFn: () => api.get<unknown>('/attendance/records?per_page=20'),
+  });
+  const correctionsQuery = useQuery({
+    queryKey: ['attendance', 'corrections', 'recent'],
+    queryFn: () => api.get<unknown>('/attendance/corrections?per_page=100'),
+  });
+
+  const recordRows = rowsFromResponse(recordsQuery.data);
+  const presentCount = recordRows.filter((row) => row.status === 'present').length;
+  const lateCount = recordRows.filter((row) => row.status === 'late').length;
+  const absentCount = recordRows.filter((row) => row.status === 'absent').length;
+  const correctionRows = rowsFromResponse(correctionsQuery.data);
+  const pendingCorrections = correctionRows.filter((row) => row.status === 'submitted').length;
+
   return (
     <AreaShell
-      title="Attendance setup"
-      subtitle="Control attendance policy, work shifts, records, and correction requests."
+      title="Attendance"
+      subtitle="Monitor today's attendance and correction requests, and control policy and work shifts."
       permission="attendance.view"
+      actions={
+        <Button type="button" size="icon" onClick={() => setSettingsOpen(true)} title="Attendance settings" aria-label="Attendance settings">
+          <Settings className="h-4 w-4" />
+        </Button>
+      }
     >
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <DataPanel
-          config={{
-            title: 'Attendance settings',
-            description: 'The policy that controls clock-in behavior, grace periods, and corrections.',
-            endpoint: '/attendance/settings',
-            responseKey: 'attendance_settings',
-            columns: [
-              { key: 'timezone', label: 'Timezone' },
-              { key: 'allow_employee_clock_in', label: 'Employee clock-in' },
-              { key: 'allow_employee_corrections', label: 'Corrections' },
-            ],
-            action: {
-              label: 'Update settings',
-              endpoint: '/attendance/settings',
-              method: 'patch',
-              successMessage: 'Attendance settings updated',
-              invalidateKeys: [['control-panel', '/attendance/settings']],
-              fields: [
-                { name: 'timezone', label: 'Timezone', defaultValue: 'Africa/Lagos' },
-                { name: 'late_grace_minutes', label: 'Late grace minutes', type: 'number', defaultValue: 0 },
-                { name: 'early_checkout_grace_minutes', label: 'Early checkout grace', type: 'number', defaultValue: 0 },
-                { name: 'rounding_minutes', label: 'Rounding minutes', type: 'number', defaultValue: 0 },
-                { name: 'allow_employee_clock_in', label: 'Employee clock-in', type: 'checkbox', defaultValue: true },
-                { name: 'allow_employee_corrections', label: 'Employee corrections', type: 'checkbox', defaultValue: true },
-                { name: 'require_approval_for_corrections', label: 'Approval for corrections', type: 'checkbox', defaultValue: true },
-              ],
-            },
-          }}
-        />
-        <DataPanel
-          config={{
-            title: 'Work shifts',
-            description: 'Reusable working schedules for attendance calculations.',
-            endpoint: '/attendance/shifts',
-            columns: [
-              { key: 'id', label: 'ID' },
-              { key: 'name', label: 'Name' },
-              { key: 'starts_at', label: 'Starts' },
-              { key: 'ends_at', label: 'Ends' },
-            ],
-            action: {
-              label: 'Add shift',
-              endpoint: '/attendance/shifts',
-              successMessage: 'Work shift created',
-              invalidateKeys: [['control-panel', '/attendance/shifts']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'code', label: 'Code', required: true },
-                { name: 'starts_at', label: 'Starts at', type: 'time', required: true },
-                { name: 'ends_at', label: 'Ends at', type: 'time', required: true },
-                { name: 'break_minutes', label: 'Break minutes', type: 'number', defaultValue: 0 },
-                { name: 'is_overnight', label: 'Overnight shift', type: 'checkbox' },
-                { name: 'is_default', label: 'Default shift', type: 'checkbox' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            edit: {
-              label: 'Edit shift',
-              endpoint: (row) => `/attendance/shifts/${row.id}`,
-              method: 'patch',
-              successMessage: 'Work shift updated',
-              invalidateKeys: [['control-panel', '/attendance/shifts']],
-              fields: [
-                { name: 'name', label: 'Name', required: true },
-                { name: 'code', label: 'Code', required: true },
-                { name: 'starts_at', label: 'Starts at', type: 'time', required: true },
-                { name: 'ends_at', label: 'Ends at', type: 'time', required: true },
-                { name: 'break_minutes', label: 'Break minutes', type: 'number', defaultValue: 0 },
-                { name: 'is_overnight', label: 'Overnight shift', type: 'checkbox' },
-                { name: 'is_default', label: 'Default shift', type: 'checkbox' },
-                { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-              ],
-            },
-            deactivate: {
-              label: 'Deactivate shift',
-              endpoint: (row) => `/attendance/shifts/${row.id}`,
-              method: 'patch',
-              successMessage: 'Work shift deactivated',
-              invalidateKeys: [['control-panel', '/attendance/shifts']],
-              fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-            },
-          }}
-        />
-        <DataPanel
-          config={{
-            title: 'Attendance records',
-            description: 'Daily attendance entries captured for employees.',
-            endpoint: '/attendance/records',
-            columns: [
-              { key: 'employee.full_name', label: 'Employee' },
-              { key: 'attendance_date', label: 'Date' },
-              { key: 'status', label: 'Status' },
-            ],
-          }}
-        />
-        <DataPanel
-          config={{
-            title: 'Correction requests',
-            description: 'Employee-raised corrections awaiting review or audit history.',
-            endpoint: '/attendance/corrections',
-            columns: [
-              { key: 'employee.full_name', label: 'Employee' },
-              { key: 'status', label: 'Status' },
-              { key: 'reason', label: 'Reason' },
-            ],
-          }}
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Present" value={presentCount} icon={UserCheck} tone="success" />
+        <StatTile label="Late" value={lateCount} icon={Clock3} tone={lateCount ? 'warning' : 'default'} />
+        <StatTile label="Absent" value={absentCount} icon={UserX} tone={absentCount ? 'danger' : 'default'} />
+        <StatTile label="Pending corrections" value={pendingCorrections} icon={FileClock} tone={pendingCorrections ? 'warning' : 'success'} />
       </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent attendance records</CardTitle>
+            <Clock3 className="h-4 w-4 text-muted" />
+          </CardHeader>
+          <CardBody>
+            {recordsQuery.isLoading ? (
+              <LoadingState label="Loading attendance records..." />
+            ) : recordsQuery.isError ? (
+              <ErrorState error={recordsQuery.error} onRetry={() => recordsQuery.refetch()} />
+            ) : recordRows.length === 0 ? (
+              <EmptyState title="No attendance records yet" description="Daily attendance entries will appear here as employees clock in." />
+            ) : (
+              <div className="divide-y divide-border">
+                {recordRows.slice(0, 8).map((record, index) => (
+                  <div key={String(record.id ?? index)} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-strong">{formatValue(valueAt(record, 'employee.full_name'))}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted">{formatValue(record.attendance_date)}</p>
+                    </div>
+                    <StatusBadge status={String(record.status)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Correction requests</CardTitle>
+            <FileClock className="h-4 w-4 text-muted" />
+          </CardHeader>
+          <CardBody>
+            {correctionsQuery.isLoading ? (
+              <LoadingState label="Loading correction requests..." />
+            ) : correctionsQuery.isError ? (
+              <ErrorState error={correctionsQuery.error} onRetry={() => correctionsQuery.refetch()} />
+            ) : correctionRows.length === 0 ? (
+              <EmptyState title="No correction requests" description="Employee-raised corrections will appear here for review." />
+            ) : (
+              <div className="space-y-2">
+                {correctionRows.slice(0, 8).map((correction, index) => (
+                  <div key={String(correction.id ?? index)} className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-strong">{formatValue(valueAt(correction, 'employee.full_name'))}</p>
+                      <p className="truncate text-xs text-muted">{formatValue(correction.reason)}</p>
+                    </div>
+                    <StatusBadge status={String(correction.status)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="Attendance settings" size="lg">
+        <div className="mb-4 rounded-md border border-border bg-surface-soft px-4 py-3">
+          <p className="text-sm font-semibold text-strong">Configuration lives here</p>
+          <p className="mt-1 text-xs leading-5 text-muted">
+            Control clock-in policy and work shifts without turning the main attendance page into a settings screen.
+          </p>
+        </div>
+        <AttendanceSettingsPanels />
+      </Modal>
     </AreaShell>
   );
 }
 
+const REPORT_MODULE_ICONS: Record<string, LucideIcon> = {
+  employees: Building2,
+  documents: FileCheck2,
+  leave: CalendarDays,
+  attendance: Clock3,
+};
+
+const REPORT_MODULE_LABELS: Record<string, string> = {
+  employees: 'Employees',
+  documents: 'Documents',
+  leave: 'Leave',
+  attendance: 'Attendance',
+};
+
 export function ReportsControlPage() {
+  const toast = useToast();
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
+  const reportsQuery = useQuery({
+    queryKey: ['control-panel', '/reports'],
+    queryFn: () => api.get<unknown>('/reports'),
+  });
+
+  const reportRows = rowsFromResponse(reportsQuery.data);
+  const groups = reportRows.reduce<Record<string, Row[]>>((acc, report) => {
+    const moduleKey = String(report.module ?? 'general');
+    acc[moduleKey] = acc[moduleKey] ?? [];
+    acc[moduleKey].push(report);
+    return acc;
+  }, {});
+
+  async function handleExport(report: Row) {
+    const key = String(report.key);
+    setExportingKey(key);
+    try {
+      const response = await apiClient.get(`/reports/${key}/export`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${key}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Export ready', `${formatValue(report.name)} has been downloaded.`);
+    } catch (error) {
+      toast.error('Could not export report', error instanceof ApiError ? error.message : 'Something went wrong while preparing this export.');
+    } finally {
+      setExportingKey(null);
+    }
+  }
+
   return (
     <AreaShell
       title="Reports"
-      subtitle="Control the organization report catalogue and export points."
+      subtitle="Export ready-made reports across employees, documents, leave, and attendance."
       permission="reports.view"
     >
-      <div className="flex flex-col gap-5">
-        <ControlNote
-          icon={BarChart3}
-          title="Report exports"
-          description="Report exports remain backend-driven, so any filters applied through each report endpoint stay scoped to the current organization."
-        />
-        <DataPanel
-          config={{
-            title: 'Available reports',
-            description: 'Exportable views prepared for HR, compliance, and operations.',
-            endpoint: '/reports',
-            columns: [
-              { key: 'key', label: 'Key' },
-              { key: 'name', label: 'Name' },
-              { key: 'description', label: 'Description' },
-            ],
-          }}
-        />
-        <Link
-          to="/settings/control-center"
-          className="inline-flex h-8 w-fit items-center justify-center rounded-md border border-border bg-white px-3 text-[13px] font-medium text-strong transition-colors hover:bg-surface-soft"
-        >
-          Back to control center
-        </Link>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Available reports" value={reportRows.length} icon={BarChart3} />
+        <StatTile label="Modules covered" value={Object.keys(groups).length} icon={Building2} />
+        <StatTile label="Employee & document reports" value={(groups.employees?.length ?? 0) + (groups.documents?.length ?? 0)} icon={FileCheck2} />
+        <StatTile label="Leave & attendance reports" value={(groups.leave?.length ?? 0) + (groups.attendance?.length ?? 0)} icon={Clock3} />
+      </div>
+
+      <div className="mt-5">
+        {reportsQuery.isLoading ? (
+          <LoadingState label="Loading reports..." />
+        ) : reportsQuery.isError ? (
+          <ErrorState error={reportsQuery.error} onRetry={() => reportsQuery.refetch()} />
+        ) : reportRows.length === 0 ? (
+          <EmptyState title="No reports available" description="Reports become available as your organization's modules are enabled." />
+        ) : (
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {Object.entries(groups).map(([moduleKey, reports]) => {
+              const Icon = REPORT_MODULE_ICONS[moduleKey] ?? BarChart3;
+              return (
+                <Card key={moduleKey}>
+                  <CardHeader>
+                    <CardTitle>{REPORT_MODULE_LABELS[moduleKey] ?? moduleKey}</CardTitle>
+                    <Icon className="h-4 w-4 text-muted" />
+                  </CardHeader>
+                  <CardBody>
+                    <div className="divide-y divide-border">
+                      {reports.map((report) => {
+                        const key = String(report.key);
+                        return (
+                          <div key={key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-strong">{formatValue(report.name)}</p>
+                              <p className="mt-0.5 text-xs leading-5 text-muted">{formatValue(report.description)}</p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleExport(report)}
+                              isLoading={exportingKey === key}
+                              className="flex-shrink-0"
+                            >
+                              {exportingKey !== key && <Download className="h-3.5 w-3.5" />} Export
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </AreaShell>
   );

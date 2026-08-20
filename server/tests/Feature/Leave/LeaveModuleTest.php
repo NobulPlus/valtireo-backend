@@ -3,13 +3,19 @@
 namespace Tests\Feature\Leave;
 
 use App\Models\ApprovalRequest;
+use App\Models\Department;
+use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmploymentType;
+use App\Models\GradeLevel;
 use App\Models\LeaveEntitlement;
 use App\Models\LeaveHoliday;
 use App\Models\LeavePeriod;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\Organization;
+use App\Models\OrganizationLocation;
+use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -90,6 +96,384 @@ class LeaveModuleTest extends TestCase
         ])
             ->assertCreated()
             ->assertJsonPath('leave_entitlement.days_allocated', 7);
+    }
+
+    public function test_hr_can_delete_a_leave_entitlement_with_no_usage(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('employee_number', 'EMP-FIN-001')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $period = LeavePeriod::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Delete No Usage Test Period',
+            'starts_on' => '2028-01-01',
+            'ends_on' => '2028-12-31',
+        ]);
+
+        $entitlement = LeaveEntitlement::query()->create([
+            'organization_id' => $admin->organization_id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 10,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->deleteJson("/api/leave/entitlements/{$entitlement->id}")->assertOk();
+
+        $this->assertDatabaseMissing('leave_entitlements', ['id' => $entitlement->id]);
+    }
+
+    public function test_cannot_delete_a_leave_entitlement_with_used_or_pending_days(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('employee_number', 'EMP-FIN-001')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $period = LeavePeriod::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Delete With Usage Test Period',
+            'starts_on' => '2028-01-01',
+            'ends_on' => '2028-12-31',
+        ]);
+
+        $entitlement = LeaveEntitlement::query()->create([
+            'organization_id' => $admin->organization_id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 20,
+            'days_used' => 2,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->deleteJson("/api/leave/entitlements/{$entitlement->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['leave_entitlement']);
+
+        $this->assertDatabaseHas('leave_entitlements', ['id' => $entitlement->id]);
+    }
+
+    public function test_cannot_delete_another_organizations_leave_entitlement(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+
+        $otherOrganization = Organization::query()->create([
+            'name' => 'Other Entitlement Tenant',
+            'code' => 'OTHERENTITLE',
+            'status' => 'active',
+            'country' => 'Nigeria',
+            'settings' => [],
+        ]);
+        $otherType = LeaveType::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'name' => 'Other Annual',
+            'code' => 'OTHER-ANNUAL2',
+        ]);
+        $otherPeriod = LeavePeriod::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'name' => 'Other Leave Year',
+            'starts_on' => '2027-01-01',
+            'ends_on' => '2027-12-31',
+        ]);
+        $otherEmployee = Employee::factory()->create(['organization_id' => $otherOrganization->id]);
+        $otherEntitlement = LeaveEntitlement::query()->create([
+            'organization_id' => $otherOrganization->id,
+            'employee_id' => $otherEmployee->id,
+            'leave_type_id' => $otherType->id,
+            'leave_period_id' => $otherPeriod->id,
+            'days_allocated' => 10,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->deleteJson("/api/leave/entitlements/{$otherEntitlement->id}")->assertNotFound();
+
+        $this->assertDatabaseHas('leave_entitlements', [
+            'id' => $otherEntitlement->id,
+            'days_allocated' => 10,
+        ]);
+    }
+
+    public function test_bulk_grant_creates_entitlements_for_active_employees_and_skips_existing(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $activeEmployeeCount = Employee::query()->where('organization_id', $admin->organization_id)->where('status', 'active')->count();
+
+        $period = LeavePeriod::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Bulk Grant Test Period',
+            'starts_on' => '2028-01-01',
+            'ends_on' => '2028-12-31',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/leave/entitlements/bulk', [
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 22,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('granted', $activeEmployeeCount)
+            ->assertJsonPath('skipped', 0)
+            ->assertJsonPath('days_allocated', 22);
+
+        $this->assertSame(
+            $activeEmployeeCount,
+            LeaveEntitlement::query()->where('leave_period_id', $period->id)->where('leave_type_id', $annual->id)->count()
+        );
+
+        // Re-running for the same type and period should skip everyone already granted, not overwrite them.
+        $this->postJson('/api/leave/entitlements/bulk', [
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 25,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('granted', 0)
+            ->assertJsonPath('skipped', $activeEmployeeCount);
+
+        $this->assertDatabaseMissing('leave_entitlements', [
+            'leave_period_id' => $period->id,
+            'leave_type_id' => $annual->id,
+            'days_allocated' => 25,
+        ]);
+    }
+
+    public function test_bulk_grant_falls_back_to_leave_type_default_when_days_allocated_omitted(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $period = LeavePeriod::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Default Fallback Period',
+            'starts_on' => '2028-01-01',
+            'ends_on' => '2028-12-31',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/leave/types/{$annual->id}", ['default_days_per_year' => 18])->assertOk();
+
+        $this->postJson('/api/leave/entitlements/bulk', [
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('days_allocated', 18);
+    }
+
+    public function test_bulk_grant_requires_days_when_leave_type_has_no_default(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $type = LeaveType::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'No Default Leave',
+            'code' => 'NODEFAULT',
+        ]);
+        $period = LeavePeriod::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'No Default Period',
+            'starts_on' => '2028-01-01',
+            'ends_on' => '2028-12-31',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/leave/entitlements/bulk', [
+            'leave_type_id' => $type->id,
+            'leave_period_id' => $period->id,
+        ])->assertStatus(422);
+    }
+
+    public function test_bulk_grant_requires_leave_approval_permission(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $period = LeavePeriod::query()->where('organization_id', $admin->organization_id)->firstOrFail();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($employeeUser);
+
+        $this->postJson('/api/leave/entitlements/bulk', [
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 20,
+        ])->assertForbidden();
+    }
+
+    public function test_approving_onboarding_auto_grants_leave_types_flagged_for_activation(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $sick = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'SICK')->firstOrFail();
+        $period = LeavePeriod::query()->where('organization_id', $admin->organization_id)->where('is_active', true)->firstOrFail();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/leave/types/{$annual->id}", [
+            'default_days_per_year' => 20,
+            'auto_grant_on_activation' => true,
+        ])->assertOk();
+
+        // Sick Leave keeps a default but is NOT flagged for auto-grant, and should be left alone.
+        $this->patchJson("/api/leave/types/{$sick->id}", [
+            'default_days_per_year' => 10,
+        ])->assertOk();
+
+        $employee = $this->createOnboardingEmployee();
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'active'])
+            ->assertOk()
+            ->assertJsonPath('employee.status', 'active');
+
+        $this->assertDatabaseHas('leave_entitlements', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 20,
+        ]);
+        $this->assertDatabaseMissing('leave_entitlements', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $sick->id,
+        ]);
+    }
+
+    public function test_auto_grant_on_activation_does_not_duplicate_or_overwrite_an_existing_entitlement(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $period = LeavePeriod::query()->where('organization_id', $admin->organization_id)->where('is_active', true)->firstOrFail();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/leave/types/{$annual->id}", [
+            'default_days_per_year' => 20,
+            'auto_grant_on_activation' => true,
+        ])->assertOk();
+
+        $employee = $this->createOnboardingEmployee();
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        // HR already manually granted a custom amount before onboarding was approved.
+        LeaveEntitlement::query()->create([
+            'organization_id' => $admin->organization_id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 30,
+        ]);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'active'])->assertOk();
+
+        $this->assertSame(
+            1,
+            LeaveEntitlement::query()->where('employee_id', $employee->id)->where('leave_type_id', $annual->id)->count()
+        );
+        $this->assertDatabaseHas('leave_entitlements', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annual->id,
+            'days_allocated' => 30,
+        ]);
+    }
+
+    public function test_changing_status_to_probation_or_confirmed_also_triggers_auto_grant(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $admin->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+        $period = LeavePeriod::query()->where('organization_id', $admin->organization_id)->where('is_active', true)->firstOrFail();
+        $employee = Employee::query()->where('employee_number', 'EMP-OPS-002')->firstOrFail();
+        $employee->profile()->update([
+            'date_of_birth' => '1994-05-12',
+            'gender' => 'male',
+            'residential_address' => '24 Operations Street',
+            'next_of_kin_name' => 'Grace Adeyemi',
+            'next_of_kin_phone' => '08030000002',
+            'emergency_contact_name' => 'Grace Adeyemi',
+            'emergency_contact_phone' => '08030000002',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/leave/types/{$annual->id}", [
+            'default_days_per_year' => 20,
+            'auto_grant_on_activation' => true,
+        ])->assertOk();
+
+        $this->postJson("/api/employees/{$employee->id}/status-history", [
+            'new_status' => 'probation',
+            'effective_date' => '2026-08-07',
+            'probation_ends_at' => '2026-11-07',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('leave_entitlements', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 20,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $overrides
+     */
+    private function createOnboardingEmployee(array $overrides = []): Employee
+    {
+        $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
+        $department = Department::query()->whereBelongsTo($organization)->where('code', 'HR')->firstOrFail();
+        $unit = Unit::query()->whereBelongsTo($organization)->where('code', 'HR-REC')->firstOrFail();
+        $designation = Designation::query()->whereBelongsTo($organization)->where('code', 'HRO')->firstOrFail();
+        $gradeLevel = GradeLevel::query()->whereBelongsTo($organization)->where('code', 'GL03')->firstOrFail();
+        $employmentType = EmploymentType::query()->whereBelongsTo($organization)->where('code', 'PERM')->firstOrFail();
+        $location = OrganizationLocation::query()->whereBelongsTo($organization)->where('code', 'HQ')->firstOrFail();
+
+        $response = $this->postJson('/api/employees', [
+            'employee_number' => 'EMP-AUTOGRANT-001',
+            'first_name' => 'Chidinma',
+            'last_name' => 'Eze',
+            'work_email' => 'autogrant-onboarding@valtireo.test',
+            'phone' => '08012340000',
+            'department_id' => $department->id,
+            'unit_id' => $unit->id,
+            'designation_id' => $designation->id,
+            'grade_level_id' => $gradeLevel->id,
+            'employment_type_id' => $employmentType->id,
+            'organization_location_id' => $location->id,
+            'start_date' => '2026-08-02',
+            'send_invitation' => false,
+            ...$overrides,
+        ]);
+
+        $response->assertCreated();
+
+        $employee = Employee::query()->findOrFail($response->json('employee.id'));
+        $employee->update(['status' => 'onboarding']);
+
+        return $employee->refresh();
     }
 
     public function test_employee_can_submit_leave_request_and_approval_is_created(): void

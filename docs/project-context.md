@@ -1,6 +1,22 @@
 # Valtireo Project Context
 
-Last updated: 2026-08-11
+Last updated: 2026-08-20
+
+## Current Snapshot
+
+The project is now an active monorepo with a Laravel API backend and a React/Vite frontend:
+
+```text
+valtireo/
+  client/   # React + TypeScript frontend
+  server/   # Laravel API backend
+  docs/     # product, design, Postman, and handoff docs
+  work/     # local/reference research artifacts
+```
+
+Frontend implementation has moved beyond the original "backend-first only" phase. The app now has screens for platform administration, dashboards, employees, self-service profile/leave/attendance, workspace settings, control center, organization structure, roles and permissions, custom fields, documents, approvals, leave, attendance, reports, and audit/activity.
+
+There is active uncommitted work as of 2026-08-20 around onboarding approval starting stage, probation dates, leave type defaults, auto-grant-on-activation, and bulk leave entitlement grants. Treat these areas as work in progress until committed and verified.
 
 ## Reference Thread
 

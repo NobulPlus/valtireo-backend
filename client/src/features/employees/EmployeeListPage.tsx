@@ -140,6 +140,14 @@ function EmployeeListContent() {
       return;
     }
 
+    if (employee.status === 'onboarding' && ['active', 'probation', 'confirmed'].includes(targetStatus)) {
+      // Leaving onboarding needs a profile-readiness check and a starting-stage
+      // choice that drag-and-drop has nowhere to collect — open the real
+      // approval flow instead of letting this silently bypass it.
+      setApproveTarget(employee);
+      return;
+    }
+
     if (targetStatus === 'probation') {
       // Moving into probation requires a probation_ends_at date, which
       // drag-and-drop has nowhere to collect — redirect to the form that has

@@ -31,22 +31,108 @@ class EmployeeOnboardingApprovalTest extends TestCase
             'completion_status' => 'submitted',
         ]);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding")
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
             ->assertOk()
-            ->assertJsonPath('employee.status', 'active')
+            ->assertJsonPath('employee.status', 'confirmed')
             ->assertJsonPath('profile.completion_status', 'approved')
             ->assertJsonPath('employee.onboarding_completed_at', fn ($value) => filled($value))
             ->assertJsonPath('employee.activated_at', fn ($value) => filled($value));
 
         $this->assertDatabaseHas('employees', [
             'id' => $employee->id,
-            'status' => 'active',
+            'status' => 'confirmed',
         ]);
 
         $this->assertDatabaseHas('employee_profiles', [
             'employee_id' => $employee->id,
             'completion_status' => 'approved',
         ]);
+
+        $this->assertDatabaseHas('employee_status_histories', [
+            'employee_id' => $employee->id,
+            'previous_status' => 'onboarding',
+            'new_status' => 'confirmed',
+        ]);
+    }
+
+    public function test_hr_admin_can_approve_onboarding_directly_to_probation_with_a_review_date(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $employee = $this->createOnboardingEmployee([
+            'employee_number' => 'EMP-APPROVE-006',
+            'work_email' => 'approval-probation@valtireo.test',
+        ]);
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", [
+            'new_status' => 'probation',
+            'probation_ends_at' => now()->addMonths(3)->toDateString(),
+        ])
+            ->assertOk()
+            ->assertJsonPath('employee.status', 'probation');
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $employee->id,
+            'status' => 'probation',
+        ]);
+    }
+
+    public function test_probation_ends_at_is_required_when_approving_to_probation(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $employee = $this->createOnboardingEmployee([
+            'employee_number' => 'EMP-APPROVE-007',
+            'work_email' => 'approval-probation-missing-date@valtireo.test',
+        ]);
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'probation'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['probation_ends_at']);
+    }
+
+    public function test_a_starting_stage_is_required_to_approve_onboarding(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $employee = $this->createOnboardingEmployee([
+            'employee_number' => 'EMP-APPROVE-008',
+            'work_email' => 'approval-no-stage@valtireo.test',
+        ]);
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['new_status']);
+    }
+
+    public function test_only_probation_confirmed_or_active_are_valid_starting_stages(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $employee = $this->createOnboardingEmployee([
+            'employee_number' => 'EMP-APPROVE-009',
+            'work_email' => 'approval-invalid-stage@valtireo.test',
+        ]);
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'suspended'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['new_status']);
     }
 
     public function test_employee_user_cannot_approve_onboarding(): void
@@ -69,7 +155,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
 
         Sanctum::actingAs($employeeUser);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding")
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
             ->assertForbidden();
     }
 
@@ -86,7 +172,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
         ]);
         $employee->profile()->update(['completion_status' => 'approved']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding")
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'active'])
             ->assertOk()
             ->assertJsonPath('employee.status', 'active')
             ->assertJsonPath('profile.completion_status', 'approved');
@@ -104,7 +190,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
             'work_email' => 'approval-pending@valtireo.test',
         ]);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding")
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['employee']);
     }
@@ -123,7 +209,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
         $employee->update(['status' => 'draft']);
         $employee->profile()->update(['completion_status' => 'submitted']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding")
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['employee']);
     }

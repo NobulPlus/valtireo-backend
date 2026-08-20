@@ -177,6 +177,8 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::patch('/holidays/{leaveHoliday}', [LeaveHolidayController::class, 'update']);
         Route::get('/entitlements', [LeaveEntitlementController::class, 'index']);
         Route::post('/entitlements', [LeaveEntitlementController::class, 'store']);
+        Route::post('/entitlements/bulk', [LeaveEntitlementController::class, 'bulkStore']);
+        Route::delete('/entitlements/{leaveEntitlement}', [LeaveEntitlementController::class, 'destroy']);
         Route::get('/requests', [LeaveRequestController::class, 'index']);
         Route::post('/requests', [LeaveRequestController::class, 'store']);
         Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show']);

@@ -15,6 +15,8 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'name',
     'code',
     'description',
+    'default_days_per_year',
+    'auto_grant_on_activation',
     'is_paid',
     'requires_attachment',
     'minimum_notice_days',
@@ -47,6 +49,8 @@ class LeaveType extends Model implements AuditableContract
             'requires_attachment' => 'boolean',
             'minimum_notice_days' => 'integer',
             'maximum_days_per_request' => 'integer',
+            'default_days_per_year' => 'integer',
+            'auto_grant_on_activation' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

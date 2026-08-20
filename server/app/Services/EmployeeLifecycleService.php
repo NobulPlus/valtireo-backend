@@ -26,6 +26,7 @@ class EmployeeLifecycleService
     public function __construct(
         private readonly EmployeeProfileActivityService $activities,
         private readonly EmployeeOnboardingService $onboarding,
+        private readonly LeaveEntitlementProvisioningService $leaveEntitlements,
     ) {
     }
 
@@ -82,6 +83,10 @@ class EmployeeLifecycleService
                 // StoreEmployeeStatusHistoryRequest's requiredIf rule).
                 'probation_ends_at' => $newStatus === 'probation' ? ($data['probation_ends_at'] ?? null) : null,
             ]);
+
+            if (in_array($newStatus, ['active', 'probation', 'confirmed'], true)) {
+                $this->leaveEntitlements->grantDefaultsForActivation($employee);
+            }
 
             $this->activities->record(
                 $employee,
