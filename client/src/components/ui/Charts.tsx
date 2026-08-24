@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 export const CHART_COLORS = ['#0F766E', '#2563EB', '#D97706', '#7C3AED', '#DC2626', '#0891B2', '#64748B'];
@@ -8,6 +8,8 @@ export interface ChartEntry {
   label: string;
   value: number;
   color?: string;
+  /** Optional marker rendered next to the label — e.g. a "primary" star. Supported by RankedBarList. */
+  badge?: ReactNode;
 }
 
 export function DonutChart({
@@ -37,7 +39,7 @@ export function DonutChart({
   return (
     <div className={cn('relative mx-auto aspect-square w-full max-w-[220px]', className)}>
       <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90" aria-hidden="true">
-        <circle cx="70" cy="70" r={radius} fill="none" stroke="#E6EFED" strokeWidth="18" />
+        <circle cx="70" cy="70" r={radius} fill="none" stroke="var(--color-border)" strokeWidth="18" />
         {entries.map((entry, index) => {
           const segment = (entry.value / total) * circumference;
           const dashOffset = offset;
@@ -141,8 +143,9 @@ export function RankedBarList({
           key={entry.id ?? entry.label}
           className="-mx-2 grid grid-cols-[minmax(132px,0.42fr)_minmax(120px,1fr)_2rem] items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-soft"
         >
-          <span className="min-w-0 truncate text-sm font-medium text-strong" title={entry.label}>
-            {entry.label}
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-strong" title={entry.label}>
+            {entry.badge}
+            <span className="truncate">{entry.label}</span>
           </span>
           <div className="h-2 min-w-0 overflow-hidden rounded-full bg-surface-soft">
             <div
@@ -403,7 +406,7 @@ export function MultiLineTrendChart({
 
             return (
               <g key={line}>
-                <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#D7E2E0" strokeOpacity="0.75" />
+                <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="var(--color-border)" strokeOpacity="0.75" />
                 <text x={padding.left - 8} y={y + 3} textAnchor="end" className="fill-muted text-[10px]">
                   {Math.round(max * line)}
                 </text>
@@ -411,8 +414,8 @@ export function MultiLineTrendChart({
             );
           })}
 
-          <line x1={padding.left} x2={padding.left} y1={padding.top} y2={height - padding.bottom} stroke="#D7E2E0" />
-          <line x1={padding.left} x2={width - padding.right} y1={height - padding.bottom} y2={height - padding.bottom} stroke="#D7E2E0" />
+          <line x1={padding.left} x2={padding.left} y1={padding.top} y2={height - padding.bottom} stroke="var(--color-border)" />
+          <line x1={padding.left} x2={width - padding.right} y1={height - padding.bottom} y2={height - padding.bottom} stroke="var(--color-border)" />
 
           {series.map((item) => (
             <path key={item.key} d={pathFor(item.key)} fill="none" stroke={item.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />

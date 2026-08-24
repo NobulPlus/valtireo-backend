@@ -100,8 +100,8 @@ class ReportService
                 'module' => 'employees',
                 'description' => 'Employees by structure, status, profile completion, and reporting line.',
                 'permission' => 'employees.view',
-                'filters' => ['search', 'status', 'department_id', 'unit_id', 'designation_id', 'grade_level_id', 'employment_type_id', 'organization_location_id', 'reporting_manager_id', 'profile_status', 'date_column', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
-                'csv_headers' => ['Employee Number', 'Full Name', 'Work Email', 'Status', 'Department', 'Unit', 'Designation', 'Grade Level', 'Employment Type', 'Location', 'Reporting Manager', 'Profile Status', 'Start Date', 'Created At'],
+                'filters' => ['search', 'status', 'confirmation_status', 'department_id', 'unit_id', 'designation_id', 'grade_level_id', 'employment_type_id', 'organization_location_id', 'reporting_manager_id', 'profile_status', 'date_column', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
+                'csv_headers' => ['Employee Number', 'Full Name', 'Work Email', 'Status', 'Confirmation Status', 'Department', 'Unit', 'Designation', 'Grade Level', 'Employment Type', 'Location', 'Reporting Manager', 'Profile Status', 'Start Date', 'Created At'],
             ],
             [
                 'key' => 'document_compliance',
@@ -174,6 +174,7 @@ class ReportService
             ->where('organization_id', $user->organization_id)
             ->when($request->string('search')->toString(), fn (Builder $query, string $search) => $this->employeeSearch($query, $search))
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($request->string('confirmation_status')->toString(), fn (Builder $query, string $status) => $query->where('confirmation_status', $status))
             ->when($request->integer('department_id'), fn (Builder $query, int $id) => $query->where('department_id', $id))
             ->when($request->integer('unit_id'), fn (Builder $query, int $id) => $query->where('unit_id', $id))
             ->when($request->integer('designation_id'), fn (Builder $query, int $id) => $query->where('designation_id', $id))
@@ -307,6 +308,7 @@ class ReportService
                 'full_name' => trim($row->first_name.' '.$row->last_name),
                 'work_email' => $row->work_email,
                 'status' => $row->status,
+                'confirmation_status' => $row->confirmation_status,
                 'department' => $row->department?->name,
                 'unit' => $row->unit?->name,
                 'designation' => $row->designation?->name,
@@ -391,7 +393,7 @@ class ReportService
         $data = $this->row($key, $row);
 
         return match ($key) {
-            'employee_directory' => [$data['employee_number'], $data['full_name'], $data['work_email'], $data['status'], $data['department'], $data['unit'], $data['designation'], $data['grade_level'], $data['employment_type'], $data['location'], $data['reporting_manager'], $data['profile_status'], $data['start_date'], $data['created_at']],
+            'employee_directory' => [$data['employee_number'], $data['full_name'], $data['work_email'], $data['status'], $data['confirmation_status'], $data['department'], $data['unit'], $data['designation'], $data['grade_level'], $data['employment_type'], $data['location'], $data['reporting_manager'], $data['profile_status'], $data['start_date'], $data['created_at']],
             'document_compliance' => [$data['employee_number'], $data['full_name'], $data['document_type'], $data['requirement'], $data['title'], $data['status'], $data['issued_at'], $data['expires_at'], $data['submitted_at'], $data['reviewed_at']],
             'leave_balances' => [$data['employee_number'], $data['full_name'], $data['leave_type'], $data['leave_period'], $data['days_allocated'], $data['days_used'], $data['days_pending'], $data['days_available'], $data['notes']],
             'leave_requests' => [$data['employee_number'], $data['full_name'], $data['leave_type'], $data['leave_period'], $data['status'], $data['starts_on'], $data['ends_on'], $data['total_days'], $data['reason'], $data['submitted_at'], $data['reviewed_at']],

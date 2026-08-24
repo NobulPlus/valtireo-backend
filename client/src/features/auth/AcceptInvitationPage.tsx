@@ -88,7 +88,7 @@ export function AcceptInvitationPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-white p-6 shadow-[0_18px_60px_rgba(18,63,58,0.10)] sm:p-8">
+        <div className="rounded-lg border border-border bg-surface p-6 shadow-[0_18px_60px_rgba(18,63,58,0.10)] sm:p-8">
           {invalidTokenMessage ? (
             <div className="text-center">
               <div className="mx-auto mb-5 flex h-11 w-11 items-center justify-center rounded-md bg-danger-bg text-danger">

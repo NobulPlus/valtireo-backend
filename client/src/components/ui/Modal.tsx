@@ -22,7 +22,7 @@ export function Modal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 py-6">
-      <div className={`flex max-h-[calc(100vh-3rem)] w-full flex-col ${sizeClass} rounded-lg border border-border bg-white shadow-xl`}>
+      <div className={`flex max-h-[calc(100vh-3rem)] w-full flex-col ${sizeClass} rounded-lg border border-border bg-surface shadow-xl`}>
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
           <h2 className="text-sm font-semibold text-strong">{title}</h2>
           <button onClick={onClose} className="text-muted hover:text-strong">

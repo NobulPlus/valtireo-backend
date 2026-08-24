@@ -17,15 +17,26 @@ export function useRoles() {
   });
 }
 
-/** The global permission catalog — powers the role permission-picker. */
+/** The global permission catalog — powers the role permission-picker and the platform permission catalog page. */
 export function usePermissionCatalog() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, session } = useAuth();
   return useQuery({
     queryKey: ['permissions'],
     queryFn: () => api.get<ResourceEnvelope<Permission[]>>('/permissions'),
-    enabled: hasPermission('roles.create') || hasPermission('roles.update'),
+    enabled: Boolean(session?.is_platform_admin) || hasPermission('roles.create') || hasPermission('roles.update'),
     select: (response) => response.data,
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useUpdatePermission(permissionId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { label?: string | null; description?: string | null; group?: string | null }) =>
+      api.patch<{ permission: Permission }>(`/platform/permissions/${permissionId}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['permissions'] });
+    },
   });
 }
 

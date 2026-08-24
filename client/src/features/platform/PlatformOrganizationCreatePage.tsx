@@ -128,7 +128,7 @@ function ProvisionSuccess({ result, onCreateAnother }: { result: ProvisionOrgani
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to={`/platform/organizations/${result.organization.id}`}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[var(--workspace-button,var(--color-pine))] px-4 text-sm font-medium text-white hover:brightness-95"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[var(--workspace-button,var(--color-pine))] px-4 text-sm font-medium text-[rgb(var(--workspace-button-fg,255_255_255))] hover:brightness-95"
           >
             Go to organization
           </Link>
@@ -425,7 +425,7 @@ export function PlatformOrganizationCreatePage() {
         actions={
           <Link
             to="/platform"
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-white px-3 text-sm font-medium text-strong hover:bg-surface-soft"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-3 text-sm font-medium text-strong hover:bg-surface-soft"
           >
             <ArrowLeft className="h-4 w-4" />
             Back

@@ -84,7 +84,7 @@ function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; o
               type="datetime-local"
               value={form.requested_check_in_at}
               onChange={(event) => setForm((current) => ({ ...current, requested_check_in_at: event.target.value }))}
-              className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
             />
           </label>
           <label className="block text-sm">
@@ -93,7 +93,7 @@ function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; o
               type="datetime-local"
               value={form.requested_check_out_at}
               onChange={(event) => setForm((current) => ({ ...current, requested_check_out_at: event.target.value }))}
-              className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
             />
           </label>
           <label className="block text-sm">
@@ -223,7 +223,7 @@ function MyAttendanceContent() {
               type="datetime-local"
               value={logForm.check_in_at}
               onChange={(event) => setLogForm((current) => ({ ...current, check_in_at: event.target.value }))}
-              className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
             />
           </label>
           <label className="block text-sm">
@@ -232,7 +232,7 @@ function MyAttendanceContent() {
               type="datetime-local"
               value={logForm.check_out_at}
               onChange={(event) => setLogForm((current) => ({ ...current, check_out_at: event.target.value }))}
-              className="h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
             />
           </label>
         </div>

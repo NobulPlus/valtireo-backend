@@ -16,6 +16,7 @@ use App\Services\EmployeeInvitationService;
 use App\Services\EmployeeOnboardingService;
 use App\Services\EmployeeProfileActivityService;
 use App\Services\EmployeeRoleAssignmentService;
+use App\Services\WorkspaceSettingsService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +37,51 @@ class EmployeeController extends Controller
             ->paginate($perPage);
 
         return EmployeeResource::collection($employees);
+    }
+
+    /**
+     * Flat node list for the org-chart view. `is_department_head` is
+     * resolved server-side (via the same `employees.view_department`
+     * permission check the approval chain uses) rather than left for the
+     * frontend to infer from a role name, since a department head can be
+     * any custom role that happens to carry that permission.
+     */
+    public function orgChart(Request $request, WorkspaceSettingsService $workspace): JsonResponse
+    {
+        $organization = $request->user()->organization;
+        $showOrgChartToEveryone = $organization
+            && ($workspace->forOrganization($organization)['employee_experience']['show_org_chart'] ?? false);
+
+        abort_unless(
+            $request->user()->can('employees.view') || ($showOrgChartToEveryone && $request->user()->employee),
+            403
+        );
+
+        $employees = Employee::query()
+            ->where('organization_id', $request->user()->organization_id)
+            ->where('status', 'active')
+            ->with(['department:id,code,name', 'designation:id,name', 'user.roles'])
+            ->orderBy('first_name')
+            ->get();
+
+        $nodes = $employees->map(fn (Employee $employee) => [
+            'id' => $employee->id,
+            'full_name' => trim("{$employee->first_name} {$employee->last_name}"),
+            'employee_number' => $employee->employee_number,
+            'work_email' => $employee->work_email,
+            'department' => $employee->department ? [
+                'id' => $employee->department->id,
+                'code' => $employee->department->code,
+                'name' => $employee->department->name,
+            ] : null,
+            'designation' => $employee->designation?->name,
+            'reporting_manager_id' => $employee->reporting_manager_id,
+            'role_name' => $employee->user?->roles->first()?->name,
+            'has_login' => $employee->user_id !== null,
+            'is_department_head' => (bool) $employee->user?->can('employees.view_department'),
+        ]);
+
+        return response()->json(['employees' => $nodes->values()]);
     }
 
     public function export(Request $request): StreamedResponse
@@ -59,6 +105,7 @@ class EmployeeController extends Controller
                 'Work Email',
                 'Phone',
                 'Status',
+                'Confirmation Status',
                 'Department',
                 'Unit',
                 'Designation',
@@ -84,6 +131,7 @@ class EmployeeController extends Controller
                         $employee->work_email,
                         $employee->phone,
                         $employee->status,
+                        $employee->confirmation_status,
                         $employee->department?->name,
                         $employee->unit?->name,
                         $employee->designation?->name,
@@ -118,7 +166,7 @@ class EmployeeController extends Controller
         );
 
         return response()->json([
-            'employee' => new EmployeeResource($result['employee']),
+            'employee' => new EmployeeResource($this->loadEmployeeDetail($result['employee'])),
             'invitation' => $result['invitation'] ? [
                 'id' => $result['invitation']->id,
                 'email' => $result['invitation']->email,
@@ -141,6 +189,7 @@ class EmployeeController extends Controller
             'user',
             'department',
             'unit',
+            'cluster',
             'designation',
             'gradeLevel',
             'employmentType',
@@ -187,6 +236,7 @@ class EmployeeController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'department_id' => ['nullable', Rule::exists('departments', 'id')->where('organization_id', $organizationId)],
             'unit_id' => ['nullable', Rule::exists('units', 'id')->where('organization_id', $organizationId)],
+            'cluster_id' => ['nullable', Rule::exists('clusters', 'id')->where('organization_id', $organizationId)],
             'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('organization_id', $organizationId)],
             'employment_type_id' => ['nullable', Rule::exists('employment_types', 'id')->where('organization_id', $organizationId)],
             'organization_location_id' => ['nullable', Rule::exists('organization_locations', 'id')->where('organization_id', $organizationId)],
@@ -248,6 +298,7 @@ class EmployeeController extends Controller
             fputcsv($handle, ['Work Email', $employee->work_email]);
             fputcsv($handle, ['Phone', $employee->phone]);
             fputcsv($handle, ['Status', $employee->status]);
+            fputcsv($handle, ['Confirmation Status', $employee->confirmation_status]);
             fputcsv($handle, ['Department', $employee->department?->name]);
             fputcsv($handle, ['Unit', $employee->unit?->name]);
             fputcsv($handle, ['Designation', $employee->designation?->name]);
@@ -312,6 +363,7 @@ class EmployeeController extends Controller
             'user.roles',
             'department',
             'unit',
+            'cluster',
             'designation',
             'gradeLevel',
             'employmentType',
@@ -413,6 +465,7 @@ class EmployeeController extends Controller
                 'user.roles',
                 'department',
                 'unit',
+                'cluster',
                 'designation',
                 'gradeLevel',
                 'employmentType',
@@ -431,8 +484,10 @@ class EmployeeController extends Controller
                 });
             })
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($request->string('confirmation_status')->toString(), fn (Builder $query, string $confirmationStatus) => $query->where('confirmation_status', $confirmationStatus))
             ->when($request->integer('department_id'), fn (Builder $query, int $departmentId) => $query->where('department_id', $departmentId))
             ->when($request->integer('unit_id'), fn (Builder $query, int $unitId) => $query->where('unit_id', $unitId))
+            ->when($request->integer('cluster_id'), fn (Builder $query, int $clusterId) => $query->where('cluster_id', $clusterId))
             ->when($request->integer('designation_id'), fn (Builder $query, int $designationId) => $query->where('designation_id', $designationId))
             ->when($request->integer('grade_level_id'), fn (Builder $query, int $gradeLevelId) => $query->where('grade_level_id', $gradeLevelId))
             ->when($request->integer('employment_type_id'), fn (Builder $query, int $employmentTypeId) => $query->where('employment_type_id', $employmentTypeId))

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -169,7 +169,7 @@ function GenderBadge({ gender }: { gender?: string | null }) {
   if (!gender) return null;
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-2 py-0.5 text-xs font-medium text-strong">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-strong">
       <GenderIcon gender={gender} />
       {formatText(gender)}
     </span>
@@ -193,6 +193,8 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
     work_email: '',
     phone: '',
     department_id: '',
+    unit_id: '',
+    cluster_id: '',
     designation_id: '',
     employment_type_id: '',
     organization_location_id: '',
@@ -207,6 +209,20 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
     emergency_contact_name: '',
     emergency_contact_phone: '',
   });
+  const editFormUnits = useMemo(
+    () =>
+      (lookups.data?.units ?? []).filter(
+        (unit) => !editForm.department_id || String(unit.department_id) === editForm.department_id,
+      ),
+    [lookups.data?.units, editForm.department_id],
+  );
+  const editFormClusters = useMemo(
+    () =>
+      (lookups.data?.clusters ?? []).filter(
+        (cluster) => !editForm.department_id || String(cluster.department_id) === editForm.department_id,
+      ),
+    [lookups.data?.clusters, editForm.department_id],
+  );
   const [correctionSection, setCorrectionSection] = useState('Overview');
   const [correctionMessage, setCorrectionMessage] = useState('');
   const [newManager, setNewManager] = useState<AsyncOption | null>(null);
@@ -229,6 +245,8 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
       work_email: employeeToEdit.work_email,
       phone: employeeToEdit.phone ?? '',
       department_id: employeeToEdit.department_id ? String(employeeToEdit.department_id) : '',
+      unit_id: employeeToEdit.unit_id ? String(employeeToEdit.unit_id) : '',
+      cluster_id: employeeToEdit.cluster_id ? String(employeeToEdit.cluster_id) : '',
       designation_id: employeeToEdit.designation_id ? String(employeeToEdit.designation_id) : '',
       employment_type_id: employeeToEdit.employment_type_id ? String(employeeToEdit.employment_type_id) : '',
       organization_location_id: employeeToEdit.organization_location_id ? String(employeeToEdit.organization_location_id) : '',
@@ -255,6 +273,8 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
         work_email: editForm.work_email,
         phone: editForm.phone || null,
         department_id: editForm.department_id ? Number(editForm.department_id) : null,
+        unit_id: editForm.unit_id ? Number(editForm.unit_id) : null,
+        cluster_id: editForm.cluster_id ? Number(editForm.cluster_id) : null,
         designation_id: editForm.designation_id ? Number(editForm.designation_id) : null,
         employment_type_id: editForm.employment_type_id ? Number(editForm.employment_type_id) : null,
         organization_location_id: editForm.organization_location_id ? Number(editForm.organization_location_id) : null,
@@ -322,6 +342,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
         status={
           <>
             <StatusBadge status={employee.status} />
+            {employee.confirmation_status !== 'not_applicable' && <StatusBadge status={employee.confirmation_status} />}
             <GenderBadge gender={employee.profile?.gender} />
           </>
         }
@@ -472,8 +493,10 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
               <CardBody className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                 <OverviewRow label="Employee number" value={employee.employee_number} />
                 <OverviewRow label="Status" value={<StatusBadge status={employee.status} />} />
+                <OverviewRow label="Confirmation status" value={<StatusBadge status={employee.confirmation_status} />} />
                 <OverviewRow label="Department" value={employee.department?.name ?? '—'} />
                 <OverviewRow label="Unit" value={employee.unit?.name ?? '—'} />
+                <OverviewRow label="Cluster" value={employee.cluster?.name ?? '—'} />
                 <OverviewRow label="Designation" value={employee.designation?.name ?? '—'} />
                 <OverviewRow label="Grade level" value={employee.grade_level?.name ?? '—'} />
                 <OverviewRow label="Employment type" value={employee.employment_type?.name ?? '—'} />
@@ -550,7 +573,12 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                     {employee.status_history.map((entry) => (
                       <li key={entry.id} className="px-5 py-3 text-sm">
                         <div className="flex items-center justify-between">
-                          <StatusBadge status={entry.new_status} />
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <StatusBadge status={entry.new_status} />
+                            {entry.new_confirmation_status && entry.new_confirmation_status !== entry.previous_confirmation_status && (
+                              <StatusBadge status={entry.new_confirmation_status} />
+                            )}
+                          </div>
                           <span className="text-xs text-muted">{formatDate(entry.effective_date)}</span>
                         </div>
                         {entry.reason && <p className="mt-1 text-strong">{entry.reason}</p>}
@@ -665,8 +693,24 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           <ActionField label="Department">
             <SelectMenu
               value={editForm.department_id}
-              onChange={(value) => setEditForm((current) => ({ ...current, department_id: value }))}
+              onChange={(value) =>
+                setEditForm((current) => ({ ...current, department_id: value, unit_id: '', cluster_id: '' }))
+              }
               options={lookupOptions(lookups.data?.departments, 'Unassigned')}
+            />
+          </ActionField>
+          <ActionField label="Unit">
+            <SelectMenu
+              value={editForm.unit_id}
+              onChange={(value) => setEditForm((current) => ({ ...current, unit_id: value }))}
+              options={lookupOptions(editFormUnits, 'Unassigned')}
+            />
+          </ActionField>
+          <ActionField label="Cluster">
+            <SelectMenu
+              value={editForm.cluster_id}
+              onChange={(value) => setEditForm((current) => ({ ...current, cluster_id: value }))}
+              options={lookupOptions(editFormClusters, 'Unassigned')}
             />
           </ActionField>
           <ActionField label="Designation">

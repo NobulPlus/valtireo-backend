@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -8,6 +9,8 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   Clock3,
   Download,
@@ -19,6 +22,7 @@ import {
   Power,
   Settings,
   ShieldCheck,
+  Star,
   Trash2,
   UserCheck,
   Users,
@@ -34,17 +38,28 @@ import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction, ModalConfirmAction, ModalSaveAction, ModalSendAction } from '@/components/ui/ModalActions';
-import { SelectMenu } from '@/components/ui/SelectMenu';
+import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
 import { useAuth } from '@/context/AuthContext';
-import { useActOnApprovalRequest, useApprovalRequests, type ApprovalDecisionAction } from '@/features/approvals/api';
+import {
+  useActOnApprovalRequest,
+  useApprovalRequest,
+  useApprovalRequests,
+  useApprovalWorkflows,
+  useCreateApprovalWorkflow,
+  useUpdateApprovalWorkflow,
+  type ApprovalDecisionAction,
+  type ApprovalWorkflowPayload,
+} from '@/features/approvals/api';
 import { useEmployees } from '@/features/employees/api';
+import { usePermissionCatalog, useRoles } from '@/features/settings/rolesApi';
 import { useSetupLookups } from '@/features/workspace/api';
 import { api, apiClient, ApiError } from '@/lib/apiClient';
-import type { AllSetupLookups, ApprovalRequest, Paginated } from '@/types/api';
+import { cn } from '@/lib/cn';
+import type { AllSetupLookups, ApprovalRequest, ApprovalWorkflow, ApproverType, ClusterLookup, LocationLookup, Paginated } from '@/types/api';
 
 type Row = Record<string, unknown>;
 
@@ -195,7 +210,7 @@ function ActionFields({
             </>
           ) : field.type === 'checkbox' ? (
             <>
-              <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-white px-3 text-sm text-strong">
+              <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-strong">
                 <input
                   type="checkbox"
                   checked={Boolean(form[field.name])}
@@ -567,7 +582,7 @@ function RecordDetailModal({
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {columns.map((column) => (
-          <div key={column.key} className="rounded-md border border-border bg-white px-3 py-2">
+          <div key={column.key} className="rounded-md border border-border bg-surface px-3 py-2">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{column.label}</p>
             <p className="mt-1 text-sm font-medium text-strong">{formatValue(valueAt(row, column.key))}</p>
           </div>
@@ -706,11 +721,240 @@ function LookupPanel({
   );
 }
 
+function ClusterFormModal({
+  cluster,
+  departmentOptions,
+  locations,
+  onClose,
+  onSaved,
+}: {
+  cluster: ClusterLookup | 'new' | null;
+  departmentOptions: SelectMenuOption[];
+  locations: LocationLookup[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const isNew = cluster === 'new';
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [description, setDescription] = useState('');
+  const [locationIds, setLocationIds] = useState<number[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (cluster && cluster !== 'new') {
+      setName(cluster.name);
+      setCode(cluster.code ?? '');
+      setDepartmentId(String(cluster.department_id));
+      setDescription(cluster.description ?? '');
+      setLocationIds((cluster.locations ?? []).map((location) => location.id));
+    } else if (cluster === 'new') {
+      setName('');
+      setCode('');
+      setDepartmentId('');
+      setDescription('');
+      setLocationIds([]);
+    }
+  }, [cluster]);
+
+  function toggleLocation(id: number) {
+    setLocationIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  }
+
+  async function handleSubmit() {
+    setIsSaving(true);
+    try {
+      const payload = {
+        name,
+        code,
+        department_id: departmentId ? Number(departmentId) : null,
+        description: description || null,
+        location_ids: locationIds,
+      };
+
+      if (isNew) {
+        await api.post('/setup/clusters', payload);
+      } else if (cluster) {
+        await api.patch(`/setup/clusters/${cluster.id}`, payload);
+      }
+
+      toast.success(isNew ? 'Cluster created' : 'Cluster updated', `${name} now covers ${locationIds.length} location${locationIds.length === 1 ? '' : 's'}.`);
+      onSaved();
+      onClose();
+    } catch (error) {
+      toast.error('Could not save cluster', error instanceof ApiError ? error.message : 'Please check the form and try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open={cluster !== null}
+      onClose={onClose}
+      title={isNew ? 'Create cluster' : 'Edit cluster'}
+      footer={
+        <>
+          <ModalCancelAction onClick={onClose} />
+          <ModalSaveAction title="Save cluster" isLoading={isSaving} onClick={handleSubmit} />
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Name">
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Lagos Cluster" />
+        </Field>
+        <Field label="Code">
+          <Input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="e.g. LAG-CLU" />
+        </Field>
+        <Field label="Department" hint="The cluster's approvals and reporting roll up to this department.">
+          <SelectMenu value={departmentId} onChange={setDepartmentId} options={departmentOptions} />
+        </Field>
+        <Field label="Description">
+          <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Optional" />
+        </Field>
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-muted">Locations in this cluster</p>
+          {locations.length === 0 ? (
+            <p className="text-sm text-muted">No locations set up yet.</p>
+          ) : (
+            <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border border-border p-2">
+              {locations.map((location) => {
+                const checked = locationIds.includes(location.id);
+                return (
+                  <label
+                    key={location.id}
+                    className={cn(
+                      'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors',
+                      checked ? 'bg-teal/5 text-strong' : 'text-muted hover:bg-surface-soft',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleLocation(location.id)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    {location.name}
+                    {location.is_primary && <Star className="h-3 w-3 fill-current text-warning" />}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ClustersPanel({
+  clusters,
+  departmentOptions,
+  locations,
+  onChanged,
+}: {
+  clusters: ClusterLookup[];
+  departmentOptions: SelectMenuOption[];
+  locations: LocationLookup[];
+  onChanged: () => void;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState<ClusterLookup | 'new' | null>(null);
+
+  async function handleDeactivate(cluster: ClusterLookup) {
+    try {
+      await api.patch(`/setup/clusters/${cluster.id}`, { is_active: false });
+      toast.success('Cluster deactivated', `${cluster.name} is no longer active.`);
+      onChanged();
+    } catch (error) {
+      toast.error('Could not deactivate cluster', error instanceof ApiError ? error.message : 'Please try again.');
+    }
+  }
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="items-start">
+        <div>
+          <CardTitle>Clusters</CardTitle>
+          <p className="mt-1 text-xs leading-5 text-muted">Groups of locations that roll up to one department.</p>
+        </div>
+        <span className="rounded-full bg-surface-soft px-2 py-0.5 text-xs font-medium text-muted">
+          {clusters.length} record{clusters.length === 1 ? '' : 's'}
+        </span>
+      </CardHeader>
+      <CardBody>
+        <Button type="button" size="sm" onClick={() => setEditing('new')} disabled={departmentOptions.length === 0}>
+          <Plus className="h-3.5 w-3.5" /> Add cluster
+        </Button>
+        {clusters.length === 0 ? (
+          <EmptyState
+            title="No clusters yet"
+            description="Create a cluster to group locations under a department for regional reporting and approvals."
+          />
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase text-muted">
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">Name</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">Department</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">Locations</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold" />
+                </tr>
+              </thead>
+              <tbody>
+                {clusters.map((cluster) => (
+                  <tr key={cluster.id} className="border-b border-border/70 last:border-0">
+                    <td className="px-3 py-2 text-strong">{cluster.name}</td>
+                    <td className="px-3 py-2 text-muted">{cluster.department?.name ?? '—'}</td>
+                    <td className="px-3 py-2 text-muted">
+                      {cluster.locations && cluster.locations.length > 0
+                        ? cluster.locations.map((location) => location.name).join(', ')
+                        : '—'}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Button type="button" size="sm" onClick={() => setEditing(cluster)} title="Edit" aria-label="Edit">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="danger"
+                          onClick={() => handleDeactivate(cluster)}
+                          title="Deactivate"
+                          aria-label="Deactivate"
+                        >
+                          <Power className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardBody>
+      <ClusterFormModal
+        cluster={editing}
+        departmentOptions={departmentOptions}
+        locations={locations}
+        onClose={() => setEditing(null)}
+        onSaved={onChanged}
+      />
+    </Card>
+  );
+}
+
 export function StructureSettingsPage() {
   const lookupsQuery = useSetupLookups();
   const lookups = lookupsQuery.data;
   const departmentOptions = useMemo(
-    () => lookups?.departments.map((department) => ({ label: department.name, value: department.id })) ?? [],
+    () => lookups?.departments.map((department) => ({ label: department.name, value: String(department.id) })) ?? [],
     [lookups?.departments],
   );
   const invalidateLookups = [['setup', 'lookups']];
@@ -999,6 +1243,12 @@ export function StructureSettingsPage() {
                 invalidateKeys: invalidateLookups,
                 fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
               }}
+            />
+            <ClustersPanel
+              clusters={(lookupsQuery.data as AllSetupLookups).clusters}
+              departmentOptions={departmentOptions}
+              locations={(lookupsQuery.data as AllSetupLookups).locations}
+              onChanged={() => lookupsQuery.refetch()}
             />
           </div>
         </div>
@@ -1415,6 +1665,7 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
   const [decisionAction, setDecisionAction] = useState<ApprovalDecisionAction>('approve');
   const [note, setNote] = useState('');
   const actMutation = useActOnApprovalRequest(request?.id ?? 0);
+  const isPending = request?.status === 'pending';
 
   useEffect(() => {
     if (request) {
@@ -1437,49 +1688,95 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
     <Modal
       open={Boolean(request)}
       onClose={onClose}
-      title="Review approval request"
+      title={isPending ? 'Review approval request' : 'Approval request'}
       footer={
-        <>
-          <ModalCancelAction onClick={onClose} />
-          <ModalSendAction title="Record decision" isLoading={actMutation.isPending} onClick={handleSubmit} />
-        </>
+        isPending ? (
+          <>
+            <ModalCancelAction onClick={onClose} />
+            <ModalSendAction title="Record decision" isLoading={actMutation.isPending} onClick={handleSubmit} />
+          </>
+        ) : (
+          <ModalCancelAction title="Close" onClick={onClose} />
+        )
       }
     >
       {request && (
         <div className="space-y-4">
-          <div>
-            <p className="font-medium text-strong">{request.title}</p>
-            <p className="text-xs text-muted">
-              {formatSnakeCase(request.module)} · {formatSnakeCase(request.action)} · Requested by {request.requester?.name ?? 'System'}
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-medium text-strong">{request.title}</p>
+              <p className="text-xs text-muted">
+                {formatSnakeCase(request.module)} · {formatSnakeCase(request.action)} · Requested by {request.requester?.name ?? 'System'}
+              </p>
+            </div>
+            <StatusBadge status={request.status} />
           </div>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted">Decision</span>
-            <SelectMenu
-              value={decisionAction}
-              onChange={(value) => setDecisionAction(value as ApprovalDecisionAction)}
-              options={DECISION_OPTIONS}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted">Note</span>
-            <Textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Optional — some workflows require a note when rejecting or requesting changes."
-            />
-          </label>
+
+          {isPending ? (
+            <>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">Decision</span>
+                <SelectMenu
+                  value={decisionAction}
+                  onChange={(value) => setDecisionAction(value as ApprovalDecisionAction)}
+                  options={DECISION_OPTIONS}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">Note</span>
+                <Textarea
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="Optional — some workflows require a note when rejecting or requesting changes."
+                />
+              </label>
+            </>
+          ) : (
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted">Decision history</p>
+              {request.decisions && request.decisions.length > 0 ? (
+                <ul className="space-y-2">
+                  {request.decisions.map((decision) => (
+                    <li key={decision.id} className="rounded-md border border-border px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-strong">{decision.actor?.name ?? 'System'}</span>
+                        <span className="text-xs text-muted">{new Date(decision.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {formatSnakeCase(decision.action)} → {formatSnakeCase(decision.next_status)}
+                      </p>
+                      {decision.note && <p className="mt-1 text-xs text-strong">"{decision.note}"</p>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted">No decisions recorded yet.</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Modal>
   );
 }
 
-function ApprovalRequestsPanel() {
+function ApprovalRequestsPanel({ openRequestId, onOpenRequestHandled }: { openRequestId?: number; onOpenRequestHandled?: () => void }) {
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useState('pending');
   const requestsQuery = useApprovalRequests({ status: statusFilter || undefined, per_page: 50 });
   const [actingOn, setActingOn] = useState<ApprovalRequest | null>(null);
   const requests = requestsQuery.data?.data ?? [];
+  const deepLinkedRequest = useApprovalRequest(openRequestId);
+
+  useEffect(() => {
+    if (deepLinkedRequest.data) {
+      setActingOn(deepLinkedRequest.data);
+      onOpenRequestHandled?.();
+    } else if (deepLinkedRequest.isError) {
+      toast.error('Approval request not found', 'It may have been removed, or you no longer have access to it.');
+      onOpenRequestHandled?.();
+    }
+  }, [deepLinkedRequest.data, deepLinkedRequest.isError, onOpenRequestHandled, toast]);
 
   return (
     <Card>
@@ -1533,98 +1830,344 @@ function ApprovalRequestsPanel() {
   );
 }
 
-function ApprovalWorkflowsPanel() {
+/** (module, action) pairs are what a real submission is routed by — these three are the only ones the app ever submits against. */
+const WORKFLOW_TARGET_OPTIONS: Array<{ value: string; label: string; module: string; action: string }> = [
+  { value: 'leave.submit', label: 'Leave requests', module: 'leave', action: 'submit' },
+  { value: 'employee_documents.submit', label: 'Employee documents', module: 'employee_documents', action: 'submit' },
+  { value: 'attendance.correction', label: 'Attendance corrections', module: 'attendance', action: 'correction' },
+];
+
+const APPROVER_TYPE_OPTIONS: Array<{ value: ApproverType; label: string }> = [
+  { value: 'direct_manager', label: "Employee's direct manager" },
+  { value: 'department_head', label: "Employee's department head" },
+  { value: 'role', label: 'Anyone with a specific role' },
+  { value: 'permission', label: 'Anyone with a specific permission' },
+];
+
+interface StepDraft {
+  key: string;
+  name: string;
+  approver_type: ApproverType;
+  approver_role_id: number | null;
+  approver_permission: string;
+  note_required: boolean;
+}
+
+let stepDraftSeq = 0;
+function emptyStep(order: number): StepDraft {
+  stepDraftSeq += 1;
+  return {
+    key: `new-${stepDraftSeq}`,
+    name: `Step ${order}`,
+    approver_type: 'direct_manager',
+    approver_role_id: null,
+    approver_permission: '',
+    note_required: false,
+  };
+}
+
+function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow | 'new' | null; onClose: () => void }) {
+  const toast = useToast();
+  const isNew = workflow === 'new';
+  const rolesQuery = useRoles();
+  const permissionsQuery = usePermissionCatalog();
+  const createMutation = useCreateApprovalWorkflow();
+  const updateMutation = useUpdateApprovalWorkflow(workflow && workflow !== 'new' ? workflow.id : 0);
+
+  const [target, setTarget] = useState(WORKFLOW_TARGET_OPTIONS[0].value);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [requireNoteOnReject, setRequireNoteOnReject] = useState(true);
+  const [steps, setSteps] = useState<StepDraft[]>([]);
+
+  useEffect(() => {
+    if (workflow && workflow !== 'new') {
+      const matchedTarget = WORKFLOW_TARGET_OPTIONS.find((option) => option.module === workflow.module && option.action === workflow.action);
+      setTarget(matchedTarget?.value ?? WORKFLOW_TARGET_OPTIONS[0].value);
+      setName(workflow.name);
+      setDescription(workflow.description ?? '');
+      setIsActive(workflow.is_active);
+      setRequireNoteOnReject(workflow.require_note_on_reject);
+      setSteps(
+        [...workflow.steps]
+          .sort((a, b) => a.step_order - b.step_order)
+          .map((step) => ({
+            key: `existing-${step.id}`,
+            name: step.name,
+            approver_type: step.approver_type,
+            approver_role_id: step.approver_role_id,
+            approver_permission: step.approver_permission ?? '',
+            note_required: step.note_required,
+          })),
+      );
+    } else if (workflow === 'new') {
+      setTarget(WORKFLOW_TARGET_OPTIONS[0].value);
+      setName('');
+      setDescription('');
+      setIsActive(true);
+      setRequireNoteOnReject(true);
+      setSteps([emptyStep(1)]);
+    }
+  }, [workflow]);
+
+  function addStep() {
+    setSteps((current) => [...current, emptyStep(current.length + 1)]);
+  }
+  function removeStep(key: string) {
+    setSteps((current) => current.filter((step) => step.key !== key));
+  }
+  function moveStep(index: number, direction: -1 | 1) {
+    setSteps((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+      return next;
+    });
+  }
+  function updateStep(key: string, patch: Partial<StepDraft>) {
+    setSteps((current) => current.map((step) => (step.key === key ? { ...step, ...patch } : step)));
+  }
+
+  async function handleSubmit() {
+    const targetOption = WORKFLOW_TARGET_OPTIONS.find((option) => option.value === target) ?? WORKFLOW_TARGET_OPTIONS[0];
+    const payload: ApprovalWorkflowPayload = {
+      module: targetOption.module,
+      action: targetOption.action,
+      name: name.trim(),
+      description: description.trim() || undefined,
+      is_active: isActive,
+      require_note_on_reject: requireNoteOnReject,
+      steps: steps.map((step, index) => ({
+        step_order: index + 1,
+        name: step.name.trim() || `Step ${index + 1}`,
+        approver_type: step.approver_type,
+        approver_role_id: step.approver_type === 'role' ? step.approver_role_id : null,
+        approver_permission: step.approver_type === 'permission' ? step.approver_permission || null : null,
+        note_required: step.note_required,
+        is_active: true,
+      })),
+    };
+
+    try {
+      if (isNew) {
+        await createMutation.mutateAsync(payload);
+        toast.success('Workflow created', `${payload.name} will now route ${targetOption.label.toLowerCase()}.`);
+      } else {
+        await updateMutation.mutateAsync(payload);
+        toast.success('Workflow updated', 'The approval chain has been saved.');
+      }
+      onClose();
+    } catch (error) {
+      toast.error('Could not save workflow', error instanceof ApiError ? error.message : 'Please check the form and try again.');
+    }
+  }
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
   return (
-    <DataPanel
-      config={{
-        title: 'Approval workflows',
-        description: 'Workflow definitions owned by this organization.',
-        endpoint: '/approval-workflows',
-        columns: [
-          { key: 'id', label: 'ID' },
-          { key: 'name', label: 'Name' },
-          { key: 'module', label: 'Module' },
-          { key: 'action', label: 'Action' },
-          { key: 'is_active', label: 'Active' },
-        ],
-        action: {
-          label: 'Create workflow',
-          endpoint: '/approval-workflows',
-          successMessage: 'Approval workflow created',
-          invalidateKeys: [['control-panel', '/approval-workflows']],
-          fields: [
-            {
-              name: 'module',
-              label: 'Module',
-              type: 'select',
-              required: true,
-              options: [
-                { label: 'Documents', value: 'documents' },
-                { label: 'Leave', value: 'leave' },
-                { label: 'Attendance', value: 'attendance' },
-                { label: 'Employees', value: 'employees' },
-              ],
-            },
-            { name: 'action', label: 'Action', required: true, placeholder: 'review, approve, correction' },
-            { name: 'name', label: 'Name', required: true },
-            { name: 'description', label: 'Description', type: 'textarea' },
-            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-            { name: 'require_note_on_reject', label: 'Require note on reject', type: 'checkbox', defaultValue: true },
-          ],
-        },
-        edit: {
-          label: 'Edit workflow',
-          endpoint: (row) => `/approval-workflows/${row.id}`,
-          method: 'patch',
-          successMessage: 'Approval workflow updated',
-          invalidateKeys: [['control-panel', '/approval-workflows']],
-          fields: [
-            {
-              name: 'module',
-              label: 'Module',
-              type: 'select',
-              required: true,
-              options: [
-                { label: 'Documents', value: 'documents' },
-                { label: 'Leave', value: 'leave' },
-                { label: 'Attendance', value: 'attendance' },
-                { label: 'Employees', value: 'employees' },
-              ],
-            },
-            { name: 'action', label: 'Action', required: true },
-            { name: 'name', label: 'Name', required: true },
-            { name: 'description', label: 'Description' },
-            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
-            { name: 'require_note_on_reject', label: 'Require note on reject', type: 'checkbox' },
-          ],
-        },
-        deactivate: {
-          label: 'Deactivate workflow',
-          endpoint: (row) => `/approval-workflows/${row.id}`,
-          method: 'patch',
-          successMessage: 'Approval workflow deactivated',
-          invalidateKeys: [['control-panel', '/approval-workflows']],
-          fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-        },
-      }}
-    />
+    <Modal
+      open={workflow !== null}
+      onClose={onClose}
+      title={isNew ? 'Create approval workflow' : 'Edit approval workflow'}
+      size="lg"
+      footer={
+        <>
+          <ModalCancelAction onClick={onClose} />
+          <ModalSaveAction title="Save workflow" isLoading={isSaving} onClick={handleSubmit} />
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-medium text-muted">Applies to</span>
+          <SelectMenu value={target} onChange={setTarget} options={WORKFLOW_TARGET_OPTIONS} />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-medium text-muted">Workflow name</span>
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Leave approval chain" />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-xs font-medium text-muted">Description</span>
+          <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Optional" />
+        </label>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm text-strong">
+            <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
+            Active
+          </label>
+          <label className="flex items-center gap-2 text-sm text-strong">
+            <input type="checkbox" checked={requireNoteOnReject} onChange={(event) => setRequireNoteOnReject(event.target.checked)} />
+            Require note on reject
+          </label>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-muted">Approval chain</span>
+            <Button type="button" size="sm" variant="ghost" onClick={addStep}>
+              <Plus className="h-3.5 w-3.5" /> Add step
+            </Button>
+          </div>
+          {steps.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted">
+              No steps — matching requests will auto-approve immediately.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {steps.map((step, index) => (
+                <div key={step.key} className="rounded-md border border-border p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-1.5 flex h-6 w-6 flex-none items-center justify-center rounded-full bg-teal-light text-xs font-semibold text-pine">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Input
+                        value={step.name}
+                        onChange={(event) => updateStep(step.key, { name: event.target.value })}
+                        placeholder="Step name"
+                      />
+                      <SelectMenu
+                        value={step.approver_type}
+                        onChange={(value) => updateStep(step.key, { approver_type: value as ApproverType })}
+                        options={APPROVER_TYPE_OPTIONS}
+                      />
+                      {step.approver_type === 'role' && (
+                        <SelectMenu
+                          value={step.approver_role_id ? String(step.approver_role_id) : ''}
+                          onChange={(value) => updateStep(step.key, { approver_role_id: value ? Number(value) : null })}
+                          options={[
+                            { value: '', label: 'Select a role' },
+                            ...(rolesQuery.data ?? []).map((role) => ({ value: String(role.id), label: role.name })),
+                          ]}
+                        />
+                      )}
+                      {step.approver_type === 'permission' && (
+                        <SelectMenu
+                          value={step.approver_permission}
+                          onChange={(value) => updateStep(step.key, { approver_permission: value })}
+                          options={[
+                            { value: '', label: 'Select a permission' },
+                            ...(permissionsQuery.data ?? []).map((permission) => ({
+                              value: permission.name,
+                              label: permission.label ?? permission.name,
+                            })),
+                          ]}
+                        />
+                      )}
+                      <label className="flex items-center gap-2 text-xs text-muted">
+                        <input
+                          type="checkbox"
+                          checked={step.note_required}
+                          onChange={(event) => updateStep(step.key, { note_required: event.target.checked })}
+                        />
+                        Require a note when this step rejects or requests changes
+                      </label>
+                    </div>
+                    <div className="flex flex-none flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveStep(index, -1)}
+                        disabled={index === 0}
+                        className="rounded p-1 text-muted hover:bg-surface-soft disabled:opacity-30"
+                        aria-label="Move step up"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveStep(index, 1)}
+                        disabled={index === steps.length - 1}
+                        className="rounded p-1 text-muted hover:bg-surface-soft disabled:opacity-30"
+                        aria-label="Move step down"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeStep(step.key)}
+                        className="rounded p-1 text-danger hover:bg-danger-bg"
+                        aria-label="Remove step"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ApprovalWorkflowsPanel() {
+  const workflowsQuery = useApprovalWorkflows();
+  const [editing, setEditing] = useState<ApprovalWorkflow | 'new' | null>(null);
+  const workflows = workflowsQuery.data?.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <div>
+          <CardTitle>Approval workflows</CardTitle>
+          <p className="mt-1 text-xs text-muted">Chain of approvers routed for leave, documents, and attendance corrections.</p>
+        </div>
+        <Button type="button" size="sm" onClick={() => setEditing('new')}>
+          <Plus className="h-4 w-4" /> Create workflow
+        </Button>
+      </CardHeader>
+      <CardBody className="p-0">
+        {workflowsQuery.isLoading && <LoadingState label="Loading workflows..." />}
+        {workflowsQuery.isError && <ErrorState error={workflowsQuery.error} onRetry={() => workflowsQuery.refetch()} />}
+        {workflowsQuery.data && workflows.length === 0 && (
+          <EmptyState title="No workflows configured" description="Create a workflow to route approvals through the right people." />
+        )}
+        {workflows.length > 0 && (
+          <ul className="divide-y divide-border">
+            {workflows.map((workflow) => (
+              <li key={workflow.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-strong">{workflow.name}</p>
+                  <p className="text-xs text-muted">
+                    {WORKFLOW_TARGET_OPTIONS.find((option) => option.module === workflow.module && option.action === workflow.action)?.label ??
+                      `${formatSnakeCase(workflow.module)} · ${formatSnakeCase(workflow.action)}`}
+                    {' · '}
+                    {workflow.steps.length} step{workflow.steps.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <StatusBadge status={workflow.is_active ? 'active' : 'suspended'} />
+                  <Button type="button" size="sm" onClick={() => setEditing(workflow)} title="Edit" aria-label="Edit">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardBody>
+      <WorkflowFormModal workflow={editing} onClose={() => setEditing(null)} />
+    </Card>
   );
 }
 
 export function ApprovalsControlPage() {
   const { hasPermission } = useAuth();
+  const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
+  const openRequestId = id ? Number(id) : undefined;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const canManageWorkflows = hasPermission('approval_workflows.view');
 
-  const workflowsQuery = useQuery({
-    queryKey: ['control-panel', '/approval-workflows'],
-    queryFn: () => api.get<unknown>('/approval-workflows'),
-    enabled: canManageWorkflows,
-  });
+  const workflowsQuery = useApprovalWorkflows(canManageWorkflows);
   const allRequestsQuery = useApprovalRequests({ per_page: 100 });
 
-  const workflowRows = rowsFromResponse(workflowsQuery.data);
-  const activeWorkflows = workflowRows.filter((row) => Boolean(row.is_active)).length;
+  const workflows = workflowsQuery.data?.data ?? [];
+  const activeWorkflows = workflows.filter((workflow) => workflow.is_active).length;
   const requests = allRequestsQuery.data?.data ?? [];
   const pendingCount = requests.filter((request) => request.status === 'pending').length;
   const approvedCount = requests.filter((request) => request.status === 'approved').length;
@@ -1656,7 +2199,7 @@ export function ApprovalsControlPage() {
       </div>
 
       <div className="mt-5">
-        <ApprovalRequestsPanel />
+        <ApprovalRequestsPanel openRequestId={openRequestId} onOpenRequestHandled={() => navigate('/approvals', { replace: true })} />
       </div>
 
       {canManageWorkflows && (
@@ -1838,7 +2381,7 @@ function LeaveSettingsPanels() {
                 name: 'auto_grant_on_activation',
                 label: 'Auto-grant when an employee is activated',
                 type: 'checkbox',
-                help: 'Automatically grants every employee this type\'s default days the moment they become active, on probation, or confirmed. Only turn this on for universal types like Annual or Sick Leave — leave it off for situational types like Maternity or Compassionate Leave, which should stay a manual, per-case grant.',
+                help: 'Automatically grants every employee this type\'s default days the moment they become active. Only turn this on for universal types like Annual or Sick Leave — leave it off for situational types like Maternity or Compassionate Leave, which should stay a manual, per-case grant.',
               },
               { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
               { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
@@ -1867,7 +2410,7 @@ function LeaveSettingsPanels() {
                 name: 'auto_grant_on_activation',
                 label: 'Auto-grant when an employee is activated',
                 type: 'checkbox',
-                help: 'Automatically grants every employee this type\'s default days the moment they become active, on probation, or confirmed. Only turn this on for universal types like Annual or Sick Leave.',
+                help: 'Automatically grants every employee this type\'s default days the moment they become active. Only turn this on for universal types like Annual or Sick Leave.',
               },
               { name: 'minimum_notice_days', label: 'Minimum notice days', type: 'number', defaultValue: 0 },
               { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },

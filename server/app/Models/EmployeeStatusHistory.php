@@ -15,6 +15,8 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'changed_by_id',
     'previous_status',
     'new_status',
+    'previous_confirmation_status',
+    'new_confirmation_status',
     'effective_date',
     'reason',
     'note',

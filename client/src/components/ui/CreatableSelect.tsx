@@ -136,7 +136,7 @@ export function CreatableSelect({
         }}
         placeholder={placeholder}
         className={cn(
-          'h-9 w-full rounded-md border border-border bg-white px-3 pr-8 text-sm text-strong placeholder:text-muted focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20 disabled:bg-surface-soft disabled:text-muted',
+          'h-9 w-full rounded-md border border-border bg-surface px-3 pr-8 text-sm text-strong placeholder:text-muted focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20 disabled:bg-surface-soft disabled:text-muted',
           invalid && 'border-danger focus:ring-danger/20',
         )}
       />
@@ -162,7 +162,7 @@ export function CreatableSelect({
               width: position.width,
               maxHeight: position.maxHeight,
             }}
-            className="z-[60] overflow-y-auto rounded-lg border border-border bg-white p-1.5 shadow-xl"
+            className="z-[60] overflow-y-auto rounded-lg border border-border bg-surface p-1.5 shadow-xl"
           >
             {filtered.map((option) => (
               <button

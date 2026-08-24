@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Blocks,
   Building2,
+  CalendarClock,
+  ClipboardCheck,
   ClipboardList,
   Download,
+  FileWarning,
   MapPin,
   Plus,
   RotateCcw,
   Search,
+  Star,
+  Timer,
   UserCheck,
+  UserPlus,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -27,10 +34,9 @@ import { ProgressRing } from '@/components/ui/ProgressRing';
 import { AreaTrendChart, ChartLegend, DonutChart, RankedBarList } from '@/components/ui/Charts';
 import { useSetupLookups } from '@/features/workspace/api';
 import { downloadEmployeesCsv, useEmployees, type EmployeeFilters } from '@/features/employees/api';
+import { EMPLOYEE_STATUS_OPTIONS, statusLabel } from '@/features/employees/statusHelpers';
 import { cn } from '@/lib/cn';
 import type { Employee, EmployeeSummary } from '@/types/api';
-
-const EMPLOYEE_STATUS_OPTIONS = ['draft', 'invited', 'onboarding', 'active', 'suspended', 'exited'];
 
 /** Pine/Teal/Blue family only — Gold/Cyan/Bridge Teal are reserved (index.css) and must not appear as general chart colors. */
 const DEPARTMENT_COLORS = [
@@ -100,6 +106,53 @@ function HeroStat({
         <p className="mt-1.5 text-[12.5px] font-medium text-muted">{label}</p>
       </div>
     </div>
+  );
+}
+
+function SummaryLinkCard({
+  icon: Icon,
+  iconClassName,
+  title,
+  stats,
+  onClick,
+}: {
+  icon: LucideIcon;
+  iconClassName: string;
+  title: string;
+  stats: Array<{ label: string; value: number; tone?: 'default' | 'warning' | 'danger' }>;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex flex-col gap-3 rounded-2xl border border-border bg-surface p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-teal/40 hover:shadow-[0_16px_32px_-18px_rgba(15,35,32,0.35)]"
+    >
+      <div className="flex items-center justify-between">
+        <span className={cn('flex h-8 w-8 items-center justify-center rounded-lg', iconClassName)}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="text-xs font-medium text-muted group-hover:text-teal">View</span>
+      </div>
+      <div>
+        <p className="text-[13px] font-semibold text-strong">{title}</p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {stats.map((stat) => (
+            <span key={stat.label} className="flex items-baseline gap-1.5">
+              <span
+                className={cn(
+                  'font-display text-lg font-bold tabular-nums',
+                  stat.tone === 'danger' ? 'text-danger' : stat.tone === 'warning' ? 'text-warning' : 'text-strong',
+                )}
+              >
+                {stat.value}
+              </span>
+              <span className="text-[11px] font-medium text-muted">{stat.label}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -189,7 +242,17 @@ export function OrganizationDashboardView() {
     label: entry.name,
     value: entry.total,
     color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+    badge: entry.is_primary ? (
+      <Star className="h-3 w-3 flex-none fill-current text-warning" aria-label="Primary location" />
+    ) : undefined,
   }));
+  const statusEntries = data.breakdowns.by_status.map((entry, index) => ({
+    id: entry.status,
+    label: statusLabel(entry.status),
+    value: entry.total,
+    color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+  }));
+  const pendingInvitations = data.recent.invitations.filter((invitation) => invitation.status === 'pending');
   const recentEmployees = data.recent.employees.slice(0, 5);
   const onboardingTrend = data.trends.onboarding;
   const selectedTrendMetric = TREND_METRIC_OPTIONS.find((option) => option.value === trendMetric) ?? TREND_METRIC_OPTIONS[0];
@@ -324,7 +387,7 @@ export function OrganizationDashboardView() {
             onChange={(value) => updateFilter('status', value)}
             options={[
               { value: '', label: 'All statuses' },
-              ...EMPLOYEE_STATUS_OPTIONS.map((option) => ({ value: option, label: option.charAt(0).toUpperCase() + option.slice(1) })),
+              ...EMPLOYEE_STATUS_OPTIONS.map((option) => ({ value: option, label: statusLabel(option) })),
             ]}
           />
           <SelectMenu
@@ -351,6 +414,61 @@ export function OrganizationDashboardView() {
           </Button>
         </CardBody>
       </Card>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <SummaryLinkCard
+          icon={ClipboardCheck}
+          iconClassName="bg-teal-light text-pine"
+          title="Approvals"
+          onClick={() => navigate('/approvals')}
+          stats={[
+            { label: 'pending', value: data.approvals.pending },
+            { label: 'needs attention', value: data.approvals.needs_attention, tone: data.approvals.needs_attention > 0 ? 'warning' : 'default' },
+          ]}
+        />
+        <SummaryLinkCard
+          icon={CalendarClock}
+          iconClassName="bg-info-bg text-info"
+          title="Leave"
+          onClick={() => navigate('/leave')}
+          stats={[
+            { label: 'pending', value: data.leave.pending },
+            { label: 'upcoming (7d)', value: data.leave.upcoming },
+          ]}
+        />
+        <SummaryLinkCard
+          icon={Timer}
+          iconClassName="bg-success-bg text-success"
+          title="Attendance today"
+          onClick={() => navigate('/attendance')}
+          stats={[
+            { label: 'present', value: data.attendance.present },
+            { label: 'late', value: data.attendance.late, tone: data.attendance.late > 0 ? 'warning' : 'default' },
+            { label: 'absent', value: data.attendance.absent, tone: data.attendance.absent > 0 ? 'danger' : 'default' },
+          ]}
+        />
+        <SummaryLinkCard
+          icon={FileWarning}
+          iconClassName="bg-pending-bg text-pending"
+          title="Documents"
+          onClick={() => navigate('/documents')}
+          stats={[
+            { label: 'missing', value: data.documents.missing, tone: data.documents.missing > 0 ? 'warning' : 'default' },
+            { label: 'expiring soon', value: data.documents.expiring_soon, tone: data.documents.expiring_soon > 0 ? 'warning' : 'default' },
+            { label: 'expired', value: data.documents.expired, tone: data.documents.expired > 0 ? 'danger' : 'default' },
+          ]}
+        />
+        <SummaryLinkCard
+          icon={Blocks}
+          iconClassName="bg-surface-soft text-teal"
+          title="Modules"
+          onClick={() => navigate('/settings/control-center')}
+          stats={[
+            { label: 'active', value: data.modules.active },
+            { label: 'locked', value: data.modules.locked, tone: data.modules.locked > 0 ? 'warning' : 'default' },
+          ]}
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.7fr_1fr]">
         <Card>
@@ -457,6 +575,54 @@ export function OrganizationDashboardView() {
               {data.structure.locations} location{data.structure.locations === 1 ? '' : 's'}
             </div>
             <RankedBarList valueLabel="Employees" entries={locationEntries} />
+          </CardBody>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>By status</CardTitle>
+          </CardHeader>
+          <CardBody>
+            <RankedBarList valueLabel="Employees" entries={statusEntries} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4" /> Pending invitations
+            </CardTitle>
+            {pendingInvitations.length > 0 && (
+              <p className="text-xs text-muted">{pendingInvitations.length} awaiting acceptance</p>
+            )}
+          </CardHeader>
+          <CardBody className="p-0">
+            {pendingInvitations.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {pendingInvitations.slice(0, 5).map((invitation) => (
+                  <li key={invitation.id}>
+                    <button
+                      type="button"
+                      onClick={() => invitation.employee && navigate(`/employees/${invitation.employee.id}`)}
+                      className="flex w-full items-center justify-between px-5 py-3 text-left text-sm hover:bg-surface-soft disabled:cursor-default disabled:hover:bg-transparent"
+                      disabled={!invitation.employee}
+                    >
+                      <div>
+                        <p className="font-medium text-strong">{invitation.employee?.full_name ?? invitation.email}</p>
+                        <p className="text-xs text-muted">{invitation.email}</p>
+                      </div>
+                      <span className="text-xs text-muted">
+                        {invitation.expires_at ? `Expires ${new Date(invitation.expires_at).toLocaleDateString()}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 py-6 text-sm text-muted">No pending invitations.</p>
+            )}
           </CardBody>
         </Card>
       </div>

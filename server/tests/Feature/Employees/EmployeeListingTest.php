@@ -104,6 +104,58 @@ class EmployeeListingTest extends TestCase
         }
     }
 
+    public function test_org_chart_marks_department_head_permission_holders_and_reporting_lines(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($admin->organization_id);
+
+        $hrDirector = Employee::query()->where('employee_number', 'EMP-HR-001')->firstOrFail();
+        $hrOfficer = Employee::query()->where('employee_number', 'EMP-HR-002')->firstOrFail();
+        $hrOfficer->update(['reporting_manager_id' => $hrDirector->id, 'status' => 'active']);
+        $hrDirector->update(['status' => 'active']);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->getJson('/api/employees/org-chart')->assertOk();
+        $nodes = collect($response->json('employees'))->keyBy('id');
+
+        $this->assertTrue($nodes[$hrDirector->id]['is_department_head']);
+        $this->assertSame($hrDirector->id, $nodes[$hrOfficer->id]['reporting_manager_id']);
+        $this->assertFalse($nodes[$hrOfficer->id]['is_department_head']);
+
+        foreach ($nodes as $node) {
+            $this->assertSame('active', Employee::query()->find($node['id'])->status);
+        }
+    }
+
+    public function test_org_chart_access_for_an_ordinary_employee_follows_the_show_org_chart_setting(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+
+        Sanctum::actingAs($admin);
+        $this->patchJson('/api/workspace/settings', [
+            'employee_experience' => ['show_org_chart' => false],
+        ])->assertOk();
+
+        // Re-fetched fresh each time: Sanctum::actingAs() pins the exact PHP
+        // object as the request's user, and a stale cached ->organization
+        // relation would otherwise still show the pre-update setting.
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->getJson('/api/employees/org-chart')->assertForbidden();
+
+        Sanctum::actingAs($admin);
+        $this->patchJson('/api/workspace/settings', [
+            'employee_experience' => ['show_org_chart' => true],
+        ])->assertOk();
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->getJson('/api/employees/org-chart')->assertOk();
+    }
+
     public function test_hr_admin_can_export_filtered_employee_csv(): void
     {
         $this->seed();

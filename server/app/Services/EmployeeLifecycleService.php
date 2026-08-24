@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 class EmployeeLifecycleService
 {
     private const PRE_ACTIVE_STATUSES = ['draft', 'invited', 'onboarding'];
-    private const ACTIVE_LIFECYCLE_STATUSES = ['active', 'probation', 'confirmed', 'suspended', 'exited'];
+    private const ACTIVE_LIFECYCLE_STATUSES = ['active', 'suspended', 'exited'];
     private const REQUIRED_BIODATA_FIELDS = [
         'date_of_birth' => 'Date of birth',
         'gender' => 'Gender',
@@ -37,9 +37,17 @@ class EmployeeLifecycleService
     {
         $this->ensureSameOrganization($actor, $employee);
 
+        if (! array_key_exists('new_status', $data) && ! array_key_exists('new_confirmation_status', $data)) {
+            throw ValidationException::withMessages([
+                'new_status' => ['Provide a new employment status, a new confirmation status, or both.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($actor, $employee, $data): EmployeeStatusHistory {
             $previousStatus = $employee->status;
-            $newStatus = $data['new_status'];
+            $newStatus = $data['new_status'] ?? $previousStatus;
+            $previousConfirmationStatus = $employee->confirmation_status;
+            $newConfirmationStatus = $data['new_confirmation_status'] ?? $previousConfirmationStatus;
 
             if (in_array($previousStatus, self::ACTIVE_LIFECYCLE_STATUSES, true) && in_array($newStatus, self::PRE_ACTIVE_STATUSES, true)) {
                 throw ValidationException::withMessages([
@@ -58,7 +66,7 @@ class EmployeeLifecycleService
                 $employee->refresh();
             }
 
-            if ($newStatus === 'active') {
+            if ($newStatus === 'active' && $previousStatus !== 'active') {
                 $this->ensureBiodataIsReadyForActivation($employee);
             }
 
@@ -67,6 +75,8 @@ class EmployeeLifecycleService
                 'changed_by_id' => $actor->id,
                 'previous_status' => $previousStatus,
                 'new_status' => $newStatus,
+                'previous_confirmation_status' => $previousConfirmationStatus,
+                'new_confirmation_status' => $newConfirmationStatus,
                 'effective_date' => $data['effective_date'],
                 'reason' => $data['reason'] ?? null,
                 'note' => $data['note'] ?? null,
@@ -74,30 +84,39 @@ class EmployeeLifecycleService
 
             $employee->update([
                 'status' => $newStatus,
+                'confirmation_status' => $newConfirmationStatus,
                 'invited_at' => $newStatus === 'invited' ? ($employee->invited_at ?? now()) : $employee->invited_at,
                 'activated_at' => $newStatus === 'active' ? ($employee->activated_at ?? now()) : $employee->activated_at,
                 // Only meaningful while actually on probation — cleared on
-                // any other transition so a stale date can't linger and
-                // resurface if the employee re-enters probation later
-                // (re-entering always requires setting a fresh date, per
-                // StoreEmployeeStatusHistoryRequest's requiredIf rule).
-                'probation_ends_at' => $newStatus === 'probation' ? ($data['probation_ends_at'] ?? null) : null,
+                // any other confirmation transition so a stale date can't
+                // linger and resurface if the employee re-enters probation
+                // later (re-entering always requires setting a fresh date,
+                // per StoreEmployeeStatusHistoryRequest's requiredIf rule).
+                'probation_ends_at' => $newConfirmationStatus === 'probation' ? ($data['probation_ends_at'] ?? null) : null,
             ]);
 
-            if (in_array($newStatus, ['active', 'probation', 'confirmed'], true)) {
+            if ($newStatus === 'active') {
                 $this->leaveEntitlements->grantDefaultsForActivation($employee);
             }
+
+            $description = $newStatus !== $previousStatus && $newConfirmationStatus !== $previousConfirmationStatus
+                ? "Status changed from {$previousStatus} to {$newStatus}, confirmation changed from {$previousConfirmationStatus} to {$newConfirmationStatus}."
+                : ($newStatus !== $previousStatus
+                    ? "Status changed from {$previousStatus} to {$newStatus}."
+                    : "Confirmation changed from {$previousConfirmationStatus} to {$newConfirmationStatus}.");
 
             $this->activities->record(
                 $employee,
                 $actor,
                 'status_changed',
                 'Employment status changed',
-                "Status changed from {$previousStatus} to {$newStatus}.",
+                $description,
                 $history,
                 [
                     'previous_status' => $previousStatus,
                     'new_status' => $newStatus,
+                    'previous_confirmation_status' => $previousConfirmationStatus,
+                    'new_confirmation_status' => $newConfirmationStatus,
                     'effective_date' => $data['effective_date'],
                 ]
             );

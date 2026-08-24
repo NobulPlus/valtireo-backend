@@ -97,7 +97,7 @@ class AuthController extends Controller
         // rather than trusting middleware wiring at every possible caller.
         app(PermissionRegistrar::class)->setPermissionsTeamId($user->organization_id);
 
-        $user->loadMissing('organization', 'roles', 'permissions');
+        $user->loadMissing('organization', 'roles', 'permissions', 'employee.profile');
 
         return [
             'user' => new UserResource($user),

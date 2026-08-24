@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Cluster;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\EmploymentType;
@@ -25,6 +26,7 @@ class SetupLookupController extends Controller
             'grade_levels' => $this->gradeLevels($request)->getData(true)['data'],
             'employment_types' => $this->employmentTypes($request)->getData(true)['data'],
             'locations' => $this->locations($request)->getData(true)['data'],
+            'clusters' => $this->clusters($request)->getData(true)['data'],
             'assignable_roles' => $this->assignableRoles($request, $roleAssignment)->getData(true)['data'],
         ]);
     }
@@ -59,6 +61,29 @@ class SetupLookupController extends Controller
                 ->when($request->integer('department_id'), fn ($query, int $departmentId) => $query->where('department_id', $departmentId))
                 ->orderBy('name')
                 ->get(['id', 'organization_id', 'department_id', 'code', 'name', 'description']),
+        ]);
+    }
+
+    public function clusters(Request $request): JsonResponse
+    {
+        return response()->json([
+            'data' => Cluster::query()
+                ->with(['department:id,code,name', 'locations:id,code,name'])
+                ->where('organization_id', $request->user()->organization_id)
+                ->where('is_active', true)
+                ->when($request->integer('department_id'), fn ($query, int $departmentId) => $query->where('department_id', $departmentId))
+                ->orderBy('name')
+                ->get(['id', 'organization_id', 'department_id', 'code', 'name', 'description'])
+                ->map(fn (Cluster $cluster) => [
+                    'id' => $cluster->id,
+                    'organization_id' => $cluster->organization_id,
+                    'department_id' => $cluster->department_id,
+                    'code' => $cluster->code,
+                    'name' => $cluster->name,
+                    'description' => $cluster->description,
+                    'department' => $cluster->department,
+                    'locations' => $cluster->locations,
+                ]),
         ]);
     }
 
@@ -151,6 +176,40 @@ class SetupLookupController extends Controller
         $unit->update($request->validate($this->unitRules($request, $unit->id)));
 
         return response()->json(['unit' => $unit->refresh()->load('department:id,code,name')]);
+    }
+
+    public function storeCluster(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->can('workspace_settings.update'), 403);
+
+        $data = $request->validate($this->clusterRules($request));
+        $locationIds = $data['location_ids'] ?? [];
+        unset($data['location_ids']);
+
+        $cluster = Cluster::query()->create([
+            'organization_id' => $request->user()->organization_id,
+            ...$data,
+        ]);
+        $cluster->locations()->sync($locationIds);
+
+        return response()->json(['cluster' => $cluster->load(['department:id,code,name', 'locations:id,code,name'])], 201);
+    }
+
+    public function updateCluster(Request $request, Cluster $cluster): JsonResponse
+    {
+        abort_unless($request->user()->can('workspace_settings.update'), 403);
+        abort_unless($cluster->organization_id === $request->user()->organization_id, 404);
+
+        $data = $request->validate($this->clusterRules($request, $cluster->id));
+
+        if (array_key_exists('location_ids', $data)) {
+            $cluster->locations()->sync($data['location_ids']);
+            unset($data['location_ids']);
+        }
+
+        $cluster->update($data);
+
+        return response()->json(['cluster' => $cluster->refresh()->load(['department:id,code,name', 'locations:id,code,name'])]);
     }
 
     public function storeDesignation(Request $request): JsonResponse
@@ -267,10 +326,15 @@ class SetupLookupController extends Controller
      */
     private function simpleSetupRules(Request $request, string $table, ?int $ignoreId = null): array
     {
+        // Updates (ignoreId set) may be a partial payload — a "Deactivate" action only
+        // ever sends {is_active: false}, so name/code can't be unconditionally required
+        // or every deactivate button on every lookup panel 422s.
+        $presence = $ignoreId === null ? 'required' : 'sometimes';
+
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [$presence, 'string', 'max:255'],
             'code' => [
-                'required',
+                $presence,
                 'alpha_dash',
                 'max:50',
                 Rule::unique($table, 'code')
@@ -300,7 +364,26 @@ class SetupLookupController extends Controller
     {
         return [
             ...$this->simpleSetupRules($request, 'units', $ignoreId),
-            'department_id' => ['required', Rule::exists('departments', 'id')->where('organization_id', $request->user()?->organization_id)],
+            'department_id' => [
+                $ignoreId === null ? 'required' : 'sometimes',
+                Rule::exists('departments', 'id')->where('organization_id', $request->user()?->organization_id),
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function clusterRules(Request $request, ?int $ignoreId = null): array
+    {
+        return [
+            ...$this->simpleSetupRules($request, 'clusters', $ignoreId),
+            'department_id' => [
+                $ignoreId === null ? 'required' : 'sometimes',
+                Rule::exists('departments', 'id')->where('organization_id', $request->user()?->organization_id),
+            ],
+            'location_ids' => ['sometimes', 'array'],
+            'location_ids.*' => [Rule::exists('organization_locations', 'id')->where('organization_id', $request->user()?->organization_id)],
         ];
     }
 
@@ -309,10 +392,12 @@ class SetupLookupController extends Controller
      */
     private function locationRules(Request $request, ?int $ignoreId = null): array
     {
+        $presence = $ignoreId === null ? 'required' : 'sometimes';
+
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [$presence, 'string', 'max:255'],
             'code' => [
-                'required',
+                $presence,
                 'alpha_dash',
                 'max:50',
                 Rule::unique('organization_locations', 'code')

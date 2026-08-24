@@ -70,7 +70,7 @@ export function AsyncSelect({
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          'flex h-9 w-full items-center justify-between rounded-md border border-border bg-white px-3 text-left text-sm text-strong disabled:bg-surface-soft disabled:text-muted',
+          'flex h-9 w-full items-center justify-between rounded-md border border-border bg-surface px-3 text-left text-sm text-strong disabled:bg-surface-soft disabled:text-muted',
           invalid && 'border-danger',
         )}
       >
@@ -89,7 +89,7 @@ export function AsyncSelect({
         </span>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-white shadow-lg">
+        <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-surface shadow-lg">
           <div className="border-b border-border p-2">
             <input
               autoFocus

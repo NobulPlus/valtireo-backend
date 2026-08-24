@@ -19,7 +19,11 @@ class ApprovalWorkflowStepResource extends JsonResource
             'step_order' => $this->step_order,
             'name' => $this->name,
             'approver_type' => $this->approver_type,
-            'approver_role' => $this->approver_role,
+            'approver_role_id' => $this->approver_role_id,
+            'approver_role' => $this->whenLoaded('approverRole', fn () => [
+                'id' => $this->approverRole->id,
+                'name' => $this->approverRole->name,
+            ]),
             'approver_permission' => $this->approver_permission,
             'note_required' => $this->note_required,
             'is_active' => $this->is_active,

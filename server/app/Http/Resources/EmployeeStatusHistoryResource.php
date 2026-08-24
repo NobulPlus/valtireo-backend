@@ -19,6 +19,8 @@ class EmployeeStatusHistoryResource extends JsonResource
             'employee_id' => $this->employee_id,
             'previous_status' => $this->previous_status,
             'new_status' => $this->new_status,
+            'previous_confirmation_status' => $this->previous_confirmation_status,
+            'new_confirmation_status' => $this->new_confirmation_status,
             'effective_date' => $this->effective_date,
             'reason' => $this->reason,
             'note' => $this->note,

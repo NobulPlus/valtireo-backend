@@ -48,6 +48,7 @@ export interface CurrentUser {
   name: string;
   email: string;
   email_verified_at: string | null;
+  photo_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -74,11 +75,12 @@ export interface WorkspaceSettings {
     logo_url: string | null;
     favicon_url: string | null;
     login_background_url: string | null;
+    short_name: string | null;
     welcome_message: string;
     support_email: string | null;
   };
   theme: {
-    mode: 'light' | 'dark';
+    mode: 'light' | 'dark' | 'system';
     primary_color: string;
     accent_color: string;
     sidebar_color: string;
@@ -195,10 +197,11 @@ export type EmployeeStatus =
   | 'invited'
   | 'onboarding'
   | 'active'
-  | 'probation'
-  | 'confirmed'
   | 'suspended'
   | 'exited';
+
+/** Whether an active employee has cleared probation — independent of employment status. */
+export type ConfirmationStatus = 'not_applicable' | 'probation' | 'confirmed';
 
 export type ProfileCompletionStatus = 'pending' | 'submitted' | 'approved' | 'changes_requested';
 
@@ -242,6 +245,7 @@ export interface Employee {
   phone: string | null;
   department_id: number | null;
   unit_id: number | null;
+  cluster_id: number | null;
   designation_id: number | null;
   grade_level_id: number | null;
   employment_type_id: number | null;
@@ -249,9 +253,11 @@ export interface Employee {
   reporting_manager_id: number | null;
   start_date: string | null;
   status: EmployeeStatus;
+  confirmation_status: ConfirmationStatus;
   pending_role_id?: number | null;
   department?: LookupRef | null;
   unit?: LookupRef | null;
+  cluster?: LookupRef | null;
   designation?: LookupRef | null;
   grade_level?: LookupRef | null;
   employment_type?: LookupRef | null;
@@ -316,6 +322,8 @@ export interface EmployeeStatusHistoryEntry {
   id: number;
   previous_status?: string | null;
   new_status: string;
+  previous_confirmation_status?: string | null;
+  new_confirmation_status?: string | null;
   effective_date: string;
   reason: string | null;
   note: string | null;
@@ -460,6 +468,37 @@ export interface ApprovalRequest {
   updated_at: string;
 }
 
+export type ApproverType = 'permission' | 'role' | 'direct_manager' | 'department_head';
+
+export interface ApprovalWorkflowStep {
+  id: number;
+  approval_workflow_id: number;
+  step_order: number;
+  name: string;
+  approver_type: ApproverType;
+  approver_role_id: number | null;
+  approver_role: { id: number; name: string } | null;
+  approver_permission: string | null;
+  note_required: boolean;
+  is_active: boolean;
+}
+
+export interface ApprovalWorkflow {
+  id: number;
+  organization_id: number;
+  module: string;
+  action: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  require_note_on_reject: boolean;
+  require_note_on_request_changes: boolean;
+  auto_approve_when_no_steps: boolean;
+  steps: ApprovalWorkflowStep[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CreateEmployeePayload {
   employee_number: string;
   first_name: string;
@@ -469,6 +508,7 @@ export interface CreateEmployeePayload {
   phone?: string | null;
   department_id: number;
   unit_id?: number | null;
+  cluster_id?: number | null;
   designation_id: number;
   grade_level_id?: number | null;
   employment_type_id: number;
@@ -550,6 +590,17 @@ export interface AssignableRoleOption {
   label: string;
 }
 
+export interface ClusterLookup {
+  id: number;
+  organization_id: number;
+  department_id: number;
+  code: string | null;
+  name: string;
+  description: string | null;
+  department?: { id: number; code: string | null; name: string };
+  locations?: Array<{ id: number; code: string | null; name: string }>;
+}
+
 export interface AllSetupLookups {
   departments: DepartmentLookup[];
   units: UnitLookup[];
@@ -557,6 +608,7 @@ export interface AllSetupLookups {
   grade_levels: GradeLevelLookup[];
   employment_types: EmploymentTypeLookup[];
   locations: LocationLookup[];
+  clusters: ClusterLookup[];
   assignable_roles: AssignableRoleOption[];
 }
 
@@ -656,6 +708,7 @@ export interface LookupCount {
   code: string | null;
   name: string;
   total: number;
+  is_primary?: boolean;
 }
 
 export interface StatusCount {
@@ -698,6 +751,19 @@ export interface EmployeeSummary {
   activated_at?: string | null;
 }
 
+export interface OrgChartNode {
+  id: number;
+  full_name: string;
+  employee_number: string;
+  work_email: string;
+  department: LookupRef | null;
+  designation: string | null;
+  reporting_manager_id: number | null;
+  role_name: string | null;
+  has_login: boolean;
+  is_department_head: boolean;
+}
+
 export interface OrganizationDashboard {
   filters: Record<string, unknown>;
   employees: EmployeeCountBreakdown;
@@ -721,6 +787,24 @@ export interface OrganizationDashboard {
     available: number;
     active: number;
     locked: number;
+  };
+  approvals: {
+    pending: number;
+    needs_attention: number;
+  };
+  leave: {
+    pending: number;
+    upcoming: number;
+  };
+  attendance: {
+    present: number;
+    late: number;
+    absent: number;
+  };
+  documents: {
+    missing: number;
+    expiring_soon: number;
+    expired: number;
   };
   breakdowns: {
     by_department: LookupCount[];
@@ -830,7 +914,9 @@ export interface MyDashboard {
     }>;
   } | null;
   attendance: {
-    recent_records: unknown[];
+    recent_records: Array<
+      Pick<AttendanceRecord, 'id' | 'attendance_date' | 'check_in_at' | 'check_out_at' | 'duration_minutes' | 'source' | 'status'>
+    >;
     corrections_pending: number;
   } | null;
   modules: EntitledModule[];

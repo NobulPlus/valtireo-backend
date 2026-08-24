@@ -19,10 +19,10 @@ function ApprovalCheck({ complete, label, value }: { complete: boolean; label: s
   );
 }
 
-const STAGE_OPTIONS: SelectMenuOption[] = [
+const CONFIRMATION_OPTIONS: SelectMenuOption[] = [
   { value: 'probation', label: 'Probation', description: 'Starts on probation with a review date. Most new hires start here.' },
   { value: 'confirmed', label: 'Confirmed', description: 'Skips probation — this employee is confirmed immediately.' },
-  { value: 'active', label: 'Active (no stage tracking)', description: "For roles where your organization doesn't track probation or confirmation." },
+  { value: 'not_applicable', label: 'Not tracked', description: "For roles where your organization doesn't track probation or confirmation." },
 ];
 
 export function ApproveOnboardingModal({
@@ -39,7 +39,7 @@ export function ApproveOnboardingModal({
   const toast = useToast();
   const mutation = useApproveOnboarding(employee.id);
   const profileReady = isReadyForOnboardingApproval(employee);
-  const [newStatus, setNewStatus] = useState('');
+  const [confirmationStatus, setConfirmationStatus] = useState('');
   const [probationEndsAt, setProbationEndsAt] = useState('');
   const [stageError, setStageError] = useState<string | null>(null);
   const [probationEndsAtError, setProbationEndsAtError] = useState<string | null>(null);
@@ -48,22 +48,22 @@ export function ApproveOnboardingModal({
     setStageError(null);
     setProbationEndsAtError(null);
 
-    if (!newStatus) {
-      setStageError('Choose the stage this employee starts at.');
+    if (!confirmationStatus) {
+      setStageError('Choose this employee’s confirmation stage.');
       return;
     }
-    if (newStatus === 'probation' && !probationEndsAt) {
+    if (confirmationStatus === 'probation' && !probationEndsAt) {
       setProbationEndsAtError('Set when probation ends — this drives the review reminder.');
       return;
     }
 
     try {
       await mutation.mutateAsync({
-        new_status: newStatus as 'active' | 'probation' | 'confirmed',
-        probation_ends_at: newStatus === 'probation' ? probationEndsAt : undefined,
+        confirmation_status: confirmationStatus as 'not_applicable' | 'probation' | 'confirmed',
+        probation_ends_at: confirmationStatus === 'probation' ? probationEndsAt : undefined,
       });
-      toast.success('Onboarding approved', `${employee.full_name} is now ${statusLabel(newStatus).toLowerCase()}.`);
-      setNewStatus('');
+      toast.success('Onboarding approved', `${employee.full_name} is now active${confirmationStatus === 'not_applicable' ? '' : ` (${statusLabel(confirmationStatus).toLowerCase()})`}.`);
+      setConfirmationStatus('');
       setProbationEndsAt('');
       onClose();
       onApproved?.();
@@ -109,11 +109,11 @@ export function ApproveOnboardingModal({
       {profileReady && (
         <div className="mt-4 space-y-3">
           <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted">Starting stage</span>
-            <SelectMenu value={newStatus} onChange={setNewStatus} options={STAGE_OPTIONS} placeholder="Select a stage..." />
+            <span className="mb-1 block text-xs font-medium text-muted">Confirmation stage</span>
+            <SelectMenu value={confirmationStatus} onChange={setConfirmationStatus} options={CONFIRMATION_OPTIONS} placeholder="Select a stage..." />
             {stageError && <p className="mt-1 text-xs text-danger">{stageError}</p>}
           </label>
-          {newStatus === 'probation' && (
+          {confirmationStatus === 'probation' && (
             <label className="block text-sm">
               <span className="mb-1 block text-xs font-medium text-muted">Probation ends</span>
               <DatePicker value={probationEndsAt} onChange={setProbationEndsAt} />

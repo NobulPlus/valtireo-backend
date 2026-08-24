@@ -42,8 +42,11 @@ function WorkspaceContent() {
   const { refresh } = useAuth();
 
   const [form, setForm] = useState<{
+    name: string;
+    short_name: string;
     welcome_message: string;
     support_email: string;
+    mode: string;
     primary_color: string;
     accent_color: string;
     sidebar_color: string;
@@ -63,8 +66,11 @@ function WorkspaceContent() {
     const workspace = workspaceQuery.data?.workspace;
     if (workspace && !form) {
       setForm({
+        name: workspace.workspace_name,
+        short_name: workspace.identity.short_name ?? '',
         welcome_message: workspace.identity.welcome_message,
         support_email: workspace.identity.support_email ?? '',
+        mode: workspace.theme.mode,
         primary_color: workspace.theme.primary_color,
         accent_color: workspace.theme.accent_color,
         sidebar_color: workspace.theme.sidebar_color,
@@ -86,11 +92,14 @@ function WorkspaceContent() {
   const updateMutation = useMutation({
     mutationFn: () =>
       api.patch<{ workspace: WorkspaceSettings }>('/workspace/settings', {
+        name: form?.name,
         identity: {
+          short_name: form?.short_name || null,
           welcome_message: form?.welcome_message,
           support_email: form?.support_email || null,
         },
         theme: {
+          mode: form?.mode,
           primary_color: form?.primary_color,
           accent_color: form?.accent_color,
           sidebar_color: form?.sidebar_color,
@@ -131,6 +140,7 @@ function WorkspaceContent() {
 
   const supportEmailError =
     form.support_email && !isValidEmail(form.support_email) ? 'Enter a valid email address' : undefined;
+  const nameError = form.name.trim().length === 0 ? 'Organization name is required' : undefined;
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -148,6 +158,20 @@ function WorkspaceContent() {
               }}
             >
               <OrgLogoField logoUrl={workspace.identity.logo_url} />
+              <Field label="Organization name" error={nameError}>
+                <Input
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                />
+              </Field>
+              <Field label="Short name" hint="Shown next to the logo in the sidebar instead of the full name.">
+                <Input
+                  value={form.short_name}
+                  onChange={(event) => setForm({ ...form, short_name: event.target.value })}
+                  placeholder={form.name || 'e.g. Valtireo'}
+                  maxLength={40}
+                />
+              </Field>
               <Field label="Welcome message" className="sm:col-span-2">
                 <Input
                   value={form.welcome_message}
@@ -182,7 +206,7 @@ function WorkspaceContent() {
                 />
               </Field>
               <div className="flex items-center gap-3 sm:col-span-2">
-                <Button type="submit" variant="primary" isLoading={updateMutation.isPending} disabled={Boolean(supportEmailError)}>
+                <Button type="submit" variant="primary" isLoading={updateMutation.isPending} disabled={Boolean(supportEmailError) || Boolean(nameError)}>
                   <Save className="h-3.5 w-3.5" />
                   Save changes
                 </Button>
@@ -201,6 +225,21 @@ function WorkspaceContent() {
           <CardBody>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field
+                  label="Default theme"
+                  hint="Applies to anyone in this organization who hasn't chosen a personal light/dark preference of their own."
+                  className="sm:col-span-2"
+                >
+                  <SelectMenu
+                    value={form.mode}
+                    onChange={(value) => setForm({ ...form, mode: value })}
+                    options={[
+                      { value: 'light', label: 'Light' },
+                      { value: 'dark', label: 'Dark' },
+                      { value: 'system', label: "Match each person's device" },
+                    ]}
+                  />
+                </Field>
                 <ColorField
                   label="Primary color"
                   value={form.primary_color}
@@ -257,7 +296,7 @@ function WorkspaceContent() {
 
               <div className="rounded-md border border-border bg-surface-soft p-4">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Live preview</p>
-                <div className="overflow-hidden rounded-md border border-border bg-white">
+                <div className="overflow-hidden rounded-md border border-border bg-surface">
                   <div className="flex min-h-36">
                     <div className="w-20 p-3 text-white" style={{ background: form.sidebar_color }}>
                       <div className="mb-4 h-5 w-8 rounded-sm bg-white/25" />

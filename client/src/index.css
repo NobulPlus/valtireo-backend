@@ -105,6 +105,68 @@
   --text-label--line-height: 1rem;
 }
 
+/*
+ * Dark mode — same token names, redefined values. Brand/accent colors (pine,
+ * teal, teal-light, blue, chart-*, bridge-teal, gold, cyan) stay fixed across
+ * both themes by design: they're used as small saturated chips/icons/accents
+ * on top of a surface, not as surfaces themselves, so they already carry
+ * enough contrast either way. Only the neutral scale and status tint
+ * backgrounds shift — those are what actually reads as "the page" and what
+ * would clash (a pale mint badge glowing on a dark canvas) if left alone.
+ *
+ * `@media (prefers-color-scheme: dark)` covers the default "system" setting
+ * (no data-theme attribute); the guard against [data-theme="light"] lets an
+ * explicit light choice win over a dark OS preference. `[data-theme="dark"]`
+ * covers the explicit dark choice regardless of OS preference.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-canvas: #0a1512;
+    --color-surface: #10201c;
+    --color-surface-soft: #172d27;
+    --color-border: #294a41;
+    --color-border-strong: #3a6559;
+    --color-muted: #93a8a2;
+    --color-strong: #edf5f2;
+
+    --color-success: #3ecf95;
+    --color-success-bg: #10301f;
+    --color-warning: #e3ab4c;
+    --color-warning-bg: #332708;
+    --color-danger: #f0736c;
+    --color-danger-bg: #3a1917;
+    --color-info: #6facee;
+    --color-info-bg: #13273c;
+    --color-pending: #d9bb5c;
+    --color-pending-bg: #332a0c;
+    --color-draft: #93a8a2;
+    --color-draft-bg: #1c2f2a;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-canvas: #0a1512;
+  --color-surface: #10201c;
+  --color-surface-soft: #172d27;
+  --color-border: #294a41;
+  --color-border-strong: #3a6559;
+  --color-muted: #93a8a2;
+  --color-strong: #edf5f2;
+
+  --color-success: #3ecf95;
+  --color-success-bg: #10301f;
+  --color-warning: #e3ab4c;
+  --color-warning-bg: #332708;
+  --color-danger: #f0736c;
+  --color-danger-bg: #3a1917;
+  --color-info: #6facee;
+  --color-info-bg: #13273c;
+  --color-pending: #d9bb5c;
+  --color-pending-bg: #332a0c;
+  --color-draft: #93a8a2;
+  --color-draft-bg: #1c2f2a;
+}
+
 html,
 body,
 #root {

@@ -11,7 +11,7 @@ export function Sidebar() {
   const orgLogoUrl = session?.workspace?.identity?.logo_url;
 
   return (
-    <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-border bg-[var(--workspace-sidebar,var(--color-pine))] text-white lg:flex">
+    <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-border bg-[var(--workspace-sidebar,var(--color-pine))] text-[rgb(var(--workspace-sidebar-fg,255_255_255))] lg:flex">
       <div className="flex h-14 items-center gap-2.5 px-5">
         {orgLogoUrl && !orgLogoFailed ? (
           <img
@@ -23,8 +23,8 @@ export function Sidebar() {
         ) : (
           <Logomark size={18} withBackground={false} />
         )}
-        <span className="font-display text-[15px] font-semibold tracking-tight">
-          Valtireo
+        <span className="truncate font-display text-[15px] font-semibold tracking-tight">
+          {session?.workspace?.identity.short_name || session?.organization?.name || 'Valtireo'}
         </span>
       </div>
 
@@ -40,6 +40,7 @@ export function Sidebar() {
               const module = moduleByKey(item.moduleKey);
               if (!module || module.visibility !== 'enabled') return false;
             }
+            if (item.employeeExperienceKey && !session?.workspace?.employee_experience[item.employeeExperienceKey]) return false;
             return true;
           });
 
@@ -47,7 +48,7 @@ export function Sidebar() {
 
           return (
             <div key={group.label} className="mb-5">
-              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-white/45">
+              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.45)]">
                 {group.label}
               </p>
               <div className="flex flex-col gap-0.5">
@@ -55,14 +56,16 @@ export function Sidebar() {
                   item.comingSoon ? (
                     <div
                       key={item.label}
-                      className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-white/40"
+                      className="flex cursor-not-allowed items-center justify-between rounded-md px-3 py-2 text-sm text-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.4)]"
                       title="Coming soon"
                     >
                       <span className="flex items-center gap-2.5">
                         <item.icon className="h-4 w-4" />
                         {item.label}
                       </span>
-                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium">Soon</span>
+                      <span className="rounded-full bg-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.1)] px-1.5 py-0.5 text-[10px] font-medium">
+                        Soon
+                      </span>
                     </div>
                   ) : (
                     <NavLink
@@ -70,8 +73,8 @@ export function Sidebar() {
                       to={item.to}
                       className={({ isActive }) =>
                         cn(
-                          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white',
-                          isActive && 'bg-white/15 text-white',
+                          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.8)] transition-colors hover:bg-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.1)] hover:text-[rgb(var(--workspace-sidebar-fg,255_255_255))]',
+                          isActive && 'bg-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.15)] text-[rgb(var(--workspace-sidebar-fg,255_255_255))]',
                         )
                       }
                     >
@@ -87,7 +90,9 @@ export function Sidebar() {
       </nav>
 
       {session?.organization && (
-        <div className="border-t border-white/10 px-5 py-3 text-xs text-white/50">{session.organization.name}</div>
+        <div className="border-t border-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.1)] px-5 py-3 text-xs text-[rgb(var(--workspace-sidebar-fg,255_255_255)/0.5)]">
+          {session.organization.name}
+        </div>
       )}
     </aside>
   );

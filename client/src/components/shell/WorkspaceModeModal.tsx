@@ -24,7 +24,7 @@ export function WorkspaceModeModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 px-5 py-10">
-      <div className="w-full max-w-xl rounded-lg border border-border bg-white p-8 shadow-[0_18px_60px_rgba(18,63,58,0.10)]">
+      <div className="w-full max-w-xl rounded-lg border border-border bg-surface p-8 shadow-[0_18px_60px_rgba(18,63,58,0.10)]">
         <div className="mb-6 flex items-center gap-3">
           <Logomark size={22} />
           <div>

@@ -23,6 +23,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'phone',
     'department_id',
     'unit_id',
+    'cluster_id',
     'designation_id',
     'grade_level_id',
     'employment_type_id',
@@ -30,6 +31,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'reporting_manager_id',
     'start_date',
     'status',
+    'confirmation_status',
     'pending_role_id',
     'invited_at',
     'onboarding_completed_at',
@@ -59,6 +61,11 @@ class Employee extends Model implements AuditableContract
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function cluster(): BelongsTo
+    {
+        return $this->belongsTo(Cluster::class);
     }
 
     public function designation(): BelongsTo

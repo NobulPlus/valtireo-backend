@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { Download, Plus, Trash2, Upload } from 'lucide-react';
+import { Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -485,8 +485,8 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => openContactModal(contact)}>
-                        Edit
+                      <Button type="button" variant="ghost" size="icon" aria-label="Edit contact" title="Edit" onClick={() => openContactModal(contact)}>
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button type="button" variant="ghost" size="icon" aria-label="Remove contact" onClick={() => handleDeleteContact(contact)}>
                         <Trash2 className="h-3.5 w-3.5" />
@@ -524,8 +524,8 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => openDependentModal(dependent)}>
-                        Edit
+                      <Button type="button" variant="ghost" size="icon" aria-label="Edit dependent" title="Edit" onClick={() => openDependentModal(dependent)}>
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button type="button" variant="ghost" size="icon" aria-label="Remove dependent" onClick={() => handleDeleteDependent(dependent)}>
                         <Trash2 className="h-3.5 w-3.5" />
@@ -724,7 +724,7 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
               onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-strong file:mr-3 file:rounded-md file:border file:border-border file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong hover:file:bg-surface-soft"
+              className="block w-full text-sm text-strong file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong hover:file:bg-surface-soft"
             />
           </ProfileField>
           <ProfileField label="Issued on">

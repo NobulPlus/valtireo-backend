@@ -9,27 +9,42 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Notifications\ValtireoNotification;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class NotificationDispatchService
 {
     /**
+     * Delivery is best-effort: a broken mail transport (bad SMTP creds, provider
+     * outage) must never roll back the business action that triggered it — e.g.
+     * an approval decision recorded inside a DB transaction. Failures are logged,
+     * not raised.
+     *
      * @param array<string, mixed> $data
      */
     public function notify(User $user, array $data): void
     {
-        $user->notify(new ValtireoNotification([
-            'organization_id' => $user->organization_id,
-            'category' => $data['category'] ?? 'general',
-            'event' => $data['event'] ?? 'notification.created',
-            'severity' => $data['severity'] ?? 'info',
-            'title' => $data['title'],
-            'message' => $data['message'],
-            'action_label' => $data['action_label'] ?? null,
-            'action_url' => $data['action_url'] ?? null,
-            'entity_type' => $data['entity_type'] ?? null,
-            'entity_id' => $data['entity_id'] ?? null,
-            'metadata' => $data['metadata'] ?? [],
-        ]));
+        try {
+            $user->notify(new ValtireoNotification([
+                'organization_id' => $user->organization_id,
+                'category' => $data['category'] ?? 'general',
+                'event' => $data['event'] ?? 'notification.created',
+                'severity' => $data['severity'] ?? 'info',
+                'title' => $data['title'],
+                'message' => $data['message'],
+                'action_label' => $data['action_label'] ?? null,
+                'action_url' => $data['action_url'] ?? null,
+                'entity_type' => $data['entity_type'] ?? null,
+                'entity_id' => $data['entity_id'] ?? null,
+                'metadata' => $data['metadata'] ?? [],
+            ]));
+        } catch (Throwable $exception) {
+            Log::error('Notification dispatch failed', [
+                'user_id' => $user->id,
+                'event' => $data['event'] ?? null,
+                'message' => $exception->getMessage(),
+            ]);
+        }
     }
 
     public function organizationAdminInvited(

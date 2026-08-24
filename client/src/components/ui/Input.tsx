@@ -2,7 +2,7 @@ import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } fro
 import { cn } from '@/lib/cn';
 
 const baseFieldClasses =
-  'h-9 w-full rounded-md border border-border bg-white px-3 text-sm text-strong placeholder:text-muted focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20 disabled:bg-surface-soft disabled:text-muted';
+  'h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong placeholder:text-muted focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20 disabled:bg-surface-soft disabled:text-muted';
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(
   ({ className, invalid, ...props }, ref) => (

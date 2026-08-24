@@ -27,10 +27,10 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const toneClasses: Record<ToastTone, string> = {
-  success: 'border-success-bg bg-white text-success',
-  danger: 'border-danger-bg bg-white text-danger',
-  warning: 'border-warning-bg bg-white text-warning',
-  info: 'border-info-bg bg-white text-info',
+  success: 'border-success-bg bg-surface text-success',
+  danger: 'border-danger-bg bg-surface text-danger',
+  warning: 'border-warning-bg bg-surface text-warning',
+  info: 'border-info-bg bg-surface text-info',
 };
 
 const icons = {

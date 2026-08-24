@@ -247,7 +247,7 @@ export function DateRangePicker({ dateFrom, dateTo, onChange, className }: DateR
       <button
         type="button"
         onClick={() => (open ? setOpen(false) : openPicker())}
-        className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-white px-3 text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal sm:min-w-[210px]"
+        className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal sm:min-w-[210px]"
       >
         <span className="inline-flex min-w-0 items-center gap-2">
           <CalendarDays className="h-4 w-4 flex-shrink-0 text-teal" />
@@ -268,7 +268,7 @@ export function DateRangePicker({ dateFrom, dateTo, onChange, className }: DateR
               width: position.width,
               maxHeight: position.maxHeight,
             }}
-            className="z-[60] flex overflow-auto rounded-lg border border-border bg-white shadow-xl"
+            className="z-[60] flex overflow-auto rounded-lg border border-border bg-surface shadow-xl"
           >
           <div className="w-44 flex-shrink-0 border-r border-border p-2">
             {PRESETS.map((preset) => (
@@ -405,7 +405,7 @@ function MonthGrid({
                 className={cn(
                   'flex h-8 w-8 items-center justify-center rounded-full text-sm transition-colors',
                   isCurrentMonth ? 'text-strong' : 'text-muted/40',
-                  isEndpoint ? 'bg-pine text-white hover:bg-pine' : 'hover:bg-white',
+                  isEndpoint ? 'bg-pine text-white hover:bg-pine' : 'hover:bg-surface-soft',
                 )}
               >
                 {day.getDate()}

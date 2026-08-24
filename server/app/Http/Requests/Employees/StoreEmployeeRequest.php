@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Employees;
 
+use App\Models\Cluster;
 use App\Models\Unit;
 use App\Services\EmployeeRoleAssignmentService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -46,6 +47,10 @@ class StoreEmployeeRequest extends FormRequest
                 'nullable',
                 Rule::exists('units', 'id')->where('organization_id', $organizationId),
             ],
+            'cluster_id' => [
+                'nullable',
+                Rule::exists('clusters', 'id')->where('organization_id', $organizationId),
+            ],
             'designation_id' => [
                 'required',
                 Rule::exists('designations', 'id')->where('organization_id', $organizationId),
@@ -80,17 +85,30 @@ class StoreEmployeeRequest extends FormRequest
         $validator->after(function ($validator): void {
             $organizationId = $this->user()?->organization_id;
 
-            if (! $organizationId || ! $this->filled('unit_id')) {
+            if (! $organizationId) {
                 return;
             }
 
-            $unit = Unit::query()
-                ->where('organization_id', $organizationId)
-                ->whereKey($this->integer('unit_id'))
-                ->first();
+            if ($this->filled('unit_id')) {
+                $unit = Unit::query()
+                    ->where('organization_id', $organizationId)
+                    ->whereKey($this->integer('unit_id'))
+                    ->first();
 
-            if ($unit && $unit->department_id !== $this->integer('department_id')) {
-                $validator->errors()->add('unit_id', 'The selected unit does not belong to the selected department.');
+                if ($unit && $unit->department_id !== $this->integer('department_id')) {
+                    $validator->errors()->add('unit_id', 'The selected unit does not belong to the selected department.');
+                }
+            }
+
+            if ($this->filled('cluster_id')) {
+                $cluster = Cluster::query()
+                    ->where('organization_id', $organizationId)
+                    ->whereKey($this->integer('cluster_id'))
+                    ->first();
+
+                if ($cluster && $cluster->department_id !== $this->integer('department_id')) {
+                    $validator->errors()->add('cluster_id', 'The selected cluster does not belong to the selected department.');
+                }
             }
         });
     }
@@ -109,6 +127,7 @@ class StoreEmployeeRequest extends FormRequest
             'phone',
             'department_id',
             'unit_id',
+            'cluster_id',
             'designation_id',
             'grade_level_id',
             'employment_type_id',

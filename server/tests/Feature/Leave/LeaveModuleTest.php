@@ -343,7 +343,7 @@ class LeaveModuleTest extends TestCase
         $employee = $this->createOnboardingEmployee();
         $employee->profile()->update(['completion_status' => 'submitted']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'active'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'not_applicable'])
             ->assertOk()
             ->assertJsonPath('employee.status', 'active');
 
@@ -386,7 +386,7 @@ class LeaveModuleTest extends TestCase
             'days_allocated' => 30,
         ]);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'active'])->assertOk();
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'not_applicable'])->assertOk();
 
         $this->assertSame(
             1,
@@ -399,7 +399,7 @@ class LeaveModuleTest extends TestCase
         ]);
     }
 
-    public function test_changing_status_to_probation_or_confirmed_also_triggers_auto_grant(): void
+    public function test_moving_to_active_with_a_probation_confirmation_triggers_auto_grant(): void
     {
         $this->seed();
 
@@ -425,10 +425,17 @@ class LeaveModuleTest extends TestCase
         ])->assertOk();
 
         $this->postJson("/api/employees/{$employee->id}/status-history", [
-            'new_status' => 'probation',
+            'new_status' => 'active',
+            'new_confirmation_status' => 'probation',
             'effective_date' => '2026-08-07',
             'probation_ends_at' => '2026-11-07',
         ])->assertCreated();
+
+        $this->assertDatabaseHas('employees', [
+            'id' => $employee->id,
+            'status' => 'active',
+            'confirmation_status' => 'probation',
+        ]);
 
         $this->assertDatabaseHas('leave_entitlements', [
             'employee_id' => $employee->id,

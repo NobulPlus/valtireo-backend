@@ -18,10 +18,13 @@ class UpdateWorkspaceSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'name' => ['sometimes', 'string', 'max:255'],
+
             'identity' => ['sometimes', 'array'],
             'identity.logo_url' => ['nullable', 'url', 'max:2048'],
             'identity.favicon_url' => ['nullable', 'url', 'max:2048'],
             'identity.login_background_url' => ['nullable', 'url', 'max:2048'],
+            'identity.short_name' => ['nullable', 'string', 'max:40'],
             'identity.welcome_message' => ['nullable', 'string', 'max:180'],
             'identity.support_email' => ['nullable', 'email', 'max:255'],
 

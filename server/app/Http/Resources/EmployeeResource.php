@@ -26,6 +26,7 @@ class EmployeeResource extends JsonResource
             'phone' => $this->phone,
             'department_id' => $this->department_id,
             'unit_id' => $this->unit_id,
+            'cluster_id' => $this->cluster_id,
             'designation_id' => $this->designation_id,
             'grade_level_id' => $this->grade_level_id,
             'employment_type_id' => $this->employment_type_id,
@@ -33,6 +34,7 @@ class EmployeeResource extends JsonResource
             'reporting_manager_id' => $this->reporting_manager_id,
             'start_date' => $this->start_date,
             'status' => $this->status,
+            'confirmation_status' => $this->confirmation_status,
             'pending_role_id' => $this->pending_role_id,
             'department' => $this->whenLoaded('department', fn () => [
                 'id' => $this->department->id,
@@ -43,6 +45,11 @@ class EmployeeResource extends JsonResource
                 'id' => $this->unit->id,
                 'code' => $this->unit->code,
                 'name' => $this->unit->name,
+            ] : null),
+            'cluster' => $this->whenLoaded('cluster', fn () => $this->cluster ? [
+                'id' => $this->cluster->id,
+                'code' => $this->cluster->code,
+                'name' => $this->cluster->name,
             ] : null),
             'designation' => $this->whenLoaded('designation', fn () => [
                 'id' => $this->designation->id,

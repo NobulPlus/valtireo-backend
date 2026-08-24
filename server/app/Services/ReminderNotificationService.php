@@ -198,7 +198,8 @@ class ReminderNotificationService
 
         Employee::query()
             ->with(['user', 'reportingManager.user'])
-            ->where('status', 'probation')
+            ->where('status', 'active')
+            ->where('confirmation_status', 'probation')
             ->whereNotNull('probation_ends_at')
             ->whereDate('probation_ends_at', '<=', now()->addDays($days)->toDateString())
             ->chunk(100, function ($employees) use (&$sent, &$usersByOrganization): void {

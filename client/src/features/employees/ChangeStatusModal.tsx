@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/apiClient';
 import type { Employee } from '@/types/api';
 import { useChangeEmployeeStatus } from '@/features/employees/api';
-import { statusOptionsFor } from '@/features/employees/statusHelpers';
+import { confirmationStatusOptionsFor, statusOptionsFor } from '@/features/employees/statusHelpers';
 
 function today(): string {
   const date = new Date();
@@ -38,6 +38,7 @@ export function ChangeStatusModal({
 }) {
   const toast = useToast();
   const [newStatus, setNewStatus] = useState('');
+  const [newConfirmationStatus, setNewConfirmationStatus] = useState('');
   const [effectiveDate, setEffectiveDate] = useState(today());
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -46,7 +47,8 @@ export function ChangeStatusModal({
   const mutation = useChangeEmployeeStatus(employee.id);
 
   const resolvedStatus = newStatus || employee.status;
-  const movingToProbation = resolvedStatus === 'probation';
+  const resolvedConfirmationStatus = newConfirmationStatus || employee.confirmation_status;
+  const movingToProbation = resolvedConfirmationStatus === 'probation';
 
   async function handleSave() {
     setProbationEndsAtError(null);
@@ -65,6 +67,7 @@ export function ChangeStatusModal({
     try {
       await mutation.mutateAsync({
         new_status: resolvedStatus,
+        new_confirmation_status: resolvedConfirmationStatus,
         effective_date: effectiveDate,
         reason: reason || undefined,
         note: note || undefined,
@@ -72,6 +75,7 @@ export function ChangeStatusModal({
       });
       toast.success('Status updated', `${employee.full_name}'s lifecycle history has been updated.`);
       setNewStatus('');
+      setNewConfirmationStatus('');
       setReason('');
       setNote('');
       onClose();
@@ -94,11 +98,19 @@ export function ChangeStatusModal({
       }
     >
       <div className="space-y-3">
-        <Field label="New status">
+        <Field label="Employment status">
           <SelectMenu value={newStatus || employee.status} onChange={setNewStatus} options={statusOptionsFor(employee)} />
           {employee.status === 'draft' && !employee.work_email && (
             <p className="mt-1 text-xs text-warning">Add a work email before inviting this employee.</p>
           )}
+        </Field>
+        <Field label="Confirmation status">
+          <SelectMenu
+            value={newConfirmationStatus || employee.confirmation_status}
+            onChange={setNewConfirmationStatus}
+            options={confirmationStatusOptionsFor(employee)}
+          />
+          <p className="mt-1 text-xs text-muted">Whether this employee has cleared probation — independent of employment status.</p>
         </Field>
         <Field label="Effective date">
           <DatePicker value={effectiveDate} onChange={setEffectiveDate} />

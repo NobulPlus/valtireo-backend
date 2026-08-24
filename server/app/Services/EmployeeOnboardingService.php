@@ -142,24 +142,27 @@ class EmployeeOnboardingService
             }
 
             $now = now();
-            $newStatus = $data['new_status'];
+            $confirmationStatus = $data['confirmation_status'];
 
             $employee->profile->update([
                 'completion_status' => 'approved',
             ]);
 
             $employee->update([
-                'status' => $newStatus,
+                'status' => 'active',
+                'confirmation_status' => $confirmationStatus,
                 'onboarding_completed_at' => $now,
                 'activated_at' => $now,
-                'probation_ends_at' => $newStatus === 'probation' ? $data['probation_ends_at'] : null,
+                'probation_ends_at' => $confirmationStatus === 'probation' ? $data['probation_ends_at'] : null,
             ]);
 
             $history = $employee->statusHistories()->create([
                 'organization_id' => $employee->organization_id,
                 'changed_by_id' => $actor->id,
                 'previous_status' => 'onboarding',
-                'new_status' => $newStatus,
+                'new_status' => 'active',
+                'previous_confirmation_status' => 'not_applicable',
+                'new_confirmation_status' => $confirmationStatus,
                 'effective_date' => $now->toDateString(),
                 'reason' => 'Onboarding approved.',
             ]);
@@ -169,11 +172,13 @@ class EmployeeOnboardingService
                 $actor,
                 'status_changed',
                 'Employment status changed',
-                "Onboarding approved — status changed from onboarding to {$newStatus}.",
+                "Onboarding approved — status changed from onboarding to active, confirmation set to {$confirmationStatus}.",
                 $history,
                 [
                     'previous_status' => 'onboarding',
-                    'new_status' => $newStatus,
+                    'new_status' => 'active',
+                    'previous_confirmation_status' => 'not_applicable',
+                    'new_confirmation_status' => $confirmationStatus,
                     'effective_date' => $now->toDateString(),
                 ]
             );

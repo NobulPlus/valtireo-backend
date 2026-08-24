@@ -133,6 +133,9 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/locations', [SetupLookupController::class, 'locations']);
         Route::post('/locations', [SetupLookupController::class, 'storeLocation']);
         Route::patch('/locations/{location}', [SetupLookupController::class, 'updateLocation']);
+        Route::get('/clusters', [SetupLookupController::class, 'clusters']);
+        Route::post('/clusters', [SetupLookupController::class, 'storeCluster']);
+        Route::patch('/clusters/{cluster}', [SetupLookupController::class, 'updateCluster']);
         Route::get('/assignable-roles', [SetupLookupController::class, 'assignableRoles']);
     });
 
@@ -201,6 +204,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
 
     Route::get('/employees', [EmployeeController::class, 'index']);
     Route::get('/employees/export', [EmployeeController::class, 'export']);
+    Route::get('/employees/org-chart', [EmployeeController::class, 'orgChart']);
     Route::post('/employees', [EmployeeController::class, 'store']);
     Route::get('/employees/{employee}/export', [EmployeeController::class, 'exportOne']);
     Route::post('/employees/{employee}/correction-requests', [EmployeeController::class, 'requestCorrection']);

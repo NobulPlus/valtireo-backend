@@ -212,6 +212,10 @@ function PlatformDashboardContent({
               {!isExporting && <Download className="h-4 w-4" />}
               Report
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/platform/permissions')}>
+              <ShieldCheck className="h-4 w-4" />
+              Permission catalog
+            </Button>
             <Button variant="primary" size="sm" onClick={() => navigate('/platform/organizations/new')}>
               <Plus className="h-4 w-4" />
               New organization

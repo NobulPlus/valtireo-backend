@@ -44,6 +44,11 @@ class Department extends Model implements AuditableContract
         return $this->hasMany(Unit::class);
     }
 
+    public function clusters(): HasMany
+    {
+        return $this->hasMany(Cluster::class);
+    }
+
     /**
      * @return array<string, string>
      */

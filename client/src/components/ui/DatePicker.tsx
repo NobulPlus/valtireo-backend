@@ -162,7 +162,7 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-white px-3 text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
+        className="inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal"
       >
         <span className="inline-flex min-w-0 items-center gap-2">
           <CalendarDays className="h-4 w-4 flex-shrink-0 text-teal" />
@@ -183,7 +183,7 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
               width: POPOVER_WIDTH,
               maxHeight: position.maxHeight,
             }}
-            className="z-50 overflow-y-auto rounded-lg border border-border bg-white p-4 shadow-xl"
+            className="z-50 overflow-y-auto rounded-lg border border-border bg-surface p-4 shadow-xl"
           >
             <div className="mb-4 flex items-center justify-between">
               <button
@@ -224,8 +224,8 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
                         type="button"
                         onClick={() => selectYear(year)}
                         className={cn(
-                          'h-8 rounded-md text-sm transition-colors hover:bg-white',
-                          isCursorYear && 'bg-white font-semibold text-teal shadow-sm',
+                          'h-8 rounded-md text-sm transition-colors hover:bg-surface-soft',
+                          isCursorYear && 'bg-surface-soft font-semibold text-teal shadow-sm',
                           isSelectedYear && 'ring-1 ring-teal',
                         )}
                       >

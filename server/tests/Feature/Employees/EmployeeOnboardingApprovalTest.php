@@ -31,16 +31,18 @@ class EmployeeOnboardingApprovalTest extends TestCase
             'completion_status' => 'submitted',
         ]);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
             ->assertOk()
-            ->assertJsonPath('employee.status', 'confirmed')
+            ->assertJsonPath('employee.status', 'active')
+            ->assertJsonPath('employee.confirmation_status', 'confirmed')
             ->assertJsonPath('profile.completion_status', 'approved')
             ->assertJsonPath('employee.onboarding_completed_at', fn ($value) => filled($value))
             ->assertJsonPath('employee.activated_at', fn ($value) => filled($value));
 
         $this->assertDatabaseHas('employees', [
             'id' => $employee->id,
-            'status' => 'confirmed',
+            'status' => 'active',
+            'confirmation_status' => 'confirmed',
         ]);
 
         $this->assertDatabaseHas('employee_profiles', [
@@ -51,7 +53,9 @@ class EmployeeOnboardingApprovalTest extends TestCase
         $this->assertDatabaseHas('employee_status_histories', [
             'employee_id' => $employee->id,
             'previous_status' => 'onboarding',
-            'new_status' => 'confirmed',
+            'new_status' => 'active',
+            'previous_confirmation_status' => 'not_applicable',
+            'new_confirmation_status' => 'confirmed',
         ]);
     }
 
@@ -69,15 +73,17 @@ class EmployeeOnboardingApprovalTest extends TestCase
         $employee->profile()->update(['completion_status' => 'submitted']);
 
         $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", [
-            'new_status' => 'probation',
+            'confirmation_status' => 'probation',
             'probation_ends_at' => now()->addMonths(3)->toDateString(),
         ])
             ->assertOk()
-            ->assertJsonPath('employee.status', 'probation');
+            ->assertJsonPath('employee.status', 'active')
+            ->assertJsonPath('employee.confirmation_status', 'probation');
 
         $this->assertDatabaseHas('employees', [
             'id' => $employee->id,
-            'status' => 'probation',
+            'status' => 'active',
+            'confirmation_status' => 'probation',
         ]);
     }
 
@@ -94,7 +100,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
         ]);
         $employee->profile()->update(['completion_status' => 'submitted']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'probation'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'probation'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['probation_ends_at']);
     }
@@ -114,10 +120,10 @@ class EmployeeOnboardingApprovalTest extends TestCase
 
         $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", [])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['new_status']);
+            ->assertJsonValidationErrors(['confirmation_status']);
     }
 
-    public function test_only_probation_confirmed_or_active_are_valid_starting_stages(): void
+    public function test_only_probation_confirmed_or_not_applicable_are_valid_confirmation_statuses(): void
     {
         $this->seed();
 
@@ -130,9 +136,9 @@ class EmployeeOnboardingApprovalTest extends TestCase
         ]);
         $employee->profile()->update(['completion_status' => 'submitted']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'suspended'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'suspended'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['new_status']);
+            ->assertJsonValidationErrors(['confirmation_status']);
     }
 
     public function test_employee_user_cannot_approve_onboarding(): void
@@ -155,7 +161,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
 
         Sanctum::actingAs($employeeUser);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
             ->assertForbidden();
     }
 
@@ -172,9 +178,10 @@ class EmployeeOnboardingApprovalTest extends TestCase
         ]);
         $employee->profile()->update(['completion_status' => 'approved']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'active'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'not_applicable'])
             ->assertOk()
             ->assertJsonPath('employee.status', 'active')
+            ->assertJsonPath('employee.confirmation_status', 'not_applicable')
             ->assertJsonPath('profile.completion_status', 'approved');
     }
 
@@ -190,7 +197,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
             'work_email' => 'approval-pending@valtireo.test',
         ]);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['employee']);
     }
@@ -209,7 +216,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
         $employee->update(['status' => 'draft']);
         $employee->profile()->update(['completion_status' => 'submitted']);
 
-        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['new_status' => 'confirmed'])
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['employee']);
     }

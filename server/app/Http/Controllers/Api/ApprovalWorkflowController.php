@@ -21,7 +21,7 @@ class ApprovalWorkflowController extends Controller
 
         $workflows = ApprovalWorkflow::query()
             ->where('organization_id', $request->user()->organization_id)
-            ->with('steps')
+            ->with('steps.approverRole')
             ->when($request->string('module')->toString(), fn (Builder $query, string $module) => $query->where('module', $module))
             ->when($request->string('action')->toString(), fn (Builder $query, string $action) => $query->where('action', $action))
             ->when($request->has('is_active'), fn (Builder $query) => $query->where('is_active', $request->boolean('is_active')))
@@ -47,7 +47,7 @@ class ApprovalWorkflowController extends Controller
         abort_unless($request->user()->can('approval_workflows.view'), 403);
         abort_unless($approvalWorkflow->organization_id === $request->user()->organization_id, 404);
 
-        return new ApprovalWorkflowResource($approvalWorkflow->load('steps'));
+        return new ApprovalWorkflowResource($approvalWorkflow->load('steps.approverRole'));
     }
 
     public function update(

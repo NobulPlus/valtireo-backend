@@ -49,6 +49,7 @@ const schema = z.object({
   phone: z.string().optional(),
   department_id: z.string().min(1, 'Department is required'),
   unit_id: z.string().optional(),
+  cluster_id: z.string().optional(),
   designation_id: z.string().min(1, 'Designation is required'),
   grade_level_id: z.string().optional(),
   employment_type_id: z.string().min(1, 'Employment type is required'),
@@ -105,6 +106,7 @@ function EmployeeCreateContent() {
       phone: '',
       department_id: '',
       unit_id: '',
+      cluster_id: '',
       designation_id: '',
       grade_level_id: '',
       employment_type_id: '',
@@ -118,6 +120,7 @@ function EmployeeCreateContent() {
   const selectedDepartmentId = watch('department_id');
   const startDate = watch('start_date') ?? '';
   const selectedUnitId = watch('unit_id') ?? '';
+  const selectedClusterId = watch('cluster_id') ?? '';
   const selectedDesignationId = watch('designation_id') ?? '';
   const selectedGradeLevelId = watch('grade_level_id') ?? '';
   const selectedEmploymentTypeId = watch('employment_type_id') ?? '';
@@ -134,6 +137,13 @@ function EmployeeCreateContent() {
       ),
     [lookupsQuery.data, selectedDepartmentId],
   );
+  const clusters = useMemo(
+    () =>
+      (lookupsQuery.data?.clusters ?? []).filter(
+        (cluster) => !selectedDepartmentId || String(cluster.department_id) === selectedDepartmentId,
+      ),
+    [lookupsQuery.data, selectedDepartmentId],
+  );
 
   async function onSubmit(values: FormValues) {
     try {
@@ -146,6 +156,7 @@ function EmployeeCreateContent() {
         phone: values.phone || null,
         department_id: Number(values.department_id),
         unit_id: values.unit_id ? Number(values.unit_id) : null,
+        cluster_id: values.cluster_id ? Number(values.cluster_id) : null,
         designation_id: Number(values.designation_id),
         grade_level_id: values.grade_level_id ? Number(values.grade_level_id) : null,
         employment_type_id: Number(values.employment_type_id),
@@ -248,7 +259,7 @@ function EmployeeCreateContent() {
             <Button type="button" variant="secondary" size="sm" onClick={handleDownloadTemplate}>
               <Download className="h-3.5 w-3.5" /> Template
             </Button>
-            <label className="relative inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-white px-3 text-[13px] font-medium text-strong transition-colors hover:bg-surface-soft">
+            <label className="relative inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-strong transition-colors hover:bg-surface-soft">
               {importMutation.isPending ? 'Importing…' : 'Upload CSV'}
               <input
                 type="file"
@@ -269,11 +280,11 @@ function EmployeeCreateContent() {
             <p className="text-xs text-muted">
               Departments, units, designations, grade levels, employment types, and locations are matched by their codes.
               Required columns: employee number, names, work email, department, designation, employment type, and location.
-              Set <code className="rounded bg-white px-1 py-0.5 text-[11px]">send_invitation</code> to true or false per row.
+              Set <code className="rounded bg-surface px-1 py-0.5 text-[11px]">send_invitation</code> to true or false per row.
             </p>
 
             {importResult && (
-              <div className="rounded-md border border-border bg-white p-3 text-sm">
+              <div className="rounded-md border border-border bg-surface p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="font-medium text-strong">
                     Imported {importResult.summary.imported_rows} of {importResult.summary.total_rows} rows
@@ -348,6 +359,7 @@ function EmployeeCreateContent() {
                 onChange={(value) => {
                   setValue('department_id', value, { shouldDirty: true, shouldValidate: true });
                   setValue('unit_id', '', { shouldDirty: true, shouldValidate: true });
+                  setValue('cluster_id', '', { shouldDirty: true, shouldValidate: true });
                 }}
                 options={lookupOptions(lookupsQuery.data?.departments, 'Select department')}
                 invalid={Boolean(errors.department_id)}
@@ -358,6 +370,13 @@ function EmployeeCreateContent() {
                 value={selectedUnitId}
                 onChange={(value) => setValue('unit_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(units, 'Select unit')}
+              />
+            </Field>
+            <Field label="Cluster" htmlFor="cluster_id" error={errors.cluster_id?.message}>
+              <SelectMenu
+                value={selectedClusterId}
+                onChange={(value) => setValue('cluster_id', value, { shouldDirty: true, shouldValidate: true })}
+                options={lookupOptions(clusters, 'Select cluster')}
               />
             </Field>
             <Field label="Designation" htmlFor="designation_id" error={errors.designation_id?.message} required>

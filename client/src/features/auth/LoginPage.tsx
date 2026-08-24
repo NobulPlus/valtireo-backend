@@ -123,7 +123,7 @@ export function LoginPage() {
             </div>
 
             <div
-              className="login-fade-in rounded-lg border border-border bg-white p-6 shadow-[0_18px_60px_rgba(18,63,58,0.10)] sm:p-8"
+              className="login-fade-in rounded-lg border border-border bg-surface p-6 shadow-[0_18px_60px_rgba(18,63,58,0.10)] sm:p-8"
               style={{ animationDelay: '0.15s' }}
             >
               <div className="mb-7">

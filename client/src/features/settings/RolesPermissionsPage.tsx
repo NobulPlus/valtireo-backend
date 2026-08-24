@@ -30,11 +30,11 @@ function titleCase(value: string): string {
 }
 
 /** Permissions aren't required to have a curated `group` yet — fall back to the code key's prefix (e.g. "employees.view_department" → "Employees") so the picker is still organized. */
-function permissionGroup(permission: Permission): string {
+export function permissionGroup(permission: Permission): string {
   return permission.group || titleCase(permission.name.split('.')[0] ?? 'General');
 }
 
-function permissionLabel(permission: Permission): string {
+export function permissionLabel(permission: Permission): string {
   if (permission.label) return permission.label;
   const action = permission.name.split('.').slice(1).join(' ');
   return titleCase(action || permission.name);

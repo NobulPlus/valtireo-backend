@@ -25,6 +25,10 @@ const STATUS_TONE: Record<string, Tone> = {
   draft: 'draft',
   suspended: 'warning',
   exited: 'danger',
+  // Employee confirmation status
+  probation: 'warning',
+  confirmed: 'success',
+  not_applicable: 'draft',
   // Profile completion
   pending: 'pending',
   submitted: 'info',

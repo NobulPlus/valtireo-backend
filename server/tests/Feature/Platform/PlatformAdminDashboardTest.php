@@ -110,6 +110,48 @@ class PlatformAdminDashboardTest extends TestCase
         $this->getJson('/api/platform/organizations')->assertForbidden();
     }
 
+    public function test_super_admin_can_view_and_curate_the_permission_catalog(): void
+    {
+        $this->seed();
+
+        $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($superAdmin);
+
+        $catalog = $this->getJson('/api/permissions')->assertOk();
+        $permission = $catalog->json('data.0');
+        $this->assertNotEmpty($permission, 'Platform admin should see the permission catalog even without an org role.');
+
+        $this->patchJson("/api/platform/permissions/{$permission['id']}", [
+            'label' => 'Curated label',
+            'description' => 'Curated description',
+            'group' => 'Curated group',
+        ])
+            ->assertOk()
+            ->assertJsonPath('permission.label', 'Curated label')
+            ->assertJsonPath('permission.name', $permission['name']);
+
+        $this->patchJson("/api/platform/permissions/{$permission['id']}", [
+            'name' => 'employees.hacked',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('permissions', [
+            'id' => $permission['id'],
+            'name' => $permission['name'],
+        ]);
+    }
+
+    public function test_non_platform_admin_cannot_curate_the_permission_catalog(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $permission = \App\Models\Permission::query()->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/platform/permissions/{$permission->id}", ['label' => 'Should not save'])
+            ->assertForbidden();
+    }
+
     public function test_super_admin_can_suspend_organization_and_cut_off_access(): void
     {
         $this->seed();

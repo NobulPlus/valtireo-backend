@@ -12,6 +12,7 @@ import {
   Mail,
   MapPin,
   MoreHorizontal,
+  Network,
   Plus,
   Search,
   Table2,
@@ -35,7 +36,8 @@ import { useSetupLookups } from '@/features/workspace/api';
 import { downloadEmployeesCsv, useEmployees, useMoveEmployeeStatus, type EmployeeFilters } from '@/features/employees/api';
 import { ApproveOnboardingModal } from '@/features/employees/ApproveOnboardingModal';
 import { ChangeStatusModal } from '@/features/employees/ChangeStatusModal';
-import { EMPLOYEE_STATUS_OPTIONS, isReadyForOnboardingApproval, statusLabel } from '@/features/employees/statusHelpers';
+import { OrgChartView } from '@/features/employees/OrgChartView';
+import { CONFIRMATION_STATUS_OPTIONS, EMPLOYEE_STATUS_OPTIONS, isReadyForOnboardingApproval, statusLabel } from '@/features/employees/statusHelpers';
 import { ApiError } from '@/lib/apiClient';
 import { cn } from '@/lib/cn';
 import type { Employee } from '@/types/api';
@@ -44,15 +46,13 @@ const BOARD_COLUMNS = [
   { status: 'draft', title: 'Draft', hint: 'Created by HR, not invited yet.' },
   { status: 'invited', title: 'Invited', hint: 'Invitation sent, waiting for acceptance.' },
   { status: 'onboarding', title: 'Onboarding', hint: 'Employee is completing profile.' },
-  { status: 'active', title: 'Active', hint: 'Approved and operating.' },
-  { status: 'probation', title: 'Probation', hint: 'Active lifecycle, under review.' },
-  { status: 'confirmed', title: 'Confirmed', hint: 'Fully confirmed employee.' },
+  { status: 'active', title: 'Active', hint: 'Approved and operating — see each card for confirmation status.' },
   { status: 'suspended', title: 'Suspended', hint: 'Temporarily restricted.' },
   { status: 'exited', title: 'Exited', hint: 'No longer active.' },
 ];
 const BOARD_BATCH_SIZE = 5;
 
-type ViewMode = 'board' | 'table';
+type ViewMode = 'board' | 'table' | 'orgChart';
 type BoardVisibleCounts = Record<string, number>;
 
 function lookupOptions<T extends { id: number; name: string }>(items: T[] | undefined, placeholder: string): SelectMenuOption[] {
@@ -91,6 +91,7 @@ function EmployeeListContent() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search);
   const [status, setStatus] = useState('');
+  const [confirmationStatus, setConfirmationStatus] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
@@ -105,18 +106,19 @@ function EmployeeListContent() {
     () => ({
       search: debouncedSearch || undefined,
       status: status || undefined,
+      confirmation_status: confirmationStatus || undefined,
       department_id: departmentId ? Number(departmentId) : undefined,
       page: viewMode === 'table' ? page : 1,
       per_page: viewMode === 'table' ? 10 : 250,
     }),
-    [debouncedSearch, status, departmentId, page, viewMode],
+    [debouncedSearch, status, confirmationStatus, departmentId, page, viewMode],
   );
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useEmployees(filters);
+  const { data, isLoading, isError, error, refetch, isFetching } = useEmployees(filters, viewMode !== 'orgChart');
 
   useEffect(() => {
     setVisibleBoardCounts(Object.fromEntries(BOARD_COLUMNS.map((column) => [column.status, BOARD_BATCH_SIZE])));
-  }, [debouncedSearch, status, departmentId]);
+  }, [debouncedSearch, status, confirmationStatus, departmentId]);
 
   async function handleExport() {
     setExporting(true);
@@ -140,19 +142,11 @@ function EmployeeListContent() {
       return;
     }
 
-    if (employee.status === 'onboarding' && ['active', 'probation', 'confirmed'].includes(targetStatus)) {
-      // Leaving onboarding needs a profile-readiness check and a starting-stage
+    if (employee.status === 'onboarding' && targetStatus === 'active') {
+      // Leaving onboarding needs a profile-readiness check and a confirmation-stage
       // choice that drag-and-drop has nowhere to collect — open the real
       // approval flow instead of letting this silently bypass it.
       setApproveTarget(employee);
-      return;
-    }
-
-    if (targetStatus === 'probation') {
-      // Moving into probation requires a probation_ends_at date, which
-      // drag-and-drop has nowhere to collect — redirect to the form that has
-      // the field instead of letting this 422.
-      toast.error('Set a probation end date', 'Use "Change status" from the employee table to move someone into probation.');
       return;
     }
 
@@ -209,6 +203,11 @@ function EmployeeListContent() {
     { key: 'designation', header: 'Designation', render: (row) => row.designation?.name ?? '—' },
     { key: 'location', header: 'Location', render: (row) => row.location?.name ?? '—' },
     { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: 'confirmation_status',
+      header: 'Confirmation',
+      render: (row) => (row.confirmation_status === 'not_applicable' ? '—' : <StatusBadge status={row.confirmation_status} />),
+    },
     {
       key: 'profile',
       header: 'Profile',
@@ -309,6 +308,18 @@ function EmployeeListContent() {
             className="sm:w-44"
           />
           <SelectMenu
+            value={confirmationStatus}
+            onChange={(value) => {
+              setConfirmationStatus(value);
+              setPage(1);
+            }}
+            options={[
+              { value: '', label: 'All confirmation stages' },
+              ...CONFIRMATION_STATUS_OPTIONS.map((option) => ({ value: option, label: statusLabel(option) })),
+            ]}
+            className="sm:w-48"
+          />
+          <SelectMenu
             value={departmentId}
             onChange={(value) => {
               setDepartmentId(value);
@@ -317,7 +328,7 @@ function EmployeeListContent() {
             options={lookupOptions(lookupsQuery.data?.departments, 'All departments')}
             className="sm:w-52"
           />
-          <div className="grid grid-cols-2 gap-1 rounded-md border border-border bg-white p-1 lg:w-24">
+          <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-surface p-1 lg:w-36">
             <button
               type="button"
               onClick={() => {
@@ -346,9 +357,26 @@ function EmployeeListContent() {
             >
               <Table2 className="h-4 w-4" />
             </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('orgChart')}
+              className={cn(
+                'flex h-7 items-center justify-center rounded text-muted transition-colors hover:bg-surface-soft hover:text-strong',
+                viewMode === 'orgChart' && 'bg-teal/10 text-teal',
+              )}
+              aria-label="Org chart view"
+            >
+              <Network className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
+        {viewMode === 'orgChart' ? (
+          <div className="p-4">
+            <OrgChartView />
+          </div>
+        ) : (
+          <>
         {isLoading && <LoadingState label="Loading employees…" />}
         {isError && <ErrorState error={error} onRetry={() => refetch()} />}
 
@@ -362,7 +390,7 @@ function EmployeeListContent() {
 
         {data && data.data.length > 0 && viewMode === 'board' && (
           <div className={cn('overflow-x-auto p-4', isFetching && 'opacity-60 transition-opacity')}>
-            <div className="grid min-w-[1180px] grid-cols-8 gap-3">
+            <div className="grid min-w-[900px] grid-cols-6 gap-3">
               {BOARD_COLUMNS.map((column) => {
                 const employees = boardGroups[column.status] ?? [];
                 const visibleCount = visibleBoardCounts[column.status] ?? BOARD_BATCH_SIZE;
@@ -382,7 +410,7 @@ function EmployeeListContent() {
                           <p className="truncate text-sm font-semibold text-strong">{column.title}</p>
                           <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-muted">{column.hint}</p>
                         </div>
-                        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-2 text-xs font-semibold text-strong">
+                        <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-surface px-2 text-xs font-semibold text-strong">
                           {employees.length}
                         </span>
                       </div>
@@ -442,6 +470,8 @@ function EmployeeListContent() {
             <Pagination meta={data.meta} onPageChange={setPage} />
           </>
         )}
+          </>
+        )}
       </Card>
 
       {statusTarget && (
@@ -475,7 +505,7 @@ function EmployeeKanbanCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cn(
-        'group rounded-md border border-border bg-white p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md',
+        'group rounded-md border border-border bg-surface p-3 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md',
         draggable && 'cursor-grab active:cursor-grabbing',
         moving && 'opacity-60',
       )}
@@ -515,6 +545,7 @@ function EmployeeKanbanCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <StatusBadge status={employee.status} />
+        {employee.confirmation_status !== 'not_applicable' && <StatusBadge status={employee.confirmation_status} />}
         {employee.profile && <StatusBadge status={employee.profile.completion_status} />}
       </div>
     </article>

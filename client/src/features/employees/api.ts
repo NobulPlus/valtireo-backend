@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiClient } from '@/lib/apiClient';
-import type { CreateEmployeePayload, CreateEmployeeResponse, Employee, Paginated } from '@/types/api';
+import type { CreateEmployeePayload, CreateEmployeeResponse, Employee, OrgChartNode, Paginated } from '@/types/api';
 
 interface ResourceEnvelope<T> {
   data: T;
@@ -9,6 +9,7 @@ interface ResourceEnvelope<T> {
 export interface EmployeeFilters {
   search?: string;
   status?: string;
+  confirmation_status?: string;
   department_id?: number;
   unit_id?: number;
   designation_id?: number;
@@ -65,6 +66,15 @@ export function useEmployees(filters: EmployeeFilters, enabled = true) {
   });
 }
 
+export function useOrgChart(enabled = true) {
+  return useQuery({
+    queryKey: ['employees', 'org-chart'],
+    queryFn: () => api.get<{ employees: OrgChartNode[] }>('/employees/org-chart'),
+    enabled,
+    select: (response) => response.employees,
+  });
+}
+
 export function useEmployee(id: number | string | undefined) {
   return useQuery({
     queryKey: ['employees', id],
@@ -92,6 +102,7 @@ export interface UpdateEmployeePayload {
   phone?: string | null;
   department_id?: number | null;
   unit_id?: number | null;
+  cluster_id?: number | null;
   designation_id?: number | null;
   employment_type_id?: number | null;
   organization_location_id?: number | null;
@@ -155,8 +166,8 @@ export function useApproveOnboarding(employeeId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: {
-      new_status: 'active' | 'probation' | 'confirmed';
-      /** Required when new_status is "probation" — powers the probation review reminder. */
+      confirmation_status: 'not_applicable' | 'probation' | 'confirmed';
+      /** Required when confirmation_status is "probation" — powers the probation review reminder. */
       probation_ends_at?: string;
     }) => api.patch<{ employee: Employee }>(`/employees/${employeeId}/approve-onboarding`, payload),
     onSuccess: () => {
@@ -183,11 +194,12 @@ export function useChangeEmployeeStatus(employeeId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: {
-      new_status: string;
+      new_status?: string;
+      new_confirmation_status?: string;
       effective_date: string;
       reason?: string;
       note?: string;
-      /** Required when new_status is "probation" — powers the probation review reminder. */
+      /** Required when new_confirmation_status is "probation" — powers the probation review reminder. */
       probation_ends_at?: string;
     }) => api.post(`/employees/${employeeId}/status-history`, payload),
     onSuccess: () => {

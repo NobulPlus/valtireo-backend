@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Valtireo</title>
+    <script>
+      // Applies a saved theme choice before first paint, so there's no flash
+      // of the wrong theme. Absent or 'system' leaves no attribute — the
+      // prefers-color-scheme media query in index.css handles that case.
+      // Must mirror context/ThemeContext.tsx's storage key and value set.
+      (function () {
+        try {
+          var stored = localStorage.getItem('valtireo-theme');
+          if (stored === 'light' || stored === 'dark') {
+            document.documentElement.setAttribute('data-theme', stored);
+          }
+        } catch (error) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

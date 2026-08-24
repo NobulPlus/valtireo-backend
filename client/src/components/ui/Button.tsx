@@ -12,9 +12,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<Variant, string> = {
-  primary: 'bg-[var(--workspace-button,var(--color-pine))] text-white hover:brightness-95 focus-visible:outline-pine',
+  primary:
+    'bg-[var(--workspace-button,var(--color-pine))] text-[rgb(var(--workspace-button-fg,255_255_255))] hover:brightness-95 focus-visible:outline-pine',
   secondary:
-    'bg-white text-strong border border-border hover:bg-surface-soft focus-visible:outline-teal',
+    'bg-surface text-strong border border-border hover:bg-surface-soft focus-visible:outline-teal',
   ghost: 'bg-transparent text-muted hover:bg-surface-soft hover:text-strong',
   danger: 'bg-danger text-white hover:opacity-90 focus-visible:outline-danger',
   onHero: 'bg-white/10 text-white border border-white/20 hover:bg-white/15 focus-visible:outline-white',

@@ -25,7 +25,7 @@ class ApprovalWorkflowService
 
             $this->replaceSteps($workflow, $steps);
 
-            return $workflow->load('steps');
+            return $workflow->load('steps.approverRole');
         });
     }
 
@@ -45,7 +45,7 @@ class ApprovalWorkflowService
                 $this->replaceSteps($workflow, $steps);
             }
 
-            return $workflow->refresh()->load('steps');
+            return $workflow->refresh()->load('steps.approverRole');
         });
     }
 

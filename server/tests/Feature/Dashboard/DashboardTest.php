@@ -2,8 +2,13 @@
 
 namespace Tests\Feature\Dashboard;
 
+use App\Models\ApprovalRequest;
+use App\Models\AttendanceRecord;
 use App\Models\Department;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\LeaveType;
+use App\Models\OrganizationLocation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -28,6 +33,10 @@ class DashboardTest extends TestCase
                 'onboarding' => ['pending_profiles', 'submitted_profiles', 'approved_profiles', 'pending_invitations', 'accepted_invitations', 'expired_invitations'],
                 'structure' => ['departments', 'units', 'locations', 'designations', 'grade_levels', 'employment_types'],
                 'modules' => ['available', 'active', 'locked'],
+                'approvals' => ['pending', 'needs_attention'],
+                'leave' => ['pending', 'upcoming'],
+                'attendance' => ['present', 'late', 'absent'],
+                'documents' => ['missing', 'expiring_soon', 'expired'],
                 'breakdowns' => ['by_department', 'by_location', 'by_employment_type', 'by_designation', 'by_status'],
                 'trends' => ['onboarding'],
                 'recent' => ['employees', 'invitations'],
@@ -35,6 +44,110 @@ class DashboardTest extends TestCase
             ])
             ->assertJsonStructure(['trends' => ['onboarding' => ['grain', 'label', 'date_from', 'date_to', 'entries' => [['key', 'label', 'created', 'invited', 'submitted', 'activated', 'completion_rate']]]]])
             ->assertJsonPath('setup_completion.percentage', 100);
+    }
+
+    public function test_organization_dashboard_reflects_approvals_leave_and_attendance_counts(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('employee_number', 'EMP-FIN-001')->firstOrFail();
+        $leaveType = LeaveType::query()->where('organization_id', $admin->organization_id)->firstOrFail();
+
+        Sanctum::actingAs($admin);
+        $baseline = $this->getJson('/api/dashboard/organization')->json();
+
+        ApprovalRequest::query()->create([
+            'organization_id' => $admin->organization_id,
+            'subject_employee_id' => $employee->id,
+            'approvable_type' => 'App\\Models\\LeaveRequest',
+            'approvable_id' => 1,
+            'module' => 'leave',
+            'action' => 'request',
+            'title' => 'Test approval',
+            'status' => 'pending',
+        ]);
+
+        LeaveRequest::query()->create([
+            'organization_id' => $admin->organization_id,
+            'employee_id' => $employee->id,
+            'leave_type_id' => $leaveType->id,
+            'starts_on' => now()->addDays(2)->toDateString(),
+            'ends_on' => now()->addDays(3)->toDateString(),
+            'total_days' => 2,
+            'status' => 'submitted',
+        ]);
+
+        AttendanceRecord::query()->updateOrCreate(
+            ['employee_id' => $employee->id, 'attendance_date' => now()->toDateString()],
+            ['organization_id' => $admin->organization_id, 'status' => 'late'],
+        );
+
+        $this->getJson('/api/dashboard/organization')
+            ->assertOk()
+            ->assertJsonPath('approvals.pending', $baseline['approvals']['pending'] + 1)
+            ->assertJsonPath('leave.pending', $baseline['leave']['pending'] + 1)
+            ->assertJsonPath('attendance.late', $baseline['attendance']['late'] + 1);
+    }
+
+    public function test_organization_dashboard_breakdowns_include_locations_with_no_employees_yet(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+
+        OrganizationLocation::query()->where('organization_id', $admin->organization_id)->update(['is_primary' => false]);
+        $primary = OrganizationLocation::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Kano Branch',
+            'code' => 'KANO',
+            'type' => 'branch',
+            'is_primary' => true,
+            'is_active' => true,
+        ]);
+        $empty = OrganizationLocation::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Port Harcourt Branch',
+            'code' => 'PHC',
+            'type' => 'branch',
+            'is_primary' => false,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->getJson('/api/dashboard/organization')->assertOk();
+        $locations = collect($response->json('breakdowns.by_location'));
+
+        $emptyEntry = $locations->firstWhere('id', $empty->id);
+        $this->assertNotNull($emptyEntry, 'A location with zero employees should still appear on the dashboard.');
+        $this->assertSame(0, $emptyEntry['total']);
+        $this->assertSame($primary->id, $locations->first()['id'], 'The primary location should be sorted first.');
+        $this->assertTrue($locations->first()['is_primary']);
+    }
+
+    public function test_deactivated_locations_are_excluded_from_structure_counts_and_breakdowns(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $before = $this->getJson('/api/dashboard/organization')->assertOk();
+        $baselineCount = $before->json('structure.locations');
+
+        $inactive = OrganizationLocation::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Retired Branch',
+            'code' => 'RETIRED',
+            'type' => 'branch',
+            'is_active' => false,
+        ]);
+
+        $response = $this->getJson('/api/dashboard/organization')->assertOk();
+
+        $this->assertSame($baselineCount, $response->json('structure.locations'), 'Deactivated locations should not inflate the structure count.');
+        $this->assertNull(collect($response->json('breakdowns.by_location'))->firstWhere('id', $inactive->id), 'Deactivated locations should not appear in the dashboard breakdown.');
     }
 
     public function test_organization_dashboard_shows_daily_onboarding_trend_for_a_short_date_range(): void

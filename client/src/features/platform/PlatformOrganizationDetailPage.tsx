@@ -157,7 +157,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
             </Button>
             <Link
               to="/platform"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-white px-3 text-sm font-medium text-strong hover:bg-surface-soft"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-3 text-sm font-medium text-strong hover:bg-surface-soft"
             >
               <ArrowLeft className="h-4 w-4" />
               Back

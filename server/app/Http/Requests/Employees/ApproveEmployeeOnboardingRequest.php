@@ -18,9 +18,9 @@ class ApproveEmployeeOnboardingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'new_status' => ['required', Rule::in(['active', 'probation', 'confirmed'])],
+            'confirmation_status' => ['required', Rule::in(['not_applicable', 'probation', 'confirmed'])],
             'probation_ends_at' => [
-                Rule::requiredIf($this->input('new_status') === 'probation'),
+                Rule::requiredIf($this->input('confirmation_status') === 'probation'),
                 'nullable',
                 'date',
                 'after:today',

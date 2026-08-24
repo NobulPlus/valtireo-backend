@@ -149,7 +149,7 @@ export function SelectMenu({
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          'inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-white px-3 text-left text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal disabled:bg-surface-soft disabled:text-muted',
+          'inline-flex h-9 w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 text-left text-sm text-strong shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors hover:bg-surface-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal disabled:bg-surface-soft disabled:text-muted',
           invalid && 'border-danger focus-visible:outline-danger',
         )}
       >
@@ -174,10 +174,10 @@ export function SelectMenu({
               width: position.width,
               maxHeight: position.maxHeight,
             }}
-            className="z-[60] overflow-y-auto rounded-lg border border-border bg-white p-1.5 shadow-xl"
+            className="z-[60] overflow-y-auto rounded-lg border border-border bg-surface p-1.5 shadow-xl"
           >
             {searchable && (
-              <div className="sticky top-0 z-10 mb-1.5 bg-white pb-1.5">
+              <div className="sticky top-0 z-10 mb-1.5 bg-surface pb-1.5">
                 <input
                   autoFocus
                   value={query}

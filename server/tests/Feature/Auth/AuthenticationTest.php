@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -84,6 +85,23 @@ class AuthenticationTest extends TestCase
                 'modules',
                 'has_manager_scope',
             ]);
+    }
+
+    public function test_session_reflects_the_employees_uploaded_passport_photo(): void
+    {
+        Storage::fake('public');
+        $this->seed();
+
+        $withoutPhoto = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($withoutPhoto);
+        $this->getJson('/api/auth/me')->assertOk()->assertJsonPath('user.photo_url', null);
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $employeeUser->employee->profile()->update(['passport_photo_path' => 'employees/3/passport.jpg']);
+
+        Sanctum::actingAs($employeeUser);
+        $response = $this->getJson('/api/auth/me')->assertOk();
+        $this->assertStringContainsString('employees/3/passport.jpg', $response->json('user.photo_url'));
     }
 
     public function test_session_has_manager_scope_false_for_organization_admin_without_employee_record(): void

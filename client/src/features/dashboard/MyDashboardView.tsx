@@ -1,8 +1,24 @@
-import { AlertCircle, Briefcase, CalendarClock } from 'lucide-react';
+import { AlertCircle, Blocks, Briefcase, CalendarClock, Timer } from 'lucide-react';
 import { useMyDashboard } from '@/features/dashboard/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { cn } from '@/lib/cn';
+
+function formatTime(value: string | null | undefined): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatDate(value: string): string {
+  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(
+    new Date(`${dateOnly ? dateOnly[1] : value}T00:00:00`),
+  );
+}
 
 export function MyDashboardView() {
   const { data, isLoading, isError, error, refetch } = useMyDashboard();
@@ -66,6 +82,11 @@ export function MyDashboardView() {
             <CardTitle className="flex items-center gap-2">
               <CalendarClock className="h-4 w-4" /> Leave balance
             </CardTitle>
+            {data.leave && (data.leave.pending_requests > 0 || data.leave.approved_requests > 0) && (
+              <p className="text-xs text-muted">
+                {data.leave.pending_requests} pending &middot; {data.leave.approved_requests} approved
+              </p>
+            )}
           </CardHeader>
           <CardBody>
             {data.leave && data.leave.balances.length > 0 ? (
@@ -81,6 +102,62 @@ export function MyDashboardView() {
               </ul>
             ) : (
               <p className="text-sm text-muted">No leave entitlements set up yet.</p>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Timer className="h-4 w-4" /> My attendance
+            </CardTitle>
+            {data.attendance && data.attendance.corrections_pending > 0 && (
+              <p className="text-xs text-muted">{data.attendance.corrections_pending} correction(s) pending</p>
+            )}
+          </CardHeader>
+          <CardBody className="p-0">
+            {data.attendance && data.attendance.recent_records.length > 0 ? (
+              <ul className="divide-y divide-border">
+                {data.attendance.recent_records.map((record) => (
+                  <li key={record.id} className="flex items-center justify-between px-5 py-2.5 text-sm">
+                    <span className="font-medium text-strong">{formatDate(record.attendance_date)}</span>
+                    <span className="text-muted">
+                      {formatTime(record.check_in_at)} → {formatTime(record.check_out_at)}
+                    </span>
+                    <StatusBadge status={record.status} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="px-5 py-6 text-sm text-muted">No attendance records yet.</p>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Blocks className="h-4 w-4" /> My modules
+            </CardTitle>
+          </CardHeader>
+          <CardBody>
+            {data.modules.length > 0 ? (
+              <ul className="flex flex-wrap gap-2">
+                {data.modules.map((module) => (
+                  <li
+                    key={module.key}
+                    className={cn(
+                      'rounded-full px-3 py-1 text-xs font-medium',
+                      module.can_access ? 'bg-teal-light text-pine' : 'bg-surface-soft text-muted',
+                    )}
+                    title={module.description ?? undefined}
+                  >
+                    {module.name}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted">No modules assigned yet.</p>
             )}
           </CardBody>
         </Card>

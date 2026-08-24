@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ApprovalRequest;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
@@ -26,6 +27,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class DashboardService
 {
+    public function __construct(private readonly DocumentComplianceService $documentCompliance)
+    {
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -49,9 +54,13 @@ class DashboardService
             'onboarding' => $this->onboardingMetrics($organization, $filters),
             'structure' => $this->structureMetrics($organization),
             'modules' => $this->moduleMetrics($organization),
+            'approvals' => $this->approvalsSummary($organization),
+            'leave' => $this->leaveSummary($organization),
+            'attendance' => $this->attendanceSummary($organization),
+            'documents' => $this->documentsSummary($user),
             'breakdowns' => [
                 'by_department' => $this->breakdown($organization, $filters, Department::class, 'department_id'),
-                'by_location' => $this->breakdown($organization, $filters, OrganizationLocation::class, 'organization_location_id'),
+                'by_location' => $this->breakdown($organization, $filters, OrganizationLocation::class, 'organization_location_id', ['is_primary']),
                 'by_employment_type' => $this->breakdown($organization, $filters, EmploymentType::class, 'employment_type_id'),
                 'by_designation' => $this->breakdown($organization, $filters, Designation::class, 'designation_id'),
                 'by_status' => $this->statusBreakdown($organization, $filters),
@@ -389,12 +398,74 @@ class DashboardService
     private function structureMetrics(Organization $organization): array
     {
         return [
-            'departments' => Department::query()->where('organization_id', $organization->id)->count(),
-            'units' => Unit::query()->where('organization_id', $organization->id)->count(),
-            'locations' => OrganizationLocation::query()->where('organization_id', $organization->id)->count(),
-            'designations' => Designation::query()->where('organization_id', $organization->id)->count(),
-            'grade_levels' => GradeLevel::query()->where('organization_id', $organization->id)->count(),
-            'employment_types' => EmploymentType::query()->where('organization_id', $organization->id)->count(),
+            'departments' => Department::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'units' => Unit::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'locations' => OrganizationLocation::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'designations' => Designation::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'grade_levels' => GradeLevel::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'employment_types' => EmploymentType::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function approvalsSummary(Organization $organization): array
+    {
+        $query = ApprovalRequest::query()->where('organization_id', $organization->id);
+
+        return [
+            'pending' => (clone $query)->where('status', 'pending')->count(),
+            'needs_attention' => (clone $query)->whereIn('status', ['rejected', 'changes_requested'])->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function leaveSummary(Organization $organization): array
+    {
+        $query = LeaveRequest::query()->where('organization_id', $organization->id);
+        $today = now()->toDateString();
+        $weekAhead = now()->addDays(7)->toDateString();
+
+        return [
+            'pending' => (clone $query)->where('status', 'submitted')->count(),
+            'upcoming' => (clone $query)
+                ->where('status', 'approved')
+                ->whereDate('starts_on', '>=', $today)
+                ->whereDate('starts_on', '<=', $weekAhead)
+                ->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function attendanceSummary(Organization $organization): array
+    {
+        $query = AttendanceRecord::query()
+            ->where('organization_id', $organization->id)
+            ->whereDate('attendance_date', now()->toDateString());
+
+        return [
+            'present' => (clone $query)->where('status', 'present')->count(),
+            'late' => (clone $query)->where('status', 'late')->count(),
+            'absent' => (clone $query)->where('status', 'absent')->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function documentsSummary(User $user): array
+    {
+        $summary = $this->documentCompliance->compliance($user)['summary'];
+
+        return [
+            'missing' => $summary['missing'],
+            'expiring_soon' => $summary['expiring_soon'],
+            'expired' => $summary['expired'],
         ];
     }
 
@@ -419,7 +490,15 @@ class DashboardService
      *
      * @return array<int, array<string, mixed>>
      */
-    private function breakdown(Organization $organization, array $filters, string $model, string $foreignKey): array
+    /**
+     * Every active lookup row is included regardless of headcount — a
+     * freshly-added location or employment type with nobody assigned yet
+     * still needs to show up (as a 0) rather than silently vanish from the
+     * dashboard until someone happens to be assigned to it.
+     *
+     * @param array<int, string> $extraColumns
+     */
+    private function breakdown(Organization $organization, array $filters, string $model, string $foreignKey, array $extraColumns = []): array
     {
         $counts = $this->employeeQuery($organization, $filters)
             ->selectRaw("{$foreignKey}, count(*) as total")
@@ -427,19 +506,31 @@ class DashboardService
             ->groupBy($foreignKey)
             ->pluck('total', $foreignKey);
 
-        return $model::query()
+        $entries = $model::query()
             ->where('organization_id', $organization->id)
-            ->whereIn('id', $counts->keys())
+            ->where('is_active', true)
             ->orderBy('name')
-            ->get(['id', 'code', 'name'])
-            ->map(fn ($item) => [
-                'id' => $item->id,
-                'code' => $item->code,
-                'name' => $item->name,
-                'total' => (int) $counts->get($item->id, 0),
-            ])
-            ->values()
-            ->all();
+            ->get(array_merge(['id', 'code', 'name'], $extraColumns))
+            ->map(function ($item) use ($counts, $extraColumns) {
+                $entry = [
+                    'id' => $item->id,
+                    'code' => $item->code,
+                    'name' => $item->name,
+                    'total' => (int) $counts->get($item->id, 0),
+                ];
+
+                foreach ($extraColumns as $column) {
+                    $entry[$column] = $item->{$column};
+                }
+
+                return $entry;
+            });
+
+        if (in_array('is_primary', $extraColumns, true)) {
+            $entries = $entries->sortByDesc('is_primary')->values();
+        }
+
+        return $entries->all();
     }
 
     /**

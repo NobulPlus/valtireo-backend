@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BadgeCheck,
   BarChart3,
+  Bell,
   Building2,
   CalendarCheck2,
   CalendarClock,
@@ -10,6 +11,7 @@ import {
   FileStack,
   Gauge,
   ListChecks,
+  Network,
   ScrollText,
   Settings,
   ShieldPlus,
@@ -29,6 +31,8 @@ export interface NavItem {
   platformAdminOnly?: boolean;
   /** Module key required to see this item (hidden entirely if not entitled). */
   moduleKey?: string;
+  /** Org-level "employee experience" toggle required to see this item — mirrors `WorkspaceSettings.employee_experience`. */
+  employeeExperienceKey?: 'show_org_chart' | 'allow_employee_directory';
   /** Screens not yet built in this pass — shown for roadmap context, disabled. */
   comingSoon?: boolean;
 }
@@ -61,6 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Valtireo console', to: '/platform', icon: ShieldCheck, platformAdminOnly: true },
       { label: 'Dashboard', to: '/dashboard', icon: Gauge },
+      { label: 'Notifications', to: '/notifications', icon: Bell },
     ],
   },
   {
@@ -70,6 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My profile', to: '/me/profile', icon: UserRound },
       { label: 'My leave', to: '/me/leave', icon: CalendarCheck2 },
       { label: 'My attendance', to: '/me/attendance', icon: Clock },
+      { label: 'Org chart', to: '/me/org-chart', icon: Network, employeeExperienceKey: 'show_org_chart' },
     ],
   },
   {

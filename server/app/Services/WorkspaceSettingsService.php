@@ -26,7 +26,11 @@ class WorkspaceSettingsService
      */
     public function update(Organization $organization, array $settings): array
     {
+        $name = $settings['name'] ?? null;
+        unset($settings['name']);
+
         $organization->update([
+            ...($name !== null ? ['name' => $name] : []),
             'settings' => array_replace_recursive($this->settings($organization), $settings),
         ]);
 
@@ -51,6 +55,7 @@ class WorkspaceSettingsService
                 'logo_url' => null,
                 'favicon_url' => null,
                 'login_background_url' => null,
+                'short_name' => null,
                 'welcome_message' => 'Welcome to your Valtireo workspace.',
                 'support_email' => null,
             ],

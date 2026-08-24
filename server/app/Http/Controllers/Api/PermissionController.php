@@ -19,7 +19,12 @@ class PermissionController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
-        abort_unless($request->user()->can('roles.create') || $request->user()->can('roles.update'), 403);
+        abort_unless(
+            $request->user()->is_platform_admin
+                || $request->user()->can('roles.create')
+                || $request->user()->can('roles.update'),
+            403
+        );
 
         $permissions = Permission::query()
             ->orderBy('group')

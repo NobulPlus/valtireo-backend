@@ -87,6 +87,43 @@ class WorkspaceSettingsTest extends TestCase
         $this->assertSame('#0F766E', $organization->settings['theme']['primary_color']);
     }
 
+    public function test_admin_can_rename_the_organization(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/workspace/settings', [
+            'name' => 'Valtireo Holdings Ltd',
+        ])
+            ->assertOk()
+            ->assertJsonPath('workspace.workspace_name', 'Valtireo Holdings Ltd');
+
+        $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
+        $this->assertSame('Valtireo Holdings Ltd', $organization->name);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('organization.name', 'Valtireo Holdings Ltd');
+    }
+
+    public function test_admin_can_set_a_short_name_shown_beside_the_sidebar_logo(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/workspace/settings', [
+            'name' => 'Valtireo Holdings Ltd',
+            'identity' => ['short_name' => 'Valtireo'],
+        ])
+            ->assertOk()
+            ->assertJsonPath('workspace.workspace_name', 'Valtireo Holdings Ltd')
+            ->assertJsonPath('workspace.identity.short_name', 'Valtireo');
+    }
+
     public function test_employee_cannot_update_workspace_settings(): void
     {
         $this->seed();

@@ -46,7 +46,7 @@ export function Dropdown({ trigger, children, align = 'right', panelClassName }:
       {open && (
         <div
           className={cn(
-            'absolute z-20 mt-2 min-w-[190px] rounded-md border border-border bg-white py-1 shadow-lg',
+            'absolute z-20 mt-2 min-w-[190px] rounded-md border border-border bg-surface py-1 shadow-lg',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}
