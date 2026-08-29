@@ -156,6 +156,92 @@ class EmployeeListingTest extends TestCase
         $this->getJson('/api/employees/org-chart')->assertOk();
     }
 
+    public function test_directory_access_for_an_ordinary_employee_follows_the_allow_employee_directory_setting(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+
+        Sanctum::actingAs($admin);
+        $this->patchJson('/api/workspace/settings', [
+            'employee_experience' => ['allow_employee_directory' => false],
+        ])->assertOk();
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->getJson('/api/employees/directory')->assertForbidden();
+
+        Sanctum::actingAs($admin);
+        $this->patchJson('/api/workspace/settings', [
+            'employee_experience' => ['allow_employee_directory' => true],
+        ])->assertOk();
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->getJson('/api/employees/directory')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => ['id', 'full_name', 'employee_number', 'work_email', 'phone', 'department', 'unit', 'designation', 'location'],
+                ],
+                'meta',
+            ]);
+    }
+
+    public function test_directory_defaults_to_the_viewers_own_department_and_can_be_widened(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ownDepartment = $employeeUser->employee->department_id;
+
+        Sanctum::actingAs($employeeUser);
+
+        $default = $this->getJson('/api/employees/directory')->assertOk();
+        $default->assertJsonPath('scope.department_id', $ownDepartment);
+        $default->assertJsonPath('scope.viewer_department_id', $ownDepartment);
+        foreach ($default->json('data') as $row) {
+            $this->assertSame($ownDepartment, $row['department']['id']);
+        }
+
+        $hrDepartment = Department::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('code', 'HR')
+            ->firstOrFail();
+
+        $scoped = $this->getJson("/api/employees/directory?department_id={$hrDepartment->id}")->assertOk();
+        $scoped->assertJsonPath('scope.department_id', $hrDepartment->id);
+        foreach ($scoped->json('data') as $row) {
+            $this->assertSame($hrDepartment->id, $row['department']['id']);
+        }
+
+        $all = $this->getJson('/api/employees/directory?department_id=all')->assertOk();
+        $all->assertJsonPath('scope.department_id', null);
+        $this->assertGreaterThan(count($default->json('data')), count($all->json('data')));
+    }
+
+    public function test_org_chart_for_an_ordinary_employee_is_scoped_to_their_own_department(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+        $this->patchJson('/api/workspace/settings', [
+            'employee_experience' => ['show_org_chart' => true],
+        ])->assertOk();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ownDepartment = $employeeUser->employee->department_id;
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $scoped = $this->getJson('/api/employees/org-chart')->assertOk();
+        foreach ($scoped->json('employees') as $node) {
+            $this->assertSame($ownDepartment, $node['department']['id']);
+        }
+
+        Sanctum::actingAs($admin);
+        $full = $this->getJson('/api/employees/org-chart')->assertOk();
+        $this->assertGreaterThan(count($scoped->json('employees')), count($full->json('employees')));
+    }
+
     public function test_hr_admin_can_export_filtered_employee_csv(): void
     {
         $this->seed();
@@ -236,8 +322,6 @@ class EmployeeListingTest extends TestCase
                         'residential_address',
                         'next_of_kin_name',
                         'next_of_kin_phone',
-                        'emergency_contact_name',
-                        'emergency_contact_phone',
                         'completion_status',
                         'passport_photo_url',
                     ],
@@ -263,15 +347,12 @@ class EmployeeListingTest extends TestCase
                 'residential_address' => '24 Marina Road, Lagos',
                 'next_of_kin_name' => 'Tunde Yusuf',
                 'next_of_kin_phone' => '08030000000',
-                'emergency_contact_name' => 'Amina Yusuf',
-                'emergency_contact_phone' => '08031111111',
             ],
         ])
             ->assertOk()
             ->assertJsonPath('data.profile.gender', 'female')
             ->assertJsonPath('data.profile.personal_email', 'mariam.personal@example.com')
-            ->assertJsonPath('data.profile.next_of_kin_name', 'Tunde Yusuf')
-            ->assertJsonPath('data.profile.emergency_contact_phone', '08031111111');
+            ->assertJsonPath('data.profile.next_of_kin_name', 'Tunde Yusuf');
     }
 
     public function test_employee_role_cannot_view_other_employee_detail(): void

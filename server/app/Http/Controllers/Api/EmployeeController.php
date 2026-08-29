@@ -9,6 +9,7 @@ use App\Http\Requests\Employees\StoreEmployeeRequest;
 use App\Http\Requests\Employees\UpdateEmployeeProfileRequest;
 use App\Models\Employee;
 use App\Models\Role;
+use App\Http\Resources\EmployeeDirectoryResource;
 use App\Http\Resources\EmployeeProfileResource;
 use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\UserResource;
@@ -45,21 +46,30 @@ class EmployeeController extends Controller
      * permission check the approval chain uses) rather than left for the
      * frontend to infer from a role name, since a department head can be
      * any custom role that happens to carry that permission.
+     *
+     * An ordinary employee (no `employees.view`) only ever sees their own
+     * department's structure — not the rest of the organization. Admins
+     * keep the full, org-wide chart they already get on the Employees page.
      */
     public function orgChart(Request $request, WorkspaceSettingsService $workspace): JsonResponse
     {
         $organization = $request->user()->organization;
         $showOrgChartToEveryone = $organization
             && ($workspace->forOrganization($organization)['employee_experience']['show_org_chart'] ?? false);
+        $canViewAllEmployees = $request->user()->can('employees.view');
 
         abort_unless(
-            $request->user()->can('employees.view') || ($showOrgChartToEveryone && $request->user()->employee),
+            $canViewAllEmployees || ($showOrgChartToEveryone && $request->user()->employee),
             403
         );
 
         $employees = Employee::query()
             ->where('organization_id', $request->user()->organization_id)
             ->where('status', 'active')
+            ->when(
+                ! $canViewAllEmployees,
+                fn (Builder $query) => $query->where('department_id', $request->user()->employee->department_id)
+            )
             ->with(['department:id,code,name', 'designation:id,name', 'user.roles'])
             ->orderBy('first_name')
             ->get();
@@ -82,6 +92,63 @@ class EmployeeController extends Controller
         ]);
 
         return response()->json(['employees' => $nodes->values()]);
+    }
+
+    /**
+     * Read-only colleague directory for ordinary employees — deliberately
+     * returns only work-facing contact/org fields (never salary, dates of
+     * birth, grade level, etc.), gated by the org's `allow_employee_directory`
+     * setting the same way `orgChart()` is gated by `show_org_chart`.
+     *
+     * Defaults to the viewer's own department when no `department_id` is
+     * given, so an ordinary employee lands on "people near them" rather than
+     * the whole organization — `department_id=all` (or any other department
+     * id) opts back out of that default.
+     */
+    public function directory(Request $request, WorkspaceSettingsService $workspace): AnonymousResourceCollection
+    {
+        $organization = $request->user()->organization;
+        $directoryEnabled = $organization
+            && ($workspace->forOrganization($organization)['employee_experience']['allow_employee_directory'] ?? false);
+
+        abort_unless(
+            $request->user()->can('employees.view') || ($directoryEnabled && $request->user()->employee),
+            403
+        );
+
+        $viewerDepartmentId = $request->user()->employee?->department_id;
+        $requestedDepartmentId = $request->string('department_id')->toString();
+
+        $departmentId = match (true) {
+            $requestedDepartmentId === 'all' => null,
+            $requestedDepartmentId !== '' => (int) $requestedDepartmentId,
+            default => $viewerDepartmentId,
+        };
+
+        $perPage = min(max($request->integer('per_page', 20), 1), 100);
+
+        $employees = Employee::query()
+            ->where('organization_id', $request->user()->organization_id)
+            ->where('status', 'active')
+            ->with(['department:id,code,name', 'unit:id,name', 'designation:id,name', 'location:id,name'])
+            ->when($request->string('search')->toString(), function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query
+                        ->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('work_email', 'like', "%{$search}%");
+                });
+            })
+            ->when($departmentId, fn (Builder $query, int $id) => $query->where('department_id', $id))
+            ->orderBy('first_name')
+            ->paginate($perPage);
+
+        return EmployeeDirectoryResource::collection($employees)->additional([
+            'scope' => [
+                'department_id' => $departmentId,
+                'viewer_department_id' => $viewerDepartmentId,
+            ],
+        ]);
     }
 
     public function export(Request $request): StreamedResponse
@@ -249,8 +316,6 @@ class EmployeeController extends Controller
             'profile.residential_address' => ['nullable', 'string', 'max:1000'],
             'profile.next_of_kin_name' => ['nullable', 'string', 'max:255'],
             'profile.next_of_kin_phone' => ['nullable', 'string', 'max:50'],
-            'profile.emergency_contact_name' => ['nullable', 'string', 'max:255'],
-            'profile.emergency_contact_phone' => ['nullable', 'string', 'max:50'],
         ]);
 
         $profileData = $data['profile'] ?? null;

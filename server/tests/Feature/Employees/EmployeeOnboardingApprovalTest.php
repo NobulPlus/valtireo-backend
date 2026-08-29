@@ -4,7 +4,9 @@ namespace Tests\Feature\Employees;
 
 use App\Models\Department;
 use App\Models\Designation;
+use App\Models\DocumentRequirement;
 use App\Models\Employee;
+use App\Models\EmployeeDocument;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\Organization;
@@ -202,6 +204,122 @@ class EmployeeOnboardingApprovalTest extends TestCase
             ->assertJsonValidationErrors(['employee']);
     }
 
+    public function test_onboarding_approval_requires_important_biodata(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $response = $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-APPROVE-011',
+            'work_email' => 'approval-missing-biodata@valtireo.test',
+        ]));
+        $response->assertCreated();
+
+        $employee = Employee::query()->findOrFail($response->json('employee.id'));
+        $employee->update(['status' => 'onboarding']);
+        $employee->profile()->update(['completion_status' => 'submitted']);
+        $this->satisfyDocumentRequirements($employee);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['employee'])
+            ->assertJsonPath('errors.employee.0', 'Cannot activate employee. Important biodata is missing. Review the employee biodata before activation.');
+    }
+
+    public function test_onboarding_approval_is_blocked_by_a_missing_or_unsigned_required_document(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        // Deliberately skip satisfyDocumentRequirements() — nothing on file yet.
+        $response = $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-APPROVE-010',
+            'work_email' => 'approval-missing-docs@valtireo.test',
+        ]));
+        $response->assertCreated();
+        $employee = Employee::query()->findOrFail($response->json('employee.id'));
+        $employee->update(['status' => 'onboarding']);
+        $employee->profile()->update([
+            'date_of_birth' => '1994-05-12',
+            'gender' => 'female',
+            'residential_address' => '24 Operations Street',
+            'next_of_kin_name' => 'Grace Adeyemi',
+            'next_of_kin_phone' => '08030000002',
+        ]);
+        $employee->emergencyContacts()->create([
+            'organization_id' => $employee->organization_id,
+            'name' => 'Grace Adeyemi',
+            'relationship' => 'Sister',
+            'phone' => '08030000003',
+            'is_primary' => true,
+        ]);
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['employee']);
+
+        $this->assertDatabaseHas('employees', ['id' => $employee->id, 'status' => 'onboarding']);
+
+        // Satisfying the contract but leaving it unsigned still blocks — the
+        // HR-provided contract sits at "awaiting_signature" until the
+        // employee's signed copy is reviewed and approved.
+        $contractType = \App\Models\DocumentType::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('code', 'EMP-CONTRACT')
+            ->firstOrFail();
+        $contractRequirement = DocumentRequirement::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('document_type_id', $contractType->id)
+            ->firstOrFail();
+        $contractDocument = \App\Models\EmployeeDocument::query()->create([
+            'organization_id' => $employee->organization_id,
+            'employee_id' => $employee->id,
+            'document_type_id' => $contractType->id,
+            'document_requirement_id' => $contractRequirement->id,
+            'title' => 'Employment Contract',
+            'file_name' => 'contract.pdf',
+            'file_path' => 'test/contract.pdf',
+            'status' => 'awaiting_signature',
+            'submitted_at' => now(),
+        ]);
+        $govIdType = \App\Models\DocumentType::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('code', 'GOV-ID')
+            ->firstOrFail();
+        $govIdRequirement = DocumentRequirement::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('document_type_id', $govIdType->id)
+            ->firstOrFail();
+        \App\Models\EmployeeDocument::query()->create([
+            'organization_id' => $employee->organization_id,
+            'employee_id' => $employee->id,
+            'document_type_id' => $govIdType->id,
+            'document_requirement_id' => $govIdRequirement->id,
+            'title' => 'Government ID',
+            'file_name' => 'id.pdf',
+            'file_path' => 'test/id.pdf',
+            'expires_at' => now()->addYear(),
+            'status' => 'approved',
+            'submitted_at' => now(),
+        ]);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['employee']);
+
+        // Once the employee's signed copy is reviewed and approved, approval goes through.
+        $contractDocument->update(['status' => 'approved']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
+            ->assertOk()
+            ->assertJsonPath('employee.status', 'active');
+    }
+
     public function test_employee_must_be_in_onboarding_before_approval(): void
     {
         $this->seed();
@@ -234,8 +352,63 @@ class EmployeeOnboardingApprovalTest extends TestCase
         $employee->update([
             'status' => 'onboarding',
         ]);
+        $employee->profile()->update([
+            'date_of_birth' => '1994-05-12',
+            'gender' => 'female',
+            'residential_address' => '24 Operations Street',
+            'next_of_kin_name' => 'Grace Adeyemi',
+            'next_of_kin_phone' => '08030000002',
+        ]);
+        $employee->emergencyContacts()->create([
+            'organization_id' => $employee->organization_id,
+            'name' => 'Grace Adeyemi',
+            'relationship' => 'Sister',
+            'phone' => '08030000003',
+            'is_primary' => true,
+        ]);
+
+        $this->satisfyDocumentRequirements($employee);
 
         return $employee->refresh();
+    }
+
+    /**
+     * Onboarding approval now blocks on any missing/expired/unacknowledged
+     * required document (RichDemoDataSeeder seeds "Government ID for all
+     * employees" and, for PERM employees, "Signed contract for permanent
+     * employees"). Satisfy every requirement that actually applies to this
+     * employee so these tests keep exercising the approval flow itself,
+     * not the document gate.
+     */
+    private function satisfyDocumentRequirements(Employee $employee): void
+    {
+        $requirements = DocumentRequirement::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('is_active', true)
+            ->where('is_required', true)
+            ->where(fn ($query) => $query->whereNull('department_id')->orWhere('department_id', $employee->department_id))
+            ->where(fn ($query) => $query->whereNull('designation_id')->orWhere('designation_id', $employee->designation_id))
+            ->where(fn ($query) => $query->whereNull('grade_level_id')->orWhere('grade_level_id', $employee->grade_level_id))
+            ->where(fn ($query) => $query->whereNull('employment_type_id')->orWhere('employment_type_id', $employee->employment_type_id))
+            ->where(fn ($query) => $query->whereNull('organization_location_id')->orWhere('organization_location_id', $employee->organization_location_id))
+            ->get();
+
+        foreach ($requirements as $requirement) {
+            EmployeeDocument::query()->create([
+                'organization_id' => $employee->organization_id,
+                'employee_id' => $employee->id,
+                'document_type_id' => $requirement->document_type_id,
+                'document_requirement_id' => $requirement->id,
+                'title' => $requirement->name,
+                'file_name' => 'document.pdf',
+                'file_path' => 'test/document.pdf',
+                'expires_at' => now()->addYear(),
+                'status' => 'approved',
+                'submitted_at' => now(),
+                'reviewed_at' => now(),
+                'acknowledged_at' => now(),
+            ]);
+        }
     }
 
     /**

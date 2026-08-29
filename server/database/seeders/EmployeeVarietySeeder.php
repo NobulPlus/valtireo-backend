@@ -173,9 +173,17 @@ class EmployeeVarietySeeder extends Seeder
                     'residential_address' => $street,
                     'next_of_kin_name' => $nokFirstName.' '.$lastName,
                     'next_of_kin_phone' => '0805'.str_pad((string) ($n + 500), 7, '0', STR_PAD_LEFT),
-                    'emergency_contact_name' => $nokFirstName.' '.$lastName,
-                    'emergency_contact_phone' => '0805'.str_pad((string) ($n + 600), 7, '0', STR_PAD_LEFT),
                     'completion_status' => $profileStatus,
+                ]
+            );
+
+            $employee->emergencyContacts()->firstOrCreate(
+                ['employee_id' => $employee->id],
+                [
+                    'organization_id' => $organization->id,
+                    'name' => $nokFirstName.' '.$lastName,
+                    'phone' => '0805'.str_pad((string) ($n + 600), 7, '0', STR_PAD_LEFT),
+                    'is_primary' => true,
                 ]
             );
 

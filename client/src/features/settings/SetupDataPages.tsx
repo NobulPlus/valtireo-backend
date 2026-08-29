@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   Clock3,
   Download,
+  Eye,
   FileCheck2,
   FileClock,
   FileText,
@@ -55,10 +56,13 @@ import {
   type ApprovalWorkflowPayload,
 } from '@/features/approvals/api';
 import { useEmployees } from '@/features/employees/api';
+import { openLeaveEvidenceInNewTab } from '@/features/leave/api';
 import { usePermissionCatalog, useRoles } from '@/features/settings/rolesApi';
 import { useSetupLookups } from '@/features/workspace/api';
 import { api, apiClient, ApiError } from '@/lib/apiClient';
+import { openDocumentInNewTab } from '@/lib/documents';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { AllSetupLookups, ApprovalRequest, ApprovalWorkflow, ApproverType, ClusterLookup, LocationLookup, Paginated } from '@/types/api';
 
 type Row = Record<string, unknown>;
@@ -1383,6 +1387,18 @@ export function DocumentsControlPage() {
                 type: 'checkbox',
                 help: 'Uploads enter the approval/review workflow before becoming approved.',
               },
+              {
+                name: 'signature_method',
+                label: 'Employee signature',
+                type: 'select',
+                defaultValue: 'none',
+                options: [
+                  { value: 'none', label: 'None' },
+                  { value: 'acknowledge', label: 'Acknowledge in-app' },
+                  { value: 'signed_copy', label: 'Upload a signed copy' },
+                ],
+                help: 'For files HR provides to the employee. "Acknowledge" is a one-click confirmation; "signed copy" asks the employee to download, sign, scan, and upload it back for HR review.',
+              },
               { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
             ],
           },
@@ -1414,6 +1430,18 @@ export function DocumentsControlPage() {
                 label: 'Approval required',
                 type: 'checkbox',
                 help: 'Uploads enter the approval/review workflow before becoming approved.',
+              },
+              {
+                name: 'signature_method',
+                label: 'Employee signature',
+                type: 'select',
+                defaultValue: 'none',
+                options: [
+                  { value: 'none', label: 'None' },
+                  { value: 'acknowledge', label: 'Acknowledge in-app' },
+                  { value: 'signed_copy', label: 'Upload a signed copy' },
+                ],
+                help: 'For files HR provides to the employee. "Acknowledge" is a one-click confirmation; "signed copy" asks the employee to download, sign, scan, and upload it back for HR review.',
               },
               { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true, help: 'Inactive document types are hidden from new usage without deleting history.' },
             ],
@@ -1593,6 +1621,8 @@ export function DocumentsControlPage() {
                     <div className="flex flex-wrap justify-end gap-1.5">
                       {Boolean(type.requires_expiry_date) && <StatusBadge status="expires" />}
                       {Boolean(type.approval_required) && <StatusBadge status="submitted" />}
+                      {type.signature_method === 'acknowledge' && <StatusBadge status="pending_acknowledgment" />}
+                      {type.signature_method === 'signed_copy' && <StatusBadge status="awaiting_signature" />}
                       <StatusBadge status={Boolean(type.is_active) ? 'active' : 'suspended'} />
                     </div>
                   </div>
@@ -1662,6 +1692,7 @@ const DECISION_OPTIONS: { value: ApprovalDecisionAction; label: string }[] = [
 
 function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | null; onClose: () => void }) {
   const toast = useToast();
+  const { formatDateTime } = useDateFormatter();
   const [decisionAction, setDecisionAction] = useState<ApprovalDecisionAction>('approve');
   const [note, setNote] = useState('');
   const actMutation = useActOnApprovalRequest(request?.id ?? 0);
@@ -1673,6 +1704,22 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
       setNote('');
     }
   }, [request]);
+
+  async function handleViewDocument(documentId: number, title: string) {
+    try {
+      await openDocumentInNewTab(documentId);
+    } catch (error) {
+      toast.error('Could not open document', error instanceof ApiError ? error.message : `Could not open ${title}.`);
+    }
+  }
+
+  async function handleViewLeaveEvidence(leaveRequest: NonNullable<ApprovalRequest['leave_request']>) {
+    try {
+      await openLeaveEvidenceInNewTab(leaveRequest);
+    } catch (error) {
+      toast.error('Could not open evidence', error instanceof ApiError ? error.message : 'Could not open this leave evidence.');
+    }
+  }
 
   async function handleSubmit() {
     try {
@@ -1709,7 +1756,31 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
                 {formatSnakeCase(request.module)} · {formatSnakeCase(request.action)} · Requested by {request.requester?.name ?? 'System'}
               </p>
             </div>
-            <StatusBadge status={request.status} />
+            <div className="flex flex-shrink-0 items-center gap-2">
+              {request.document && (
+                <button
+                  type="button"
+                  onClick={() => handleViewDocument(request.document!.id, request.document!.title)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-teal"
+                  title={`View ${request.document.title}`}
+                  aria-label={`View ${request.document.title}`}
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+              )}
+              {request.leave_request?.evidence_download_url && (
+                <button
+                  type="button"
+                  onClick={() => handleViewLeaveEvidence(request.leave_request!)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-teal"
+                  title={`View ${request.leave_request.evidence_file_name ?? 'leave evidence'}`}
+                  aria-label={`View ${request.leave_request.evidence_file_name ?? 'leave evidence'}`}
+                >
+                  <FileText className="h-4 w-4" />
+                </button>
+              )}
+              <StatusBadge status={request.status} />
+            </div>
           </div>
 
           {isPending ? (
@@ -1740,7 +1811,7 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
                     <li key={decision.id} className="rounded-md border border-border px-3 py-2 text-sm">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-strong">{decision.actor?.name ?? 'System'}</span>
-                        <span className="text-xs text-muted">{new Date(decision.created_at).toLocaleString()}</span>
+                        <span className="text-xs text-muted">{formatDateTime(decision.created_at)}</span>
                       </div>
                       <p className="mt-0.5 text-xs text-muted">
                         {formatSnakeCase(decision.action)} → {formatSnakeCase(decision.next_status)}
@@ -1778,6 +1849,14 @@ function ApprovalRequestsPanel({ openRequestId, onOpenRequestHandled }: { openRe
     }
   }, [deepLinkedRequest.data, deepLinkedRequest.isError, onOpenRequestHandled, toast]);
 
+  async function handleViewDocument(documentId: number, title: string) {
+    try {
+      await openDocumentInNewTab(documentId);
+    } catch (error) {
+      toast.error('Could not open document', error instanceof ApiError ? error.message : `Could not open ${title}.`);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -1813,6 +1892,17 @@ function ApprovalRequestsPanel({ openRequestId, onOpenRequestHandled }: { openRe
                   </p>
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
+                  {request.document && (
+                    <button
+                      type="button"
+                      onClick={() => handleViewDocument(request.document!.id, request.document!.title)}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-teal"
+                      title={`View ${request.document.title}`}
+                      aria-label={`View ${request.document.title}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </button>
+                  )}
                   <StatusBadge status={request.status} />
                   {request.status === 'pending' && (
                     <Button type="button" size="sm" onClick={() => setActingOn(request)}>
@@ -1879,6 +1969,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [requireNoteOnReject, setRequireNoteOnReject] = useState(true);
+  const [autoApproveWhenNoSteps, setAutoApproveWhenNoSteps] = useState(false);
   const [steps, setSteps] = useState<StepDraft[]>([]);
 
   useEffect(() => {
@@ -1889,6 +1980,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
       setDescription(workflow.description ?? '');
       setIsActive(workflow.is_active);
       setRequireNoteOnReject(workflow.require_note_on_reject);
+      setAutoApproveWhenNoSteps(workflow.auto_approve_when_no_steps);
       setSteps(
         [...workflow.steps]
           .sort((a, b) => a.step_order - b.step_order)
@@ -1907,6 +1999,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
       setDescription('');
       setIsActive(true);
       setRequireNoteOnReject(true);
+      setAutoApproveWhenNoSteps(false);
       setSteps([emptyStep(1)]);
     }
   }, [workflow]);
@@ -1939,6 +2032,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
       description: description.trim() || undefined,
       is_active: isActive,
       require_note_on_reject: requireNoteOnReject,
+      auto_approve_when_no_steps: autoApproveWhenNoSteps,
       steps: steps.map((step, index) => ({
         step_order: index + 1,
         name: step.name.trim() || `Step ${index + 1}`,
@@ -2001,6 +2095,14 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
             <input type="checkbox" checked={requireNoteOnReject} onChange={(event) => setRequireNoteOnReject(event.target.checked)} />
             Require note on reject
           </label>
+          <label className="flex items-center gap-2 text-sm text-strong">
+            <input
+              type="checkbox"
+              checked={autoApproveWhenNoSteps}
+              onChange={(event) => setAutoApproveWhenNoSteps(event.target.checked)}
+            />
+            Auto-approve when there are no steps
+          </label>
         </div>
 
         <div>
@@ -2012,7 +2114,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
           </div>
           {steps.length === 0 ? (
             <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted">
-              No steps — matching requests will auto-approve immediately.
+              No steps — matching requests will {autoApproveWhenNoSteps ? 'auto-approve immediately' : 'be rejected until you add a step or enable auto-approval'}.
             </p>
           ) : (
             <div className="space-y-3">
@@ -3101,5 +3203,3 @@ export function ReportsControlPage() {
     </AreaShell>
   );
 }
-
-

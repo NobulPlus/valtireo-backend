@@ -514,7 +514,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"date_of_birth\": \"1995-01-01\",\n  \"gender\": \"female\",\n  \"personal_email\": \"employee.personal@example.test\",\n  \"residential_address\": \"16 Demo Street, Lagos\",\n  \"next_of_kin_name\": \"Grace Contact\",\n  \"next_of_kin_phone\": \"08098765432\",\n  \"emergency_contact_name\": \"Grace Contact\",\n  \"emergency_contact_phone\": \"08098765432\"\n}"
+              "raw": "{\n  \"date_of_birth\": \"1995-01-01\",\n  \"gender\": \"female\",\n  \"personal_email\": \"employee.personal@example.test\",\n  \"residential_address\": \"16 Demo Street, Lagos\",\n  \"next_of_kin_name\": \"Grace Contact\",\n  \"next_of_kin_phone\": \"08098765432\"\n}"
             },
             "url": "{{base_url}}/me/employee-profile"
           }

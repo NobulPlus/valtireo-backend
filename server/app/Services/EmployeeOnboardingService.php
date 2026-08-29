@@ -17,6 +17,8 @@ class EmployeeOnboardingService
         private readonly EmployeeRoleAssignmentService $roleAssignment,
         private readonly LeaveEntitlementProvisioningService $leaveEntitlements,
         private readonly EmployeeProfileActivityService $activities,
+        private readonly DocumentComplianceService $documentCompliance,
+        private readonly EmployeeActivationReadinessService $activationReadiness,
     ) {
     }
 
@@ -138,6 +140,21 @@ class EmployeeOnboardingService
             if (! $employee->profile || ! in_array($employee->profile->completion_status, ['submitted', 'approved'], true)) {
                 throw ValidationException::withMessages([
                     'employee' => ['This employee profile is not ready for onboarding approval.'],
+                ]);
+            }
+
+            $this->activationReadiness->ensureReady($employee, 'employee');
+
+            $outstandingDocuments = array_filter(
+                $this->documentCompliance->complianceForEmployee($employee),
+                fn (array $row): bool => in_array($row['state'], ['missing', 'expired', 'pending_acknowledgment', 'awaiting_signature', 'rejected', 'changes_requested'], true)
+            );
+
+            if ($outstandingDocuments !== []) {
+                $names = implode(', ', array_map(fn (array $row) => $row['requirement']['name'], $outstandingDocuments));
+
+                throw ValidationException::withMessages([
+                    'employee' => ["This employee has outstanding required documents: {$names}."],
                 ]);
             }
 

@@ -19,8 +19,6 @@ export interface UpdateMyProfilePayload {
   residential_address?: string | null;
   next_of_kin_name?: string | null;
   next_of_kin_phone?: string | null;
-  emergency_contact_name?: string | null;
-  emergency_contact_phone?: string | null;
   passport_photo?: File | null;
 }
 
@@ -84,6 +82,40 @@ export function useSubmitMyDocument() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY });
+    },
+  });
+}
+
+export function useAcknowledgeDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (documentId: number) => api.patch<{ document: EmployeeDocument }>(`/documents/${documentId}/acknowledge`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'me'] });
+    },
+  });
+}
+
+export interface SubmitSignedCopyPayload {
+  documentId: number;
+  file: File;
+  notes?: string;
+}
+
+export function useSubmitSignedCopy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, file, notes }: SubmitSignedCopyPayload) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (notes) formData.append('notes', notes);
+
+      return api.post<{ document: EmployeeDocument }>(`/documents/${documentId}/signed-copy`, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'me'] });
     },
   });
 }

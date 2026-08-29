@@ -17,7 +17,10 @@ use App\Models\Organization;
 use App\Models\OrganizationLocation;
 use App\Models\Unit;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -413,8 +416,11 @@ class LeaveModuleTest extends TestCase
             'residential_address' => '24 Operations Street',
             'next_of_kin_name' => 'Grace Adeyemi',
             'next_of_kin_phone' => '08030000002',
-            'emergency_contact_name' => 'Grace Adeyemi',
-            'emergency_contact_phone' => '08030000002',
+        ]);
+        $employee->emergencyContacts()->create([
+            'organization_id' => $employee->organization_id,
+            'name' => 'Grace Adeyemi',
+            'phone' => '08030000002',
         ]);
 
         Sanctum::actingAs($admin);
@@ -479,6 +485,51 @@ class LeaveModuleTest extends TestCase
 
         $employee = Employee::query()->findOrFail($response->json('employee.id'));
         $employee->update(['status' => 'onboarding']);
+        $employee->profile()->update([
+            'date_of_birth' => '1994-05-12',
+            'gender' => 'female',
+            'residential_address' => '24 Operations Street',
+            'next_of_kin_name' => 'Grace Adeyemi',
+            'next_of_kin_phone' => '08030000002',
+        ]);
+        $employee->emergencyContacts()->create([
+            'organization_id' => $employee->organization_id,
+            'name' => 'Grace Adeyemi',
+            'relationship' => 'Sister',
+            'phone' => '08030000003',
+            'is_primary' => true,
+        ]);
+
+        // Onboarding approval now blocks on any missing/expired/unacknowledged
+        // required document — satisfy every requirement that applies to this
+        // employee so these tests keep exercising leave, not the document gate.
+        $requirements = \App\Models\DocumentRequirement::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('is_active', true)
+            ->where('is_required', true)
+            ->where(fn ($query) => $query->whereNull('department_id')->orWhere('department_id', $employee->department_id))
+            ->where(fn ($query) => $query->whereNull('designation_id')->orWhere('designation_id', $employee->designation_id))
+            ->where(fn ($query) => $query->whereNull('grade_level_id')->orWhere('grade_level_id', $employee->grade_level_id))
+            ->where(fn ($query) => $query->whereNull('employment_type_id')->orWhere('employment_type_id', $employee->employment_type_id))
+            ->where(fn ($query) => $query->whereNull('organization_location_id')->orWhere('organization_location_id', $employee->organization_location_id))
+            ->get();
+
+        foreach ($requirements as $requirement) {
+            \App\Models\EmployeeDocument::query()->create([
+                'organization_id' => $employee->organization_id,
+                'employee_id' => $employee->id,
+                'document_type_id' => $requirement->document_type_id,
+                'document_requirement_id' => $requirement->id,
+                'title' => $requirement->name,
+                'file_name' => 'document.pdf',
+                'file_path' => 'test/document.pdf',
+                'expires_at' => now()->addYear(),
+                'status' => 'approved',
+                'submitted_at' => now(),
+                'reviewed_at' => now(),
+                'acknowledged_at' => now(),
+            ]);
+        }
 
         return $employee->refresh();
     }
@@ -515,6 +566,65 @@ class LeaveModuleTest extends TestCase
             'leave_type_id' => $annual->id,
             'days_pending' => 3,
         ]);
+    }
+
+    public function test_leave_type_requiring_attachment_rejects_request_without_evidence(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $sick = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'SICK')->firstOrFail();
+        Sanctum::actingAs($employeeUser);
+
+        $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $sick->id,
+            'starts_on' => '2026-09-10',
+            'ends_on' => '2026-09-11',
+            'reason' => 'Medical appointment.',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['evidence']);
+
+        $this->assertDatabaseMissing('leave_requests', [
+            'employee_id' => $employeeUser->employee->id,
+            'leave_type_id' => $sick->id,
+            'starts_on' => '2026-09-10',
+        ]);
+    }
+
+    public function test_employee_can_submit_required_attachment_leave_and_download_evidence(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $sick = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'SICK')->firstOrFail();
+        Sanctum::actingAs($employeeUser);
+
+        $leaveRequestId = $this->post('/api/leave/requests', [
+            'leave_type_id' => $sick->id,
+            'starts_on' => '2026-09-21',
+            'ends_on' => '2026-09-22',
+            'reason' => 'Medical appointment.',
+            'evidence' => UploadedFile::fake()->create('doctor-note.pdf', 128, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('leave_request.evidence_file_name', 'doctor-note.pdf')
+            ->assertJsonPath('leave_request.evidence_download_url', fn ($url) => str_contains($url, '/api/leave/requests/'))
+            ->assertJsonPath('leave_request.approval_requests.0.leave_request.evidence_file_name', 'doctor-note.pdf')
+            ->json('leave_request.id');
+
+        $request = LeaveRequest::query()->findOrFail($leaveRequestId);
+        Storage::disk('local')->assertExists($request->evidence_file_path);
+
+        $this->get("/api/leave/requests/{$leaveRequestId}/evidence/download", ['Accept' => 'application/pdf'])
+            ->assertOk();
+
+        Sanctum::actingAs($admin);
+
+        $this->get("/api/leave/requests/{$leaveRequestId}/evidence/download", ['Accept' => 'application/pdf'])
+            ->assertOk();
     }
 
     public function test_approving_leave_request_moves_pending_days_to_used_days(): void
@@ -555,6 +665,149 @@ class LeaveModuleTest extends TestCase
             'days_pending' => 0,
             'days_used' => 3,
         ]);
+    }
+
+    public function test_cancelling_an_approved_leave_that_has_not_started_returns_all_days(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(4);
+
+        Sanctum::actingAs($employeeUser);
+        $leaveRequestId = $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+        ])->assertCreated()->json('leave_request.id');
+
+        $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->patchJson("/api/leave/requests/{$leaveRequestId}/cancel")
+            ->assertOk()
+            ->assertJsonPath('leave_request.status', 'cancelled')
+            ->assertJsonPath('leave_request.starts_on', $startsOn->startOfDay()->toJSON())
+            ->assertJsonPath('leave_request.ends_on', $endsOn->startOfDay()->toJSON());
+
+        $this->assertDatabaseHas('leave_entitlements', [
+            'employee_id' => $employeeUser->employee->id,
+            'leave_type_id' => $annual->id,
+            'days_used' => 0,
+        ]);
+    }
+
+    public function test_cancelling_an_in_progress_approved_leave_splits_used_and_returned_days(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(4); // Mon..Fri, 5 working days
+
+        Sanctum::actingAs($employeeUser);
+        $created = $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+        ])->assertCreated();
+        $leaveRequestId = $created->json('leave_request.id');
+        $totalDays = $created->json('leave_request.total_days');
+
+        $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+
+        // Wednesday of that week: Mon/Tue/Wed already taken, Thu/Fri remain.
+        $this->travelTo($startsOn->addDays(2));
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->patchJson("/api/leave/requests/{$leaveRequestId}/cancel")
+            ->assertOk()
+            ->assertJsonPath('leave_request.status', 'cancelled')
+            // the original request is left untouched as an honest historical record
+            ->assertJsonPath('leave_request.starts_on', $startsOn->startOfDay()->toJSON())
+            ->assertJsonPath('leave_request.ends_on', $endsOn->startOfDay()->toJSON())
+            ->assertJsonPath('leave_request.total_days', $totalDays);
+
+        $this->assertDatabaseHas('leave_entitlements', [
+            'employee_id' => $employeeUser->employee->id,
+            'leave_type_id' => $annual->id,
+            'days_used' => $totalDays - 2,
+        ]);
+    }
+
+    public function test_cannot_cancel_an_approved_leave_that_ends_today(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $day = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+
+        Sanctum::actingAs($employeeUser);
+        $leaveRequestId = $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $day->toDateString(),
+            'ends_on' => $day->toDateString(),
+        ])->assertCreated()->json('leave_request.id');
+
+        $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+
+        // Same day the leave is scheduled — nothing left to return.
+        $this->travelTo($day);
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->patchJson("/api/leave/requests/{$leaveRequestId}/cancel")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertDatabaseHas('leave_requests', ['id' => $leaveRequestId, 'status' => 'approved']);
+    }
+
+    public function test_cannot_cancel_an_approved_leave_that_has_already_ended(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(4);
+
+        Sanctum::actingAs($employeeUser);
+        $leaveRequestId = $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+        ])->assertCreated()->json('leave_request.id');
+
+        $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+
+        $this->travelTo($endsOn->addDay());
+
+        Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
+        $this->patchJson("/api/leave/requests/{$leaveRequestId}/cancel")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertDatabaseHas('leave_requests', ['id' => $leaveRequestId, 'status' => 'approved']);
     }
 
     public function test_leave_request_rejects_overlapping_dates(): void

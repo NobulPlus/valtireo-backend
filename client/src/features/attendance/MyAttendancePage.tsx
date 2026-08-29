@@ -17,24 +17,11 @@ import {
   useRequestAttendanceCorrection,
 } from '@/features/attendance/api';
 import { ApiError } from '@/lib/apiClient';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { AttendanceRecord } from '@/types/api';
 
 function actionError(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})/);
-  return dateOnly ? dateOnly[1] : value;
-}
-
-function formatTime(value: string | null | undefined): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
 function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; onSubmitted: () => void }) {
@@ -108,6 +95,7 @@ function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; o
 
 function MyAttendanceContent() {
   const toast = useToast();
+  const { formatDate, formatTime } = useDateFormatter();
   const recordsQuery = useMyAttendanceRecords();
   const correctionsQuery = useMyAttendanceCorrections();
   const logMutation = useLogAttendance();

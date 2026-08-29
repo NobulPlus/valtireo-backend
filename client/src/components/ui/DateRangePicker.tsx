@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 
 interface DateRangePickerProps {
   dateFrom: string;
@@ -112,9 +113,9 @@ function monthLabel(date: Date): string {
   return new Intl.DateTimeFormat(undefined, { month: 'long' }).format(date);
 }
 
-function formatShort(date: Date | null): string {
+function formatShort(date: Date | null, formatDate: (value: string | null | undefined) => string): string {
   if (!date) return '';
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: '2-digit', year: 'numeric' }).format(date);
+  return formatDate(toInputDate(date));
 }
 
 function calendarDays(cursor: Date): Date[] {
@@ -139,6 +140,7 @@ const PRESETS: Preset[] = [
 ];
 
 export function DateRangePicker({ dateFrom, dateTo, onChange, className }: DateRangePickerProps) {
+  const { formatDate } = useDateFormatter();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PanelPosition | null>(null);
   const [cursor, setCursor] = useState(() => fromInputDate(dateFrom) ?? new Date());
@@ -149,7 +151,8 @@ export function DateRangePicker({ dateFrom, dateTo, onChange, className }: DateR
 
   const committedStart = fromInputDate(dateFrom);
   const committedEnd = fromInputDate(dateTo);
-  const label = dateFrom && dateTo ? `${formatShort(committedStart)} – ${formatShort(committedEnd)}` : 'Select date range';
+  const label =
+    dateFrom && dateTo ? `${formatShort(committedStart, formatDate)} – ${formatShort(committedEnd, formatDate)}` : 'Select date range';
 
   const leftMonth = cursor;
   const rightMonth = useMemo(() => addMonths(cursor, 1), [cursor]);
@@ -323,7 +326,9 @@ export function DateRangePicker({ dateFrom, dateTo, onChange, className }: DateR
 
             <div className="flex items-center justify-between border-t border-border px-4 py-3">
               <p className="text-xs text-muted">
-                {draftStart ? `Range: ${formatShort(draftStart)} - ${draftEnd ? formatShort(draftEnd) : '…'}` : 'Select a range'}
+                {draftStart
+                  ? `Range: ${formatShort(draftStart, formatDate)} - ${draftEnd ? formatShort(draftEnd, formatDate) : '…'}`
+                  : 'Select a range'}
               </p>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="secondary" size="sm" onClick={handleCancel}>

@@ -19,6 +19,10 @@ class DocumentTypeController extends Controller
         $types = DocumentType::query()
             ->withCount('requirements')
             ->where('organization_id', $request->user()->organization_id)
+            ->when(
+                ! $request->user()->can('employee_documents.create'),
+                fn ($query) => $query->where('employee_upload_allowed', true)
+            )
             ->when($request->string('search')->toString(), function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query

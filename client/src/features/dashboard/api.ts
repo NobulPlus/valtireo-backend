@@ -30,16 +30,28 @@ export function useOrganizationDashboard(filters: OrganizationDashboardFilters =
   });
 }
 
-export function useManagerDashboard() {
+export interface ManagerDashboardFilters {
+  department_id?: number;
+}
+
+export function useManagerDashboard(filters: ManagerDashboardFilters = {}, enabled = true) {
   return useQuery({
-    queryKey: ['dashboard', 'manager'],
-    queryFn: () => api.get<ManagerDashboard>('/dashboard/manager'),
+    queryKey: ['dashboard', 'manager', filters],
+    queryFn: () => api.get<ManagerDashboard>('/dashboard/manager', { params: cleanParams(filters) }),
+    enabled,
+    placeholderData: (previous) => previous,
   });
 }
 
-export function useMyDashboard() {
+export interface MyDashboardFilters {
+  date_from?: string;
+  date_to?: string;
+}
+
+export function useMyDashboard(filters: MyDashboardFilters = {}) {
   return useQuery({
-    queryKey: ['dashboard', 'me'],
-    queryFn: () => api.get<MyDashboard>('/dashboard/me'),
+    queryKey: ['dashboard', 'me', filters],
+    queryFn: () => api.get<MyDashboard>('/dashboard/me', { params: cleanParams(filters) }),
+    placeholderData: (previous) => previous,
   });
 }

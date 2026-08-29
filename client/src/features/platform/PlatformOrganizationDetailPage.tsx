@@ -27,6 +27,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
 import { ApiError } from '@/lib/apiClient';
+import { useDateFormatter } from '@/lib/dateFormat';
 import { isValidEmail } from '@/lib/validation';
 import {
   usePlatformOrganization,
@@ -56,12 +57,8 @@ function fallback(value: string | null | undefined): string {
   return value || 'Not set';
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return 'No expiry';
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
-}
-
 function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganizationDetail; id: string | undefined }) {
+  const { formatDate } = useDateFormatter();
   const [statusAction, setStatusAction] = useState<'active' | 'suspended' | null>(null);
   const [reason, setReason] = useState('');
   const [managingModule, setManagingModule] = useState<ModuleRow | null>(null);
@@ -213,7 +210,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
                     <p className="text-sm font-medium text-strong">{module.name ?? module.key}</p>
                     <p className="text-xs text-muted">
                       {module.category ?? 'Uncategorized'}
-                      {module.status !== 'locked' && ` - expires ${formatDate(module.expires_at)}`}
+                      {module.status !== 'locked' && ` - expires ${module.expires_at ? formatDate(module.expires_at) : 'No expiry'}`}
                     </p>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-2">

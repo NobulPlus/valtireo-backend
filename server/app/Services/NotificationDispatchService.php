@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflowStep;
+use App\Models\EmployeeDocument;
 use App\Models\EmployeeInvitation;
 use App\Models\Organization;
 use App\Models\User;
@@ -169,14 +170,16 @@ class NotificationDispatchService
             ->unique('id');
 
         foreach ($recipients as $recipient) {
+            [$actionLabel, $actionUrl] = $this->decidedActionFor($approvalRequest, $recipient);
+
             $this->notify($recipient, [
                 'category' => 'approvals',
                 'event' => 'approval.decided',
                 'severity' => in_array($approvalRequest->status, ['rejected', 'changes_requested'], true) ? 'warning' : 'info',
                 'title' => 'Approval request updated',
                 'message' => "{$approvalRequest->title} is now {$approvalRequest->status}.",
-                'action_label' => 'View approval',
-                'action_url' => "/approvals/{$approvalRequest->id}",
+                'action_label' => $actionLabel,
+                'action_url' => $actionUrl,
                 'entity_type' => 'approval_request',
                 'entity_id' => $approvalRequest->id,
                 'metadata' => [
@@ -187,6 +190,107 @@ class NotificationDispatchService
                 ],
             ]);
         }
+    }
+
+    /**
+     * The requester/subject on a decided approval isn't necessarily anyone
+     * who can view the Approvals page itself (an ordinary employee whose
+     * own leave or document was decided on, for instance) — sending them a
+     * link to a page that 403s them is worse than no link at all. Route
+     * them to wherever their own copy of the record actually lives instead.
+     *
+     * @return array{0: string|null, 1: string|null}
+     */
+    private function decidedActionFor(ApprovalRequest $approvalRequest, User $recipient): array
+    {
+        if ($recipient->can('approvals.view')) {
+            return ['View approval', "/approvals/{$approvalRequest->id}"];
+        }
+
+        $isSubject = $approvalRequest->subjectEmployee?->user_id === $recipient->id;
+
+        if ($isSubject && $approvalRequest->module === 'employee_documents') {
+            return ['View my documents', '/me/profile?tab=documents'];
+        }
+
+        if ($isSubject && $approvalRequest->module === 'leave') {
+            return ['View my leave', '/me/leave'];
+        }
+
+        return [null, null];
+    }
+
+    public function documentNeedsAcknowledgment(EmployeeDocument $document): void
+    {
+        $document->loadMissing(['employee.user', 'documentType', 'uploadedBy']);
+        $recipient = $document->employee?->user;
+
+        if (! $recipient) {
+            return;
+        }
+
+        $this->notify($recipient, [
+            'category' => 'documents',
+            'event' => 'document.needs_acknowledgment',
+            'severity' => 'warning',
+            'title' => 'A document needs your acknowledgment',
+            'message' => "{$document->uploadedBy?->name} added \"{$document->title}\" to your documents. Review it and confirm you've received it.",
+            'action_label' => 'Review document',
+            'action_url' => '/me/profile?tab=documents',
+            'entity_type' => 'employee_document',
+            'entity_id' => $document->id,
+            'metadata' => [
+                'document_type_id' => $document->document_type_id,
+                'uploaded_by_id' => $document->uploaded_by_id,
+            ],
+        ]);
+    }
+
+    public function documentNeedsSignature(EmployeeDocument $document): void
+    {
+        $document->loadMissing(['employee.user', 'documentType', 'uploadedBy']);
+        $recipient = $document->employee?->user;
+
+        if (! $recipient) {
+            return;
+        }
+
+        $this->notify($recipient, [
+            'category' => 'documents',
+            'event' => 'document.needs_signature',
+            'severity' => 'warning',
+            'title' => 'A document needs your signature',
+            'message' => "{$document->uploadedBy?->name} added \"{$document->title}\" for you to sign. Download it, sign it, and upload the signed copy.",
+            'action_label' => 'View document',
+            'action_url' => '/me/profile?tab=documents',
+            'entity_type' => 'employee_document',
+            'entity_id' => $document->id,
+            'metadata' => [
+                'document_type_id' => $document->document_type_id,
+                'uploaded_by_id' => $document->uploaded_by_id,
+            ],
+        ]);
+    }
+
+    public function documentAcknowledged(EmployeeDocument $document): void
+    {
+        $document->loadMissing(['employee', 'uploadedBy']);
+        $recipient = $document->uploadedBy;
+
+        if (! $recipient || ! $document->employee) {
+            return;
+        }
+
+        $this->notify($recipient, [
+            'category' => 'documents',
+            'event' => 'document.acknowledged',
+            'title' => 'Document acknowledged',
+            'message' => "{$document->employee->first_name} {$document->employee->last_name} acknowledged \"{$document->title}\".",
+            'action_label' => 'View employee',
+            'action_url' => "/employees/{$document->employee_id}",
+            'entity_type' => 'employee_document',
+            'entity_id' => $document->id,
+        ]);
     }
 
     /**

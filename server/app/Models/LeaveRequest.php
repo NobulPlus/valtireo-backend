@@ -22,6 +22,10 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'total_days',
     'status',
     'reason',
+    'evidence_file_name',
+    'evidence_file_path',
+    'evidence_mime_type',
+    'evidence_file_size',
     'submitted_at',
     'reviewed_at',
 ])]

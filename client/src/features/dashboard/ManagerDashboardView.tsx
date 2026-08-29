@@ -1,38 +1,96 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarClock, ClipboardList, UserCheck, UserPlus, Users } from 'lucide-react';
 import { useManagerDashboard } from '@/features/dashboard/api';
+import { useDepartmentOptions } from '@/features/employees/api';
 import { LoadingState, ErrorState, EmptyState } from '@/components/ui/States';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/StatTile';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BreakdownList } from '@/components/ui/BreakdownList';
+import { SelectMenu } from '@/components/ui/SelectMenu';
 import { statusLabel } from '@/features/employees/statusHelpers';
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date);
-}
+import { useAuth } from '@/context/AuthContext';
+import { useDateFormatter } from '@/lib/dateFormat';
 
 export function ManagerDashboardView() {
-  const { data, isLoading, isError, error, refetch } = useManagerDashboard();
+  const { hasPermission, hasManagerScope } = useAuth();
+  const canBrowseDepartments = hasPermission('reports.view');
+  const [departmentId, setDepartmentId] = useState('');
+  const departmentOptions = useDepartmentOptions();
+  const effectiveDepartmentId = departmentId ? Number(departmentId) : undefined;
+  const queryEnabled = hasManagerScope || Boolean(effectiveDepartmentId);
 
-  if (isLoading) return <LoadingState label="Loading manager dashboard…" fill />;
-  if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
+  const { data, isLoading, isError, error, refetch } = useManagerDashboard(
+    { department_id: effectiveDepartmentId },
+    queryEnabled,
+  );
+  const { formatDateTime } = useDateFormatter();
+
+  const departmentPicker = canBrowseDepartments && (
+    <div className="mb-4 flex items-center gap-2">
+      <span className="text-sm font-medium text-muted">Viewing</span>
+      <div className="w-64">
+        <SelectMenu
+          value={departmentId}
+          onChange={setDepartmentId}
+          options={[
+            { value: '', label: hasManagerScope ? 'My team' : 'Select a department…' },
+            ...(departmentOptions.data ?? []).map((department) => ({
+              value: String(department.id),
+              label: department.name,
+            })),
+          ]}
+        />
+      </div>
+    </div>
+  );
+
+  if (!queryEnabled) {
+    return (
+      <div>
+        {departmentPicker}
+        <EmptyState title="Pick a department" description="Select a department above to view its team dashboard." />
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div>
+        {departmentPicker}
+        <LoadingState label="Loading manager dashboard…" fill />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div>
+        {departmentPicker}
+        <ErrorState error={error} onRetry={() => refetch()} />
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   if (data.employees.total === 0) {
     return (
-      <EmptyState
-        title="No team members found"
-        description="You don't have any direct reports or department assignments yet."
-      />
+      <div>
+        {departmentPicker}
+        <EmptyState
+          title="No team members found"
+          description="You don't have any direct reports or department assignments yet."
+        />
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-5">
+      {departmentPicker}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Team size" value={data.employees.total} icon={Users} />
         <StatTile label="Active" value={data.employees.active} tone="success" icon={UserCheck} />

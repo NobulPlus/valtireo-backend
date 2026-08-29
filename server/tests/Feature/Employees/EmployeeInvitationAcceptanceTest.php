@@ -63,8 +63,6 @@ class EmployeeInvitationAcceptanceTest extends TestCase
             'residential_address' => '12 Example Street, Lagos',
             'next_of_kin_name' => 'Jane Lovelace',
             'next_of_kin_phone' => '08010000000',
-            'emergency_contact_name' => 'Grace Hopper',
-            'emergency_contact_phone' => '08020000000',
         ])->assertOk()
             ->assertJsonPath('employee.status', 'onboarding')
             ->assertJsonPath('profile.completion_status', 'submitted')

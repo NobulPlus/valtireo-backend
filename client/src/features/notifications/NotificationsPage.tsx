@@ -16,6 +16,7 @@ import {
   type NotificationEntry,
 } from '@/features/notifications/api';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All notifications' },
@@ -25,6 +26,7 @@ const STATUS_OPTIONS = [
 
 export function NotificationsPage() {
   const navigate = useNavigate();
+  const { formatDate } = useDateFormatter();
   const [status, setStatus] = useState<'' | 'read' | 'unread'>('');
   const [page, setPage] = useState(1);
   const unreadQuery = useUnreadNotificationCount();
@@ -103,7 +105,7 @@ export function NotificationsPage() {
                         <span className={cn('truncate text-sm', unread ? 'font-semibold text-strong' : 'font-medium text-strong')}>
                           {notification.title ?? 'Notification'}
                         </span>
-                        <span className="flex-shrink-0 text-xs text-muted">{timeAgo(notification.created_at)}</span>
+                        <span className="flex-shrink-0 text-xs text-muted">{timeAgo(notification.created_at, formatDate)}</span>
                       </span>
                       {notification.message && <span className="mt-1 block text-sm leading-5 text-muted">{notification.message}</span>}
                       {notification.action_label && (

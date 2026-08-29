@@ -24,8 +24,11 @@ class EmployeeLifecycleHistoryTest extends TestCase
             'residential_address' => '24 Operations Street',
             'next_of_kin_name' => 'Grace Adeyemi',
             'next_of_kin_phone' => '08030000002',
-            'emergency_contact_name' => 'Grace Adeyemi',
-            'emergency_contact_phone' => '08030000002',
+        ]);
+        $employee->emergencyContacts()->create([
+            'organization_id' => $employee->organization_id,
+            'name' => 'Grace Adeyemi',
+            'phone' => '08030000002',
         ]);
         Sanctum::actingAs($admin);
 
@@ -202,8 +205,11 @@ class EmployeeLifecycleHistoryTest extends TestCase
             'residential_address' => '12 Finance Road',
             'next_of_kin_name' => 'Jane Bello',
             'next_of_kin_phone' => '08030000001',
-            'emergency_contact_name' => 'Jane Bello',
-            'emergency_contact_phone' => '08030000001',
+        ]);
+        $employee->emergencyContacts()->create([
+            'organization_id' => $employee->organization_id,
+            'name' => 'Jane Bello',
+            'phone' => '08030000001',
         ]);
         Sanctum::actingAs($admin);
 
@@ -234,8 +240,6 @@ class EmployeeLifecycleHistoryTest extends TestCase
             'residential_address' => null,
             'next_of_kin_name' => null,
             'next_of_kin_phone' => null,
-            'emergency_contact_name' => null,
-            'emergency_contact_phone' => null,
         ]);
         Sanctum::actingAs($admin);
 

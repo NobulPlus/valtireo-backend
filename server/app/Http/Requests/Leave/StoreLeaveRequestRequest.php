@@ -23,6 +23,7 @@ class StoreLeaveRequestRequest extends FormRequest
             'starts_on' => ['required', 'date'],
             'ends_on' => ['required', 'date', 'after_or_equal:starts_on'],
             'reason' => ['nullable', 'string', 'max:2000'],
+            'evidence' => ['nullable', 'file', 'max:5120', 'mimes:pdf,jpg,jpeg,png,doc,docx'],
         ];
     }
 }

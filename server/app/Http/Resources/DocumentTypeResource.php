@@ -23,6 +23,7 @@ class DocumentTypeResource extends JsonResource
             'default_reminder_days' => $this->default_reminder_days,
             'employee_upload_allowed' => $this->employee_upload_allowed,
             'approval_required' => $this->approval_required,
+            'signature_method' => $this->signature_method,
             'is_active' => $this->is_active,
             'requirements_count' => $this->whenCounted('requirements'),
             'created_at' => $this->created_at,

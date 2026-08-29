@@ -13,6 +13,7 @@ use App\Models\AttendanceRecord;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\LeaveEntitlement;
+use App\Models\LeaveHoliday;
 use App\Models\LeaveRequest;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
@@ -164,7 +165,7 @@ class DashboardService
     /**
      * @return array<string, mixed>
      */
-    public function me(User $user): array
+    public function me(User $user, Request $request): array
     {
         $employee = $user->employee()
             ->with([
@@ -206,8 +207,10 @@ class DashboardService
             ] : null,
             'pending_actions' => $employee ? $this->pendingActions($employee) : [],
             'leave' => $employee ? $this->leaveSummaryForEmployee($employee) : null,
-            'attendance' => $employee ? $this->attendanceSummaryForEmployee($employee) : null,
-            'modules' => app(ModuleEntitlementService::class)->forUser($user),
+            'attendance' => $employee ? $this->attendanceSummaryForEmployee($employee, $request) : null,
+            'document_compliance' => $employee ? $this->documentCompliance->complianceForEmployee($employee) : [],
+            'next_holiday' => $employee ? $this->nextHoliday($employee->organization_id, $employee->organization_location_id) : null,
+            'tenure' => $employee ? $this->tenureSummary($employee) : null,
         ];
     }
 
@@ -803,15 +806,128 @@ class DashboardService
         ];
     }
 
-    private function attendanceSummaryForEmployee(Employee $employee): array
+    private function attendanceSummaryForEmployee(Employee $employee, Request $request): array
     {
+        $monthRecords = $employee->attendanceRecords()
+            ->where('attendance_date', '>=', CarbonImmutable::now()->startOfMonth())
+            ->get(['status', 'duration_minutes']);
+
+        [$trend, $range] = $this->attendanceTrend($employee, $request);
+
         return [
-            'recent_records' => $employee->attendanceRecords()
-                ->latest('attendance_date')
-                ->limit(5)
-                ->get(['id', 'attendance_date', 'check_in_at', 'check_out_at', 'duration_minutes', 'source', 'status'])
-                ->all(),
+            'trend' => $trend,
+            'range' => $range,
             'corrections_pending' => $employee->attendanceCorrectionRequests()->where('status', 'submitted')->count(),
+            'this_month' => [
+                'present' => $monthRecords->where('status', 'present')->count(),
+                'late' => $monthRecords->where('status', 'late')->count(),
+                'absent' => $monthRecords->where('status', 'absent')->count(),
+                'total_hours' => round($monthRecords->sum('duration_minutes') / 60, 1),
+            ],
+        ];
+    }
+
+    /**
+     * Daily attendance across a date range, one entry per calendar day
+     * (including days with no record) so the dashboard can render it as a
+     * continuous trend rather than a flat list of only the days worked.
+     * Defaults to the last 7 days; `date_from`/`date_to` widen or shift it.
+     *
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, string>}
+     */
+    private function attendanceTrend(Employee $employee, Request $request): array
+    {
+        $requestedTo = $request->date('date_to');
+        $requestedFrom = $request->date('date_from');
+
+        $dateTo = $requestedTo ? CarbonImmutable::instance($requestedTo)->startOfDay() : CarbonImmutable::today();
+        $dateFrom = $requestedFrom ? CarbonImmutable::instance($requestedFrom)->startOfDay() : $dateTo->subDays(6);
+
+        if ($dateFrom->gt($dateTo)) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        $records = $employee->attendanceRecords()
+            ->where('attendance_date', '>=', $dateFrom->toDateString())
+            ->where('attendance_date', '<=', $dateTo->toDateString())
+            ->get(['attendance_date', 'duration_minutes', 'status'])
+            ->keyBy(fn (AttendanceRecord $record) => CarbonImmutable::parse($record->attendance_date)->toDateString());
+
+        $trend = collect($dateFrom->daysUntil($dateTo))
+            ->map(function (CarbonImmutable $date) use ($records): array {
+                $record = $records->get($date->toDateString());
+
+                return [
+                    'label' => $date->format('M j'),
+                    'value' => $record ? round((float) $record->duration_minutes / 60, 1) : 0,
+                    'status' => $record->status ?? 'no_record',
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [$trend, ['date_from' => $dateFrom->toDateString(), 'date_to' => $dateTo->toDateString()]];
+    }
+
+    /**
+     * Nearest upcoming holiday for the employee's organization/location.
+     * Recurring holidays are re-anchored to the current (or next) year since
+     * their stored `date` only carries the original month/day.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function nextHoliday(int $organizationId, ?int $locationId): ?array
+    {
+        $today = CarbonImmutable::today();
+
+        return LeaveHoliday::query()
+            ->where('organization_id', $organizationId)
+            ->where('is_active', true)
+            ->where(fn (Builder $query) => $query->whereNull('organization_location_id')->orWhere('organization_location_id', $locationId))
+            ->get(['name', 'date', 'is_recurring'])
+            ->map(function (LeaveHoliday $holiday) use ($today) {
+                $date = CarbonImmutable::parse($holiday->date);
+
+                if ($holiday->is_recurring) {
+                    $date = $date->setYear($today->year);
+                    if ($date->lt($today)) {
+                        $date = $date->addYear();
+                    }
+                }
+
+                return $date->lt($today) ? null : [
+                    'name' => $holiday->name,
+                    'date' => $date->toDateString(),
+                    'days_away' => $today->diffInDays($date),
+                ];
+            })
+            ->filter()
+            ->sortBy('days_away')
+            ->first();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function tenureSummary(Employee $employee): ?array
+    {
+        if (! $employee->start_date) {
+            return null;
+        }
+
+        $start = CarbonImmutable::parse($employee->start_date);
+        $today = CarbonImmutable::today();
+        $years = (int) $start->diffInYears($today);
+
+        $anniversary = $start->setYear($today->year);
+        if ($anniversary->lt($today)) {
+            $anniversary = $anniversary->addYear();
+        }
+
+        return [
+            'years_of_service' => $years,
+            'next_anniversary' => $anniversary->toDateString(),
+            'days_until_anniversary' => $today->diffInDays($anniversary),
         ];
     }
 

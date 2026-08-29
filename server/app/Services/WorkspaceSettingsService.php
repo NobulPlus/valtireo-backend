@@ -93,8 +93,6 @@ class WorkspaceSettingsService
                     'residential_address',
                     'next_of_kin_name',
                     'next_of_kin_phone',
-                    'emergency_contact_name',
-                    'emergency_contact_phone',
                 ],
                 'onboarding_checklist' => [
                     'accept_invitation',

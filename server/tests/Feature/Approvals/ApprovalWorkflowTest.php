@@ -4,6 +4,7 @@ namespace Tests\Feature\Approvals;
 
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflow;
+use App\Models\ApprovalWorkflowStep;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
 use App\Models\Employee;
@@ -286,6 +287,222 @@ class ApprovalWorkflowTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['note']);
+    }
+
+    public function test_submission_fails_when_matching_approval_workflow_is_missing(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+
+        ApprovalWorkflow::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('module', 'employee_documents')
+            ->where('action', 'submit')
+            ->update(['is_active' => false]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'expires_at' => '2028-01-01',
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['approval_workflow']);
+
+        $this->assertDatabaseMissing('approval_requests', ['module' => 'employee_documents']);
+        $this->assertDatabaseMissing('employee_documents', ['title' => 'Aisha Government ID']);
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_empty_approval_workflow_requires_explicit_auto_approval(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+        $workflow = ApprovalWorkflow::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('module', 'employee_documents')
+            ->where('action', 'submit')
+            ->firstOrFail();
+        $workflow->steps()->delete();
+        $workflow->update(['auto_approve_when_no_steps' => false]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'expires_at' => '2028-01-01',
+        ], ['Accept' => 'application/json'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['approval_workflow']);
+
+        $this->assertDatabaseMissing('approval_requests', ['module' => 'employee_documents']);
+        $this->assertDatabaseMissing('employee_documents', ['title' => 'Aisha Government ID']);
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_empty_auto_approval_workflow_syncs_the_source_record(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+        $workflow = ApprovalWorkflow::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('module', 'employee_documents')
+            ->where('action', 'submit')
+            ->firstOrFail();
+        $workflow->steps()->delete();
+        $workflow->update(['auto_approve_when_no_steps' => true]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $documentId = $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'expires_at' => '2028-01-01',
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('document.status', 'approved')
+            ->assertJsonPath('document.approval_requests.0.status', 'approved')
+            ->json('document.id');
+
+        $this->assertDatabaseHas('approval_requests', [
+            'approvable_id' => $documentId,
+            'module' => 'employee_documents',
+            'status' => 'approved',
+            'current_step_order' => null,
+        ]);
+        $this->assertDatabaseHas('employee_documents', [
+            'id' => $documentId,
+            'status' => 'approved',
+        ]);
+    }
+
+    public function test_editing_workflow_steps_is_blocked_while_requests_are_pending(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $admin->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $admin->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'expires_at' => '2028-01-01',
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $workflow = ApprovalWorkflow::query()
+            ->where('organization_id', $admin->organization_id)
+            ->where('module', 'employee_documents')
+            ->where('action', 'submit')
+            ->firstOrFail();
+        $originalStepCount = $workflow->steps()->count();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/approval-workflows/{$workflow->id}", [
+            'steps' => [
+                [
+                    'step_order' => 1,
+                    'name' => 'Renamed step',
+                    'approver_type' => 'permission',
+                    'approver_permission' => 'employee_documents.update',
+                ],
+            ],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['steps']);
+
+        $this->assertSame($originalStepCount, $workflow->steps()->count());
+    }
+
+    public function test_approver_gets_a_clear_error_when_their_step_is_no_longer_active(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $hrOfficer = User::query()->where('email', 'kelechi.nwosu@valtireo.test')->firstOrFail();
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->where('organization_id', $admin->organization_id)->where('code', 'GOV-ID')->firstOrFail();
+        $requirement = DocumentRequirement::query()
+            ->where('organization_id', $admin->organization_id)
+            ->where('document_type_id', $type->id)
+            ->firstOrFail();
+
+        Sanctum::actingAs($employeeUser);
+
+        $documentId = $this->post('/api/documents', [
+            'document_type_id' => $type->id,
+            'document_requirement_id' => $requirement->id,
+            'title' => 'Aisha Government ID',
+            'file' => UploadedFile::fake()->create('aisha-government-id.pdf', 128, 'application/pdf'),
+            'expires_at' => '2028-01-01',
+        ], ['Accept' => 'application/json'])->assertCreated()->json('document.id');
+
+        $approval = ApprovalRequest::query()->where('approvable_id', $documentId)->where('module', 'employee_documents')->firstOrFail();
+
+        // Simulate the configured step becoming unavailable mid-flight — the
+        // guarded workflow-update path above can no longer cause this through
+        // normal use, but this defends against any other stale reference.
+        ApprovalWorkflowStep::query()
+            ->where('approval_workflow_id', $approval->approval_workflow_id)
+            ->where('step_order', $approval->current_step_order)
+            ->update(['is_active' => false]);
+
+        Sanctum::actingAs($hrOfficer);
+
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.action.0',
+                'The approval step configured for this request is no longer active. Ask an organization admin to resolve it.'
+            );
+
+        $this->assertDatabaseHas('approval_requests', ['id' => $approval->id, 'status' => 'pending']);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+            ->assertOk()
+            ->assertJsonPath('approval_request.status', 'approved');
     }
 
     public function test_default_document_workflow_is_seeded(): void

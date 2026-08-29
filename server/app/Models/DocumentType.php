@@ -19,6 +19,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'default_reminder_days',
     'employee_upload_allowed',
     'approval_required',
+    'signature_method',
     'is_active',
 ])]
 class DocumentType extends Model implements AuditableContract

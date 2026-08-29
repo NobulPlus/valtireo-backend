@@ -43,6 +43,7 @@ class UpdateDocumentTypeRequest extends FormRequest
             'default_reminder_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'employee_upload_allowed' => ['sometimes', 'boolean'],
             'approval_required' => ['sometimes', 'boolean'],
+            'signature_method' => ['sometimes', Rule::in(['none', 'acknowledge', 'signed_copy'])],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

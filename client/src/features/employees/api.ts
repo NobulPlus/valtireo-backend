@@ -1,6 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiClient } from '@/lib/apiClient';
-import type { CreateEmployeePayload, CreateEmployeeResponse, Employee, OrgChartNode, Paginated } from '@/types/api';
+import type {
+  CreateEmployeePayload,
+  CreateEmployeeResponse,
+  Dependent,
+  Employee,
+  EmployeeDirectoryResponse,
+  EmployeeDocument,
+  EmergencyContact,
+  OrgChartNode,
+  Paginated,
+} from '@/types/api';
 
 interface ResourceEnvelope<T> {
   data: T;
@@ -75,6 +85,30 @@ export function useOrgChart(enabled = true) {
   });
 }
 
+export interface DirectoryFilters {
+  search?: string;
+  department_id?: number | 'all';
+  page?: number;
+  per_page?: number;
+}
+
+export function useEmployeeDirectory(filters: DirectoryFilters) {
+  return useQuery({
+    queryKey: ['employees', 'directory', filters],
+    queryFn: () => api.get<EmployeeDirectoryResponse>('/employees/directory', { params: cleanParams(filters) }),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useDepartmentOptions() {
+  return useQuery({
+    queryKey: ['setup', 'departments'],
+    queryFn: () => api.get<{ data: Array<{ id: number; name: string }> }>('/setup/departments'),
+    staleTime: 5 * 60_000,
+    select: (response) => response.data,
+  });
+}
+
 export function useEmployee(id: number | string | undefined) {
   return useQuery({
     queryKey: ['employees', id],
@@ -83,6 +117,61 @@ export function useEmployee(id: number | string | undefined) {
       return 'data' in response ? response.data : response;
     },
     enabled: id !== undefined,
+  });
+}
+
+/** All document types visible to the acting user — admins with employee_documents.create see HR-only types too. */
+export function useDocumentTypesForUpload() {
+  return useQuery({
+    queryKey: ['documents', 'types', 'upload'],
+    queryFn: () => api.get<{ data: { id: number; name: string; code: string | null }[] }>('/documents/types?per_page=100'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useDocumentRequirementsForType(documentTypeId: number | undefined) {
+  return useQuery({
+    queryKey: ['documents', 'requirements', documentTypeId],
+    queryFn: () =>
+      api.get<{ data: { id: number; name: string }[] }>('/documents/requirements', {
+        params: { document_type_id: documentTypeId, per_page: 100 },
+      }),
+    enabled: documentTypeId !== undefined,
+  });
+}
+
+export interface UploadEmployeeDocumentPayload {
+  employee_id: number;
+  document_type_id: number;
+  document_requirement_id?: number;
+  title: string;
+  file: File;
+  issued_at?: string;
+  expires_at?: string;
+  notes?: string;
+}
+
+export function useUploadEmployeeDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UploadEmployeeDocumentPayload) => {
+      const formData = new FormData();
+      formData.append('employee_id', String(payload.employee_id));
+      formData.append('document_type_id', String(payload.document_type_id));
+      if (payload.document_requirement_id) formData.append('document_requirement_id', String(payload.document_requirement_id));
+      formData.append('title', payload.title);
+      formData.append('file', payload.file);
+      if (payload.issued_at) formData.append('issued_at', payload.issued_at);
+      if (payload.expires_at) formData.append('expires_at', payload.expires_at);
+      if (payload.notes) formData.append('notes', payload.notes);
+
+      return api.post<{ document: EmployeeDocument }>('/documents', formData);
+    },
+    onSuccess: () => {
+      // `useEmployee` keys on the route param (a string), so match broadly
+      // by prefix rather than guessing the exact key shape.
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
   });
 }
 
@@ -115,8 +204,6 @@ export interface UpdateEmployeePayload {
     residential_address?: string | null;
     next_of_kin_name?: string | null;
     next_of_kin_phone?: string | null;
-    emergency_contact_name?: string | null;
-    emergency_contact_phone?: string | null;
   };
 }
 
@@ -243,6 +330,103 @@ export function useRequestEmployeeCorrection(employeeId: number) {
       api.post(`/employees/${employeeId}/correction-requests`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees', employeeId] });
+    },
+  });
+}
+
+export interface EmployeeEmergencyContactPayload {
+  name: string;
+  relationship?: string | null;
+  phone: string;
+  alternate_phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  is_primary?: boolean;
+}
+
+export function useCreateEmployeeEmergencyContact(employeeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EmployeeEmergencyContactPayload) =>
+      api.post<{ emergency_contact: EmergencyContact }>('/employee-profile/emergency-contacts', {
+        ...payload,
+        employee_id: employeeId,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export function useUpdateEmployeeEmergencyContact(contactId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EmployeeEmergencyContactPayload) =>
+      api.patch<{ emergency_contact: EmergencyContact }>(`/employee-profile/emergency-contacts/${contactId}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export function useDeleteEmployeeEmergencyContact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (contactId: number) => api.delete(`/employee-profile/emergency-contacts/${contactId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export interface EmployeeDependentPayload {
+  name: string;
+  relationship: string;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  is_beneficiary?: boolean;
+}
+
+export function useCreateEmployeeDependent(employeeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EmployeeDependentPayload) =>
+      api.post<{ dependent: Dependent }>('/employee-profile/dependents', {
+        ...payload,
+        employee_id: employeeId,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export function useUpdateEmployeeDependent(dependentId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: EmployeeDependentPayload) =>
+      api.patch<{ dependent: Dependent }>(`/employee-profile/dependents/${dependentId}`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export function useDeleteEmployeeDependent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dependentId: number) => api.delete(`/employee-profile/dependents/${dependentId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }

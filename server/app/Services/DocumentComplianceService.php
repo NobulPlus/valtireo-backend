@@ -15,7 +15,8 @@ class DocumentComplianceService
 {
     public function __construct(
         private readonly EmployeeProfileActivityService $activities,
-        private readonly ApprovalRequestService $approvals
+        private readonly ApprovalRequestService $approvals,
+        private readonly NotificationDispatchService $notifications
     )
     {
     }
@@ -37,18 +38,47 @@ class DocumentComplianceService
                     ->where('organization_id', $actor->organization_id)
                     ->where('document_type_id', $documentType->id)
                     ->findOrFail($data['document_requirement_id']);
+            } else {
+                // Self-service uploads (and any admin upload that skips the
+                // requirement picker) never send this explicitly — without
+                // inferring it, the document is never linked to what it's
+                // actually satisfying, and compliance stays "missing"
+                // forever even once the document is approved.
+                $requirement = $this->inferRequirement($documentType, $employee);
             }
 
-            if (! $actor->can('employee_documents.create') && ! $documentType->employee_upload_allowed) {
-                throw ValidationException::withMessages([
-                    'document_type_id' => ['Employees are not allowed to upload this document type.'],
-                ]);
+            $originalDocument = null;
+            if (! empty($data['replaces_document_id'])) {
+                $originalDocument = EmployeeDocument::query()
+                    ->where('organization_id', $actor->organization_id)
+                    ->where('employee_id', $employee->id)
+                    ->findOrFail($data['replaces_document_id']);
+
+                if (! in_array($originalDocument->status, ['awaiting_signature', 'rejected', 'changes_requested'], true)) {
+                    throw ValidationException::withMessages([
+                        'replaces_document_id' => ['This document is not awaiting a signed copy.'],
+                    ]);
+                }
             }
 
-            if ($requirement && ! $actor->can('employee_documents.create') && ! $requirement->employee_upload_allowed) {
-                throw ValidationException::withMessages([
-                    'document_requirement_id' => ['Employees are not allowed to upload this required document.'],
-                ]);
+            // Replying with a signed copy of your own awaiting-signature
+            // document is always allowed for the owning employee, regardless
+            // of employee_upload_allowed — that flag governs the original
+            // HR-provided file, not the employee's signed reply to it.
+            $isSignedCopyReply = $originalDocument !== null;
+
+            if (! $isSignedCopyReply) {
+                if (! $actor->can('employee_documents.create') && ! $documentType->employee_upload_allowed) {
+                    throw ValidationException::withMessages([
+                        'document_type_id' => ['Employees are not allowed to upload this document type.'],
+                    ]);
+                }
+
+                if ($requirement && ! $actor->can('employee_documents.create') && ! $requirement->employee_upload_allowed) {
+                    throw ValidationException::withMessages([
+                        'document_requirement_id' => ['Employees are not allowed to upload this required document.'],
+                    ]);
+                }
             }
 
             if ($documentType->requires_expiry_date && empty($data['expires_at'])) {
@@ -57,13 +87,27 @@ class DocumentComplianceService
                 ]);
             }
 
-            $approvalRequired = $requirement?->approval_required ?? $documentType->approval_required;
+            $isHrProvided = $actor->employee?->id !== $employee->id;
+
+            // A signed copy always goes through HR review, regardless of the
+            // type's own approval_required flag — reviewing it is the whole
+            // point of this path (confirming the signature is legitimate).
+            $approvalRequired = $isSignedCopyReply
+                ? true
+                : ($requirement?->approval_required ?? $documentType->approval_required);
+
+            $initialStatus = match (true) {
+                $isSignedCopyReply => 'submitted',
+                $documentType->signature_method === 'signed_copy' && $isHrProvided => 'awaiting_signature',
+                default => $approvalRequired ? 'submitted' : 'approved',
+            };
 
             $document = EmployeeDocument::query()->create([
                 'organization_id' => $actor->organization_id,
                 'employee_id' => $employee->id,
                 'document_type_id' => $documentType->id,
-                'document_requirement_id' => $requirement?->id,
+                'document_requirement_id' => $requirement?->id ?? $originalDocument?->document_requirement_id,
+                'replaces_document_id' => $originalDocument?->id,
                 'uploaded_by_id' => $actor->id,
                 'title' => $data['title'],
                 'file_name' => $data['file_name'],
@@ -72,11 +116,15 @@ class DocumentComplianceService
                 'file_size' => $data['file_size'] ?? null,
                 'issued_at' => $data['issued_at'] ?? null,
                 'expires_at' => $data['expires_at'] ?? null,
-                'status' => $approvalRequired ? 'submitted' : 'approved',
+                'status' => $initialStatus,
                 'notes' => $data['notes'] ?? null,
                 'submitted_at' => now(),
-                'reviewed_at' => $approvalRequired ? null : now(),
+                'reviewed_at' => $initialStatus === 'approved' ? now() : null,
             ])->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy']);
+
+            if ($originalDocument) {
+                $originalDocument->update(['status' => 'superseded']);
+            }
 
             $this->activities->record(
                 $employee,
@@ -88,7 +136,12 @@ class DocumentComplianceService
                 ['status' => $document->status, 'document_type_id' => $document->document_type_id]
             );
 
-            if ($approvalRequired) {
+            // Gated on the document's own resulting status, not the raw
+            // approval_required flag — an "awaiting_signature" original
+            // (the blank template HR just sent) has nothing to review yet;
+            // only a genuinely "submitted" document (a normal upload, or
+            // the employee's signed reply) should ever create a review task.
+            if ($initialStatus === 'submitted') {
                 $this->approvals->submit(
                     $actor,
                     $document,
@@ -100,7 +153,17 @@ class DocumentComplianceService
                 );
             }
 
-            return $document->refresh()->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor']);
+            // Only when someone else (HR) handed this to the employee — not
+            // when the employee is submitting their own document or replying
+            // with a signed copy (that reply's review is handled by the
+            // approval-submitted notification above, addressed to HR).
+            if ($documentType->signature_method === 'acknowledge' && $isHrProvided) {
+                $this->notifications->documentNeedsAcknowledgment($document);
+            } elseif ($documentType->signature_method === 'signed_copy' && $isHrProvided && ! $isSignedCopyReply) {
+                $this->notifications->documentNeedsSignature($document);
+            }
+
+            return $document->refresh()->load(['employee', 'documentType', 'requirement', 'replacesDocument', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor']);
         });
     }
 
@@ -147,8 +210,103 @@ class DocumentComplianceService
     }
 
     /**
+     * The employee's own confirmation that they've read/received a document
+     * — distinct from the HR-side approve/reject review cycle above. Only
+     * the owning employee can acknowledge, and only for document types that
+     * are actually configured to require it.
+     */
+    public function acknowledge(User $actor, EmployeeDocument $document): EmployeeDocument
+    {
+        if ($document->organization_id !== $actor->organization_id) {
+            abort(404);
+        }
+
+        if ($actor->employee?->id !== $document->employee_id) {
+            abort(403);
+        }
+
+        $document->loadMissing('documentType');
+
+        if ($document->documentType->signature_method !== 'acknowledge') {
+            throw ValidationException::withMessages([
+                'status' => ['This document does not require acknowledgment.'],
+            ]);
+        }
+
+        if ($document->acknowledged_at) {
+            throw ValidationException::withMessages([
+                'status' => ['This document has already been acknowledged.'],
+            ]);
+        }
+
+        $document->update(['acknowledged_at' => now()]);
+        $document = $document->refresh()->load(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'reviews.reviewedBy']);
+
+        $this->activities->record(
+            $document->employee,
+            $actor,
+            'document_acknowledged',
+            'Document acknowledged',
+            "{$document->title} was acknowledged.",
+            $document,
+            []
+        );
+
+        $this->notifications->documentAcknowledged($document);
+
+        return $document;
+    }
+
+    /**
      * @return array<string, mixed>
      */
+    /**
+     * Personal compliance rows for one employee's own dashboard — only the
+     * requirements that actually need their attention (missing, expired, or
+     * expiring soon), not the full org-wide compliance matrix.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function complianceForEmployee(Employee $employee): array
+    {
+        $requirements = DocumentRequirement::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('is_active', true)
+            ->where('is_required', true)
+            ->with('documentType:id,code,name')
+            ->get()
+            ->filter(fn (DocumentRequirement $requirement) => $this->requirementAppliesToEmployee($requirement, $employee));
+
+        $latestDocuments = EmployeeDocument::query()
+            ->where('employee_id', $employee->id)
+            ->whereIn('document_requirement_id', $requirements->pluck('id'))
+            ->with('documentType:id,signature_method')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('document_requirement_id')
+            ->keyBy('document_requirement_id');
+
+        return $requirements
+            ->map(function (DocumentRequirement $requirement) use ($latestDocuments) {
+                $document = $latestDocuments->get($requirement->id);
+                $state = $this->complianceState($document, $requirement->reminder_days);
+
+                return [
+                    'requirement' => [
+                        'id' => $requirement->id,
+                        'name' => $requirement->name,
+                        'document_type' => $requirement->documentType->name,
+                    ],
+                    'state' => $state,
+                    'expires_at' => $document?->expires_at,
+                    'document_id' => $document?->id,
+                ];
+            })
+            ->filter(fn (array $row): bool => in_array($row['state'], ['missing', 'expired', 'expiring_soon', 'pending_acknowledgment', 'awaiting_signature', 'rejected', 'changes_requested'], true))
+            ->values()
+            ->all();
+    }
+
     public function compliance(User $actor, array $filters = []): array
     {
         $employees = Employee::query()
@@ -163,7 +321,7 @@ class DocumentComplianceService
             ->where('organization_id', $actor->organization_id)
             ->where('is_active', true)
             ->where('is_required', true)
-            ->with('documentType:id,code,name,requires_expiry_date')
+            ->with('documentType:id,code,name,requires_expiry_date,signature_method')
             ->get();
 
         $rows = [];
@@ -173,15 +331,19 @@ class DocumentComplianceService
             'missing' => 0,
             'expired' => 0,
             'expiring_soon' => 0,
+            'pending_acknowledgment' => 0,
+            'awaiting_signature' => 0,
             'submitted' => 0,
             'approved' => 0,
             'rejected' => 0,
             'changes_requested' => 0,
+            'superseded' => 0,
         ];
 
         $latestDocuments = EmployeeDocument::query()
             ->whereIn('employee_id', $employees->pluck('id'))
             ->whereIn('document_requirement_id', $requirements->pluck('id'))
+            ->with('documentType:id,signature_method')
             ->orderByDesc('id')
             ->get()
             ->unique(fn (EmployeeDocument $document) => "{$document->employee_id}:{$document->document_requirement_id}")
@@ -257,6 +419,27 @@ class DocumentComplianceService
             && (! $requirement->organization_location_id || $requirement->organization_location_id === $employee->organization_location_id);
     }
 
+    /**
+     * Whichever single active requirement a freshly-uploaded document of
+     * this type actually satisfies for this employee — a person picking
+     * "Government ID" as the document type shouldn't also need to know
+     * about the separate admin concept of "requirements". Only links when
+     * the match is unambiguous; genuinely optional documents, or a type
+     * with more than one applicable requirement, are left unlinked rather
+     * than guessed.
+     */
+    private function inferRequirement(DocumentType $documentType, Employee $employee): ?DocumentRequirement
+    {
+        $candidates = DocumentRequirement::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('document_type_id', $documentType->id)
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn (DocumentRequirement $requirement) => $this->requirementAppliesToEmployee($requirement, $employee));
+
+        return $candidates->count() === 1 ? $candidates->first() : null;
+    }
+
     private function complianceState(?EmployeeDocument $document, int $reminderDays): string
     {
         if (! $document) {
@@ -265,6 +448,10 @@ class DocumentComplianceService
 
         if ($document->expires_at && $document->expires_at->isPast()) {
             return 'expired';
+        }
+
+        if ($document->documentType->signature_method === 'acknowledge' && ! $document->acknowledged_at) {
+            return 'pending_acknowledgment';
         }
 
         if ($document->expires_at && $document->expires_at->lte(now()->addDays($reminderDays))) {

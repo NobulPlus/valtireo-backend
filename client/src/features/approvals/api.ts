@@ -73,6 +73,7 @@ export interface ApprovalWorkflowPayload {
   is_active?: boolean;
   require_note_on_reject?: boolean;
   require_note_on_request_changes?: boolean;
+  auto_approve_when_no_steps?: boolean;
   steps: ApprovalWorkflowStepPayload[];
 }
 

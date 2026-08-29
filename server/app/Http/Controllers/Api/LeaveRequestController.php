@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeaveRequestController extends Controller
 {
@@ -38,7 +40,12 @@ class LeaveRequestController extends Controller
 
     public function store(StoreLeaveRequestRequest $request, LeaveRequestService $leave): JsonResponse
     {
-        $leaveRequest = $leave->submit($request->user(), $request->validated());
+        $data = $request->validated();
+        if ($request->hasFile('evidence')) {
+            $data['evidence'] = $request->file('evidence');
+        }
+
+        $leaveRequest = $leave->submit($request->user(), $data);
 
         return response()->json([
             'leave_request' => new LeaveRequestResource($leaveRequest),
@@ -51,6 +58,15 @@ class LeaveRequestController extends Controller
         abort_unless($request->user()->can('leave_requests.view') || $request->user()->employee?->id === $leaveRequest->employee_id, 403);
 
         return new LeaveRequestResource($leaveRequest->load($leave->relations()));
+    }
+
+    public function downloadEvidence(Request $request, LeaveRequest $leaveRequest): StreamedResponse
+    {
+        abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('leave_requests.view') || $request->user()->employee?->id === $leaveRequest->employee_id, 403);
+        abort_unless(filled($leaveRequest->evidence_file_path) && Storage::disk('local')->exists($leaveRequest->evidence_file_path), 404);
+
+        return Storage::disk('local')->download($leaveRequest->evidence_file_path, $leaveRequest->evidence_file_name);
     }
 
     public function cancel(

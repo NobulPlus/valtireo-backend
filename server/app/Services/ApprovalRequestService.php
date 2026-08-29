@@ -41,8 +41,22 @@ class ApprovalRequestService
                 ->where('is_active', true)
                 ->with('steps')
                 ->first();
+
+            if (! $workflow) {
+                throw ValidationException::withMessages([
+                    'approval_workflow' => ["No active approval workflow is configured for {$module}.{$action}."],
+                ]);
+            }
+
             $firstStep = $workflow?->steps->where('is_active', true)->sortBy('step_order')->first();
-            $status = $firstStep ? 'pending' : (($workflow?->auto_approve_when_no_steps ?? false) ? 'approved' : 'pending');
+
+            if (! $firstStep && ! $workflow->auto_approve_when_no_steps) {
+                throw ValidationException::withMessages([
+                    'approval_workflow' => ["The {$workflow->name} workflow has no active approval step. Add a step or enable auto-approval for empty workflows."],
+                ]);
+            }
+
+            $status = $firstStep ? 'pending' : 'approved';
 
             $approvalRequest = ApprovalRequest::query()->create([
                 'organization_id' => $actor->organization_id,
@@ -63,9 +77,11 @@ class ApprovalRequestService
 
             if ($approvalRequest->status === 'pending') {
                 $this->notifications->approvalSubmitted($approvalRequest);
+            } elseif ($approvalRequest->status === 'approved') {
+                $this->syncApprovableStatus($approvalRequest->load('approvable'), $actor, 'approve', null);
             }
 
-            return $approvalRequest;
+            return $approvalRequest->refresh();
         });
     }
 
@@ -165,7 +181,9 @@ class ApprovalRequestService
         }
 
         if (! $step) {
-            abort(403);
+            throw ValidationException::withMessages([
+                'action' => ['The approval step configured for this request is no longer active. Ask an organization admin to resolve it.'],
+            ]);
         }
 
         $subjectEmployee = $approvalRequest->subjectEmployee;

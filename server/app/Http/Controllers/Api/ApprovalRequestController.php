@@ -20,7 +20,7 @@ class ApprovalRequestController extends Controller
 
         $approvals = ApprovalRequest::query()
             ->where('organization_id', $request->user()->organization_id)
-            ->with(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor'])
+            ->with(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor', 'approvable'])
             ->when($request->string('module')->toString(), fn (Builder $query, string $module) => $query->where('module', $module))
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($request->integer('subject_employee_id'), fn (Builder $query, int $employeeId) => $query->where('subject_employee_id', $employeeId))
@@ -35,7 +35,7 @@ class ApprovalRequestController extends Controller
         abort_unless($request->user()->can('approvals.view'), 403);
         abort_unless($approvalRequest->organization_id === $request->user()->organization_id, 404);
 
-        return new ApprovalRequestResource($approvalRequest->load(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor']));
+        return new ApprovalRequestResource($approvalRequest->load(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor', 'approvable']));
     }
 
     public function act(

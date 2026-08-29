@@ -183,11 +183,21 @@ class RichDemoDataSeeder extends Seeder
                     'residential_address' => $employeeData['residential_address'],
                     'next_of_kin_name' => $employeeData['next_of_kin_name'],
                     'next_of_kin_phone' => $employeeData['next_of_kin_phone'],
-                    'emergency_contact_name' => $employeeData['emergency_contact_name'],
-                    'emergency_contact_phone' => $employeeData['emergency_contact_phone'],
                     'completion_status' => $employeeData['profile_status'],
                 ]
             );
+
+            if (isset($employeeData['emergency_contact_name'], $employeeData['emergency_contact_phone'])) {
+                $employee->emergencyContacts()->firstOrCreate(
+                    ['employee_id' => $employee->id],
+                    [
+                        'organization_id' => $employee->organization_id,
+                        'name' => $employeeData['emergency_contact_name'],
+                        'phone' => $employeeData['emergency_contact_phone'],
+                        'is_primary' => true,
+                    ]
+                );
+            }
         }
     }
 
@@ -207,6 +217,13 @@ class RichDemoDataSeeder extends Seeder
                 'description' => 'Signed employment contract or offer acceptance.',
                 'requires_expiry_date' => false,
                 'default_reminder_days' => 30,
+                // An employment contract needs an actual signature, not just
+                // an in-app click — HR provides the unsigned contract, the
+                // employee downloads, signs, and uploads the scanned signed
+                // copy back, which HR reviews before it counts as compliant.
+                'employee_upload_allowed' => false,
+                'approval_required' => true,
+                'signature_method' => 'signed_copy',
             ],
             [
                 'name' => 'Guarantor Form',
@@ -214,6 +231,13 @@ class RichDemoDataSeeder extends Seeder
                 'description' => 'Completed guarantor form.',
                 'requires_expiry_date' => false,
                 'default_reminder_days' => 30,
+                // A guarantor form conventionally needs a witnessed wet-ink
+                // signature — HR provides the blank form, the employee
+                // downloads, signs, and uploads the scanned signed copy,
+                // which HR then reviews before it counts as compliant.
+                'employee_upload_allowed' => false,
+                'approval_required' => true,
+                'signature_method' => 'signed_copy',
             ],
             [
                 'name' => 'Professional License',
@@ -228,9 +252,10 @@ class RichDemoDataSeeder extends Seeder
             $organization->documentTypes()->firstOrCreate(
                 ['code' => $type['code']],
                 [
-                    ...$type,
                     'employee_upload_allowed' => true,
                     'approval_required' => true,
+                    'signature_method' => 'none',
+                    ...$type,
                     'is_active' => true,
                 ]
             );
@@ -574,8 +599,6 @@ class RichDemoDataSeeder extends Seeder
                 'residential_address' => '8 Garki Crescent, Abuja',
                 'next_of_kin_name' => 'Usman Bello',
                 'next_of_kin_phone' => '08030000103',
-                'emergency_contact_name' => 'Kelechi Nwosu',
-                'emergency_contact_phone' => '08030000203',
                 'profile_status' => 'approved',
             ],
             [

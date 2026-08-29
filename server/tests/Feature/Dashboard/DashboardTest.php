@@ -220,8 +220,34 @@ class DashboardTest extends TestCase
                 'work',
                 'profile',
                 'pending_actions',
-                'modules',
+                'leave',
+                'attendance' => ['trend', 'range' => ['date_from', 'date_to'], 'corrections_pending', 'this_month' => ['present', 'late', 'absent', 'total_hours']],
+                'document_compliance',
+                'next_holiday',
+                'tenure',
             ]);
+    }
+
+    public function test_personal_dashboard_attendance_trend_defaults_to_last_7_days_and_respects_a_custom_range(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($employeeUser);
+
+        $today = \Carbon\CarbonImmutable::today();
+
+        $default = $this->getJson('/api/dashboard/me')->assertOk();
+        $this->assertSame($today->subDays(6)->toDateString(), $default->json('attendance.range.date_from'));
+        $this->assertSame($today->toDateString(), $default->json('attendance.range.date_to'));
+        $this->assertCount(7, $default->json('attendance.trend'));
+
+        $dateFrom = $today->subDays(29)->toDateString();
+        $dateTo = $today->toDateString();
+        $widened = $this->getJson("/api/dashboard/me?date_from={$dateFrom}&date_to={$dateTo}")->assertOk();
+        $this->assertSame($dateFrom, $widened->json('attendance.range.date_from'));
+        $this->assertSame($dateTo, $widened->json('attendance.range.date_to'));
+        $this->assertCount(30, $widened->json('attendance.trend'));
     }
 
     public function test_hr_admin_can_view_manager_dashboard_for_selected_department(): void

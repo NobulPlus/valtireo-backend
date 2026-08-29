@@ -27,6 +27,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { CHART_COLORS, DonutChart, RankedBarList } from '@/components/ui/Charts';
 import { downloadPlatformOrganizationsCsv, usePlatformDashboard, usePlatformOrganizations } from '@/features/platform/api';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { PlatformDashboard, PlatformOrganizationSummary } from '@/types/api';
 
 const STATUS_OPTIONS = ['', 'active', 'invited', 'setup_in_progress', 'suspended'];
@@ -55,10 +56,6 @@ const STATUS_COLORS: Record<string, string> = {
   suspended: '#DC2626',
 };
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
-}
-
 function statusLabel(status: string): string {
   return status
     .replaceAll('_', ' ')
@@ -84,6 +81,7 @@ function PlatformDashboardContent({
   onDateToChange: (value: string) => void;
 }) {
   const navigate = useNavigate();
+  const { formatDate } = useDateFormatter();
   const [tableSearch, setTableSearch] = useState('');
   const [tableStatus, setTableStatus] = useState('');
   const [sortBy, setSortBy] = useState('created_at');
@@ -179,7 +177,7 @@ function PlatformDashboardContent({
         render: (row) => formatDate(row.created_at),
       },
     ],
-    [sortBy, sortDirection],
+    [sortBy, sortDirection, formatDate],
   );
 
   const summary = data.summary;

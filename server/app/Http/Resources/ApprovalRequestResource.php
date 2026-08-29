@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources;
 
+use App\Models\EmployeeDocument;
+use App\Models\LeaveRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -38,6 +40,23 @@ class ApprovalRequestResource extends JsonResource
             'submitted_at' => $this->submitted_at,
             'completed_at' => $this->completed_at,
             'metadata' => $this->metadata ?? [],
+            // So the reviewer can actually see the file before deciding —
+            // not every approvable type has one, only documents do.
+            'document' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof EmployeeDocument ? [
+                'id' => $this->approvable->id,
+                'title' => $this->approvable->title,
+                'file_name' => $this->approvable->file_name,
+                'mime_type' => $this->approvable->mime_type,
+                'download_url' => url("/api/documents/{$this->approvable->id}/download"),
+                'view_url' => url("/api/documents/{$this->approvable->id}/view"),
+            ] : null),
+            'leave_request' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof LeaveRequest ? [
+                'id' => $this->approvable->id,
+                'evidence_file_name' => $this->approvable->evidence_file_name,
+                'evidence_mime_type' => $this->approvable->evidence_mime_type,
+                'evidence_file_size' => $this->approvable->evidence_file_size,
+                'evidence_download_url' => $this->approvable->evidence_file_path ? url("/api/leave/requests/{$this->approvable->id}/evidence/download") : null,
+            ] : null),
             'workflow' => new ApprovalWorkflowResource($this->whenLoaded('workflow')),
             'decisions' => ApprovalDecisionResource::collection($this->whenLoaded('decisions')),
             'created_at' => $this->created_at,

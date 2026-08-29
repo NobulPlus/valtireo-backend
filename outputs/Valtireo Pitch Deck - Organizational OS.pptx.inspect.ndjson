@@ -1,0 +1,300 @@
+{"kind":"deck","id":"pr/orbj9w","name":"Deck"}
+{"kind":"layout","layoutId":"62e00e57-3656-4546-b3e9-209d8664656a","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"ddfc98f1-76dc-432c-b4d6-de61759b0ec3","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/gscd0p","slide":1,"title":"Valtireo","textShapes":10}
+{"kind":"shape","id":"sh/tkjyx83y","slide":1,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/6x8f2t47","slide":1,"bbox":[792,0,488,720]}
+{"kind":"shape","id":"sh/ri1gvyls","slide":1,"bbox":[92,88,76,76]}
+{"kind":"shape","id":"sh/gnax83m9","slide":1,"bbox":[117.84,107,8,36.48]}
+{"kind":"shape","id":"sh/1ojy183u","slide":1,"bbox":[136.08,107,8,36.48]}
+{"kind":"shape","id":"sh/elsf6d4j","slide":1,"bbox":[108.72,100.92,11,11]}
+{"kind":"shape","id":"sh/fm1gzylo","slide":1,"bbox":[127.72,142.72,11,11]}
+{"kind":"textbox","id":"sh/wrqxwjm5","slide":1,"text":"Valtireo","textPreview":"Valtireo","textChars":8,"textLines":1,"bbox":[92,188,620,78]}
+{"kind":"textbox","id":"sh/hszeponq","slide":1,"text":"The Organizational OS for modern institutions and growing teams.","textPreview":"The Organizational OS for modern institutions and growing teams.","textChars":64,"textLines":1,"bbox":[96,282,650,78]}
+{"kind":"textbox","id":"sh/dwji1o7e","slide":1,"text":"Structure, people, documents, approvals, compliance, reporting, and audit trails in one governed workspace.","textPreview":"Structure, people, documents, approvals, compliance, reporting, and audit trails in one governed workspace.","textChars":107,"textLines":1,"bbox":[98,394,620,82]}
+{"kind":"textbox","id":"sh/svah8jq9","slide":1,"text":"HR wedge","textPreview":"HR wedge","textChars":8,"textLines":1,"bbox":[846,112,270,52]}
+{"kind":"textbox","id":"sh/ru10ze9o","slide":1,"text":"First commercial entry point","textPreview":"First commercial entry point","textChars":28,"textLines":1,"bbox":[846,166,270,42]}
+{"kind":"textbox","id":"sh/qtsz6983","slide":1,"text":"OS vision","textPreview":"OS vision","textChars":9,"textLines":1,"bbox":[846,260,270,52]}
+{"kind":"textbox","id":"sh/103i587q","slide":1,"text":"Expansion beyond HRMS","textPreview":"Expansion beyond HRMS","textChars":21,"textLines":1,"bbox":[846,314,270,42]}
+{"kind":"textbox","id":"sh/0zuhc3q5","slide":1,"text":"MVP base","textPreview":"MVP base","textChars":8,"textLines":1,"bbox":[846,408,270,52]}
+{"kind":"textbox","id":"sh/fy103ypk","slide":1,"text":"Core engines already built","textPreview":"Core engines already built","textChars":26,"textLines":1,"bbox":[846,462,270,42]}
+{"kind":"textbox","id":"sh/exszat8z","slide":1,"text":"Pitch deck v1 - 2026","textPreview":"Pitch deck v1 - 2026","textChars":20,"textLines":1,"bbox":[96,624,280,26]}
+{"kind":"notes","id":"nt/gscd0p","slide":1,"text":"[Sources] README.md; docs/valtireo-business-plan-v1-2026-08-11.md; docs/valtireo-frontend-build-and-improvement-brief.md.\nOpen with Valtireo as an Organizational OS. HR is the wedge, not the ceiling."}
+{"kind":"slide","id":"sl/2v14ds","slide":2,"title":"valtireo.deck","textShapes":18}
+{"kind":"shape","id":"sh/qx072l0j","slide":2,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/d0rqx0zu","slide":2,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/szip4vi9","slide":2,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/fm98zqh0","slide":2,"text":"THE PROBLEM","textPreview":"THE PROBLEM","textChars":11,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/e1076l0f","slide":2,"text":"Administration still runs on disconnected fragments.","textPreview":"Administration still runs on disconnected fragments.","textChars":52,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/1orq10z6","slide":2,"text":"As organizations grow, the work that should create control instead creates blind spots.","textPreview":"As organizations grow, the work that should create control instead creates blind spots.","textChars":87,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/0nip8vyl","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/nqt83ahc","slide":2,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/2pk7a5gr","slide":2,"bbox":[86,402,252,156]}
+{"kind":"textbox","id":"sh/8z65wb2x","slide":2,"text":"Records","textPreview":"Records","textChars":7,"textLines":1,"bbox":[110,424,204,34]}
+{"kind":"textbox","id":"sh/90z6pgji","slide":2,"text":"Employee data lives across spreadsheets, folders, paper files, and chats.","textPreview":"Employee data lives across spreadsheets, folders, paper files, and chats.","textChars":73,"textLines":1,"bbox":[110,466,204,72]}
+{"kind":"shape","id":"sh/mxonu1k7","slide":2,"bbox":[372,402,252,156]}
+{"kind":"textbox","id":"sh/7yx4n61s","slide":2,"text":"Approvals","textPreview":"Approvals","textChars":9,"textLines":1,"bbox":[396,424,204,34]}
+{"kind":"textbox","id":"sh/w3q50b29","slide":2,"text":"Decisions happen informally, without a durable owner, status, or trail.","textPreview":"Decisions happen informally, without a durable owner, status, or trail.","textChars":71,"textLines":1,"bbox":[396,466,204,72]}
+{"kind":"shape","id":"sh/h4z6tgju","slide":2,"bbox":[658,402,252,156]}
+{"kind":"textbox","id":"sh/u18nylk3","slide":2,"text":"Compliance","textPreview":"Compliance","textChars":10,"textLines":1,"bbox":[682,424,204,34]}
+{"kind":"textbox","id":"sh/v2horq1o","slide":2,"text":"Missing and expiring documents surface late, usually after risk has already formed.","textPreview":"Missing and expiring documents surface late, usually after risk has already formed.","textChars":83,"textLines":1,"bbox":[682,466,204,72]}
+{"kind":"shape","id":"sh/4ra54v25","slide":2,"bbox":[944,402,252,156]}
+{"kind":"textbox","id":"sh/5sj6x0jq","slide":2,"text":"Reports","textPreview":"Reports","textChars":7,"textLines":1,"bbox":[968,424,204,34]}
+{"kind":"textbox","id":"sh/dofmh0bu","slide":2,"text":"Leadership waits for recreated spreadsheets instead of trusted operational data.","textPreview":"Leadership waits for recreated spreadsheets instead of trusted operational data.","textChars":80,"textLines":1,"bbox":[968,466,204,72]}
+{"kind":"shape","id":"sh/sn65ovu9","slide":2,"bbox":[126,346,960,3]}
+{"kind":"shape","id":"sh/rmx4fqt4","slide":2,"bbox":[132,322,148,46]}
+{"kind":"textbox","id":"sh/ql4nmlcj","slide":2,"text":"files","textPreview":"files","textChars":5,"textLines":1,"bbox":[146,330,120,36]}
+{"kind":"shape","id":"sh/1cf6l0b6","slide":2,"bbox":[382,322,148,46]}
+{"kind":"textbox","id":"sh/0b65sval","slide":2,"text":"messages","textPreview":"messages","textChars":8,"textLines":1,"bbox":[396,330,120,36]}
+{"kind":"shape","id":"sh/faxojqt0","slide":2,"bbox":[632,322,148,46]}
+{"kind":"textbox","id":"sh/eponqlcf","slide":2,"text":"forms","textPreview":"forms","textChars":5,"textLines":1,"bbox":[646,330,120,36]}
+{"kind":"shape","id":"sh/hgvm9gbm","slide":2,"bbox":[882,322,148,46]}
+{"kind":"textbox","id":"sh/gfm5gbuh","slide":2,"text":"spreadsheets","textPreview":"spreadsheets","textChars":12,"textLines":1,"bbox":[896,330,120,36]}
+{"kind":"notes","id":"nt/2v14ds","slide":2,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md sections 3 and 6.\nUse this slide to make the pain concrete before introducing the product."}
+{"kind":"slide","id":"sl/sfsemv","slide":3,"title":"valtireo.deck","textShapes":13}
+{"kind":"shape","id":"sh/wfqhgnyx","slide":3,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/veh0nihc","slide":3,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/ad8zedg7","slide":3,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/9czylszm","slide":3,"text":"THE THESIS","textPreview":"THE THESIS","textChars":10,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/8b6hcny1","slide":3,"text":"Every operational object needs a place, owner, status, and trail.","textPreview":"Every operational object needs a place, owner, status, and trail.","textChars":65,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/naxgjihg","slide":3,"text":"Valtireo turns scattered organizational work into structured, visible, governed operations.","textPreview":"Valtireo turns scattered organizational work into structured, visible, governed operations.","textChars":91,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/m9ozadgv","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/l8fyh8za","slide":3,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/076h83yp","slide":3,"bbox":[456,340,370,120]}
+{"kind":"textbox","id":"sh/mhg7u903","slide":3,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[492,374,300,42]}
+{"kind":"shape","id":"sh/nipo3eho","slide":3,"bbox":[128,294,142,66]}
+{"kind":"textbox","id":"sh/ojypwji9","slide":3,"text":"People","textPreview":"People","textChars":6,"textLines":1,"bbox":[140,314,118,26]}
+{"kind":"shape","id":"sh/9k7654ze","slide":3,"bbox":[176,492,142,66]}
+{"kind":"textbox","id":"sh/edw7qp0r","slide":3,"text":"Documents","textPreview":"Documents","textChars":9,"textLines":1,"bbox":[188,512,118,26]}
+{"kind":"shape","id":"sh/ze5ozuhc","slide":3,"bbox":[528,520,142,66]}
+{"kind":"textbox","id":"sh/0fypszix","slide":3,"text":"Approvals","textPreview":"Approvals","textChars":9,"textLines":1,"bbox":[540,540,118,26]}
+{"kind":"shape","id":"sh/1g7614zi","slide":3,"bbox":[856,492,142,66]}
+{"kind":"textbox","id":"sh/qpwnmp0v","slide":3,"text":"Compliance","textPreview":"Compliance","textChars":10,"textLines":1,"bbox":[868,512,118,26]}
+{"kind":"shape","id":"sh/rq5ovuhg","slide":3,"bbox":[942,294,142,66]}
+{"kind":"textbox","id":"sh/vu143qx8","slide":3,"text":"Reports","textPreview":"Reports","textChars":7,"textLines":1,"bbox":[954,314,118,26]}
+{"kind":"shape","id":"sh/uts3ulgn","slide":3,"bbox":[556,242,142,66]}
+{"kind":"textbox","id":"sh/hw3m50fe","slide":3,"text":"Audit","textPreview":"Audit","textChars":5,"textLines":1,"bbox":[568,262,118,26]}
+{"kind":"notes","id":"nt/sfsemv","slide":3,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md executive summary and strategic conclusion; docs/valtireo-brand-product-design-foundation-v1.md positioning.\nThis is the central product idea. Keep returning to this as the deck expands."}
+{"kind":"slide","id":"sl/pn1scn","slide":4,"title":"valtireo.deck","textShapes":10}
+{"kind":"shape","id":"sh/ziho3eto","slide":4,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/0jq5cja9","slide":4,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/lkz65obu","slide":4,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/qdon69s7","slide":4,"text":"THE WEDGE","textPreview":"THE WEDGE","textChars":9,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/reh4zets","slide":4,"text":"HR is the first door into the operating layer.","textPreview":"HR is the first door into the operating layer.","textChars":46,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/cfq58jad","slide":4,"text":"People operations expose the recurring problems Valtireo is designed to solve: records, approvals, documents, leave, attendance, reports, and accountability.","textPreview":"People operations expose the recurring problems Valtireo is designed to solve: records, approvals, documents, leave, attendance, reports,...","textChars":157,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/dgz61oby","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/2pon2psb","slide":4,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/3qx4vutw","slide":4,"bbox":[86,340,500,210]}
+{"kind":"textbox","id":"sh/vq1w36tw","slide":4,"text":"Why HR first","textPreview":"Why HR first","textChars":12,"textLines":1,"bbox":[110,362,452,34]}
+{"kind":"textbox","id":"sh/apsfu1sb","slide":4,"text":"It is where organizations already feel the pain of scattered employee records, missing documents, manual approvals, leave conflicts, attendance uncertainty, and monthly spreadsheet reporting.","textPreview":"It is where organizations already feel the pain of scattered employee records, missing documents, manual approvals, leave conflicts, atte...","textChars":191,"textLines":1,"bbox":[110,404,452,126]}
+{"kind":"shape","id":"sh/xsje5gb2","slide":4,"bbox":[656,340,500,210]}
+{"kind":"textbox","id":"sh/wraxwbah","slide":4,"text":"Why not stop at HR","textPreview":"Why not stop at HR","textChars":18,"textLines":1,"bbox":[680,362,452,34]}
+{"kind":"textbox","id":"sh/ju1w76t8","slide":4,"text":"The same engines apply to internal services, compliance, finance/admin workflows, assets, service desk, policy support, and AI-assisted administration.","textPreview":"The same engines apply to internal services, compliance, finance/admin workflows, assets, service desk, policy support, and AI-assisted a...","textChars":151,"textLines":1,"bbox":[680,404,452,126]}
+{"kind":"shape","id":"sh/itsfy1sn","slide":4,"bbox":[570,413,84,60]}
+{"kind":"notes","id":"nt/pn1scn","slide":4,"text":"[Sources] README.md Product Shape; docs/valtireo-business-plan-v1-2026-08-11.md sections 1, 2, 9, and 16.\nClarify that the deck is not abandoning HR. HR is the proof module for the larger OS."}
+{"kind":"slide","id":"sl/5azotk","slide":5,"title":"valtireo.deck","textShapes":18}
+{"kind":"shape","id":"sh/at47m1wf","slide":5,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/xgvqxgf6","slide":5,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/wvmpobel","slide":5,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/jix8z6xc","slide":5,"text":"BUILT FOUNDATION","textPreview":"BUILT FOUNDATION","textChars":16,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/ih47q1wr","slide":5,"text":"The MVP already contains the engines an Organizational OS needs.","textPreview":"The MVP already contains the engines an Organizational OS needs.","textChars":64,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/5kfq1gf2","slide":5,"text":"This is the execution proof: not a mockup, but a working foundation across identity, records, workflows, reports, and governance.","textPreview":"This is the execution proof: not a mockup, but a working foundation across identity, records, workflows, reports, and governance.","textChars":129,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/4j6psbeh","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/rmx83qx8","slide":5,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/6lorulwn","slide":5,"bbox":[86,312,326,118]}
+{"kind":"textbox","id":"sh/83ql8rql","slide":5,"text":"Core","textPreview":"Core","textChars":4,"textLines":1,"bbox":[110,334,278,34]}
+{"kind":"textbox","id":"sh/94z2hw76","slide":5,"text":"Tenant setup, workspace settings, roles, permissions, module entitlements","textPreview":"Tenant setup, workspace settings, roles, permissions, module entitlements","textChars":73,"textLines":1,"bbox":[110,376,278,34]}
+{"kind":"shape","id":"sh/m1o36h8v","slide":5,"bbox":[456,312,326,118]}
+{"kind":"textbox","id":"sh/n2xkfmp0","slide":5,"text":"People","textPreview":"People","textChars":6,"textLines":1,"bbox":[480,334,278,34]}
+{"kind":"textbox","id":"sh/w7qlcbqx","slide":5,"text":"Employee records, onboarding, profiles, contacts, dependents, custom fields","textPreview":"Employee records, onboarding, profiles, contacts, dependents, custom fields","textChars":75,"textLines":1,"bbox":[480,376,278,34]}
+{"kind":"shape","id":"sh/xsz2lg7i","slide":5,"bbox":[826,312,326,118]}
+{"kind":"textbox","id":"sh/a583a18r","slide":5,"text":"Documents","textPreview":"Documents","textChars":9,"textLines":1,"bbox":[850,334,278,34]}
+{"kind":"textbox","id":"sh/v6hkj6pc","slide":5,"text":"Types, requirements, submissions, expiry tracking, reviews, compliance summaries","textPreview":"Types, requirements, submissions, expiry tracking, reviews, compliance summaries","textChars":80,"textLines":1,"bbox":[850,376,278,34]}
+{"kind":"shape","id":"sh/kvalgbqt","slide":5,"bbox":[86,464,326,118]}
+{"kind":"textbox","id":"sh/5wj2pg7e","slide":5,"text":"Workflows","textPreview":"Workflows","textChars":9,"textLines":1,"bbox":[110,486,278,34]}
+{"kind":"textbox","id":"sh/tsf2tgzi","slide":5,"text":"Configurable approvals by permission, role, manager, and department head","textPreview":"Configurable approvals by permission, role, manager, and department head","textChars":72,"textLines":1,"bbox":[110,528,278,34]}
+{"kind":"shape","id":"sh/sr6l0byx","slide":5,"bbox":[456,464,326,118]}
+{"kind":"textbox","id":"sh/rqxkr6hc","slide":5,"text":"Time","textPreview":"Time","textChars":4,"textLines":1,"bbox":[480,486,278,34]}
+{"kind":"textbox","id":"sh/6po3y107","slide":5,"text":"Leave setup, entitlements, requests, balances, attendance, corrections","textPreview":"Leave setup, entitlements, requests, balances, attendance, corrections","textChars":70,"textLines":1,"bbox":[480,528,278,34]}
+{"kind":"shape","id":"sh/1gf2xgzu","slide":5,"bbox":[826,464,326,118]}
+{"kind":"textbox","id":"sh/gf6l4vy9","slide":5,"text":"Governance","textPreview":"Governance","textChars":10,"textLines":1,"bbox":[850,486,278,34]}
+{"kind":"textbox","id":"sh/fexkvqho","slide":5,"text":"Reports, CSV exports, notifications, audit logs, activity feed","textPreview":"Reports, CSV exports, notifications, audit logs, activity feed","textChars":62,"textLines":1,"bbox":[850,528,278,34]}
+{"kind":"notes","id":"nt/5azotk","slide":5,"text":"[Sources] README.md Current Feature Surface; docs/valtireo-product-mvp-status-2026-08-06.md completed work and foundation implemented sections.\nUse 'foundation' and 'MVP' language. Avoid implying every frontend screen is complete where the docs still separate backend and frontend status."}
+{"kind":"slide","id":"sl/0p9lyg","slide":6,"title":"valtireo.deck","textShapes":16}
+{"kind":"shape","id":"sh/x4r25cne","slide":6,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/a103axon","slide":6,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/b29k3258","slide":6,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/ozyl876x","slide":6,"text":"PLATFORM DESIGN","textPreview":"PLATFORM DESIGN","textChars":15,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/p0721cn2","slide":6,"text":"The same engines run through every module.","textPreview":"The same engines run through every module.","textChars":42,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/2xg36xor","slide":6,"text":"Valtireo is not a pile of HR features. It is a set of reusable operating engines that make each new module cheaper to add and easier to govern.","textPreview":"Valtireo is not a pile of HR features. It is a set of reusable operating engines that make each new module cheaper to add and easier to g...","textChars":143,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/nypkz25c","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/0vyl4n6l","slide":6,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/1w72xsn6","slide":6,"bbox":[92,312,288,48]}
+{"kind":"textbox","id":"sh/5gvm5kb2","slide":6,"text":"Organization setup","textPreview":"Organization setup","textChars":18,"textLines":1,"bbox":[106,320,260,38]}
+{"kind":"shape","id":"sh/4vmlwfah","slide":6,"bbox":[452,312,288,48]}
+{"kind":"textbox","id":"sh/3ut43utw","slide":6,"text":"Roles and permissions","textPreview":"Roles and permissions","textChars":21,"textLines":1,"bbox":[466,320,260,38]}
+{"kind":"shape","id":"sh/itk3upsr","slide":6,"bbox":[812,312,288,48]}
+{"kind":"textbox","id":"sh/hsb21kb6","slide":6,"text":"Configurable structure","textPreview":"Configurable structure","textChars":22,"textLines":1,"bbox":[826,320,260,38]}
+{"kind":"shape","id":"sh/gr2lsfal","slide":6,"bbox":[92,388,288,48]}
+{"kind":"textbox","id":"sh/vqtkzat0","slide":6,"text":"Custom fields","textPreview":"Custom fields","textChars":13,"textLines":1,"bbox":[106,396,260,38]}
+{"kind":"shape","id":"sh/upk3q5sf","slide":6,"bbox":[452,388,288,48]}
+{"kind":"textbox","id":"sh/tob2x0bu","slide":6,"text":"Approval routing","textPreview":"Approval routing","textChars":16,"textLines":1,"bbox":[466,396,260,38]}
+{"kind":"shape","id":"sh/8nilova9","slide":6,"bbox":[812,388,288,48]}
+{"kind":"textbox","id":"sh/k7mlkf25","slide":6,"text":"Document rules","textPreview":"Document rules","textChars":14,"textLines":1,"bbox":[826,396,260,38]}
+{"kind":"shape","id":"sh/l8vmdkjq","slide":6,"bbox":[92,464,288,48]}
+{"kind":"textbox","id":"sh/y543i5kf","slide":6,"text":"Notifications","textPreview":"Notifications","textChars":13,"textLines":1,"bbox":[106,472,260,38]}
+{"kind":"shape","id":"sh/z6d4ba1k","slide":6,"bbox":[452,464,288,48]}
+{"kind":"textbox","id":"sh/c3mlgv29","slide":6,"text":"Audit and activity","textPreview":"Audit and activity","textChars":18,"textLines":1,"bbox":[466,472,260,38]}
+{"kind":"shape","id":"sh/x4vm90ju","slide":6,"bbox":[812,464,288,48]}
+{"kind":"textbox","id":"sh/a143elk3","slide":6,"text":"Reports and exports","textPreview":"Reports and exports","textChars":19,"textLines":1,"bbox":[826,472,260,38]}
+{"kind":"shape","id":"sh/b2dk7q1o","slide":6,"bbox":[246,560,786,54]}
+{"kind":"textbox","id":"sh/wz6lszid","slide":6,"text":"Default enough to start. Configurable enough to own.","textPreview":"Default enough to start. Configurable enough to own.","textChars":52,"textLines":1,"bbox":[278,574,720,28]}
+{"kind":"notes","id":"nt/0p9lyg","slide":6,"text":"[Sources] docs/valtireo-frontend-build-and-improvement-brief.md Core Engines; docs/valtireo-product-mvp-status-2026-08-06.md Current Product Direction.\nThis slide is the architecture answer to 'how do we intend to handle what is still coming?'"}
+{"kind":"slide","id":"sl/t8sp63","slide":7,"title":"valtireo.deck","textShapes":14}
+{"kind":"shape","id":"sh/yp8nq9g7","slide":7,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/lszmlofi","slide":7,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/krq5sjyx","slide":7,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/7uh4nyxo","slide":7,"text":"DIFFERENTIATION","textPreview":"DIFFERENTIATION","textChars":15,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/6t8nutg3","slide":7,"text":"Valtireo wins through control, not feature sprawl.","textPreview":"Valtireo wins through control, not feature sprawl.","textChars":50,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/twzmpofu","slide":7,"text":"The point is not to copy every HRMS module immediately. The point is to govern administrative work better than spreadsheets, chats, and narrow HR tools.","textPreview":"The point is not to copy every HRMS module immediately. The point is to govern administrative work better than spreadsheets, chats, and n...","textChars":152,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/8vq5w3e9","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/nyx4buxk","slide":7,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/mx43ipgz","slide":7,"bbox":[96,310,472,116]}
+{"kind":"textbox","id":"sh/4zilk7mh","slide":7,"text":"Multi-tenant SaaS","textPreview":"Multi-tenant SaaS","textChars":17,"textLines":1,"bbox":[120,332,424,34]}
+{"kind":"textbox","id":"sh/50r2dc32","slide":7,"text":"Organizations are provisioned as owned workspaces, with module entitlements and scoped data.","textPreview":"Organizations are provisioned as owned workspaces, with module entitlements and scoped data.","textChars":92,"textLines":1,"bbox":[120,374,424,32]}
+{"kind":"shape","id":"sh/ixg3ih4r","slide":7,"bbox":[636,310,472,116]}
+{"kind":"textbox","id":"sh/jy9kb2lc","slide":7,"text":"Document compliance","textPreview":"Document compliance","textChars":19,"textLines":1,"bbox":[660,332,424,34]}
+{"kind":"textbox","id":"sh/s3ilormt","slide":7,"text":"Requirements, expiries, review states, and reminders are first-class operating objects.","textPreview":"Requirements, expiries, review states, and reminders are first-class operating objects.","textChars":87,"textLines":1,"bbox":[660,374,424,32]}
+{"kind":"shape","id":"sh/t4r2hw3e","slide":7,"bbox":[96,462,472,116]}
+{"kind":"textbox","id":"sh/6103mh4n","slide":7,"text":"Shared approvals","textPreview":"Shared approvals","textChars":16,"textLines":1,"bbox":[120,484,424,34]}
+{"kind":"textbox","id":"sh/r29kfml8","slide":7,"text":"Documents, leave, attendance, and future modules can reuse the same decision engine.","textPreview":"Documents, leave, attendance, and future modules can reuse the same decision engine.","textChars":84,"textLines":1,"bbox":[120,526,424,32]}
+{"kind":"shape","id":"sh/87y1cnmp","slide":7,"bbox":[636,462,472,116]}
+{"kind":"textbox","id":"sh/98725s3u","slide":7,"text":"Audit-ready activity","textPreview":"Audit-ready activity","textChars":20,"textLines":1,"bbox":[660,484,424,34]}
+{"kind":"textbox","id":"sh/94zi9ovy","slide":7,"text":"Important changes carry actor, status, metadata, and history.","textPreview":"Important changes carry actor, status, metadata, and history.","textChars":61,"textLines":1,"bbox":[660,526,424,32]}
+{"kind":"notes","id":"nt/t8sp63","slide":7,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md Differentiation and Competitive Landscape; docs/valtireo-product-mvp-status-2026-08-06.md OrangeHRM review and Valtireo advantage.\nDo not pitch this as 'more HR features than everyone.' Pitch it as the governance layer for institutions."}
+{"kind":"slide","id":"sl/1darte","slide":8,"title":"valtireo.deck","textShapes":14}
+{"kind":"shape","id":"sh/947m9cva","slide":8,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/m1w3yxcz","slide":8,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/725472dk","slide":8,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/wryl4ru1","slide":8,"text":"ROADMAP","textPreview":"ROADMAP","textChars":7,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/hs7mdwvm","slide":8,"text":"The product expands by attaching modules to the same foundation.","textPreview":"The product expands by attaching modules to the same foundation.","textChars":64,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/u5g32hcv","slide":8,"text":"Future surfaces should activate on top of existing organization structure, roles, approvals, notifications, reports, and audit trails.","textPreview":"Future surfaces should activate on top of existing organization structure, roles, approvals, notifications, reports, and audit trails.","textChars":134,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/vqp4bmdg","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/4vil8rux","slide":8,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/5wrmhwvi","slide":8,"bbox":[112,350,54,54]}
+{"kind":"shape","id":"sh/lsvu5kra","slide":8,"bbox":[170,377,208,3]}
+{"kind":"textbox","id":"sh/krmtwzap","slide":8,"text":"Now","textPreview":"Now","textChars":3,"textLines":1,"bbox":[62,426,154,32]}
+{"kind":"textbox","id":"sh/jqdc3u94","slide":8,"text":"Core HR, Documents, Leave, Attendance, Reports, Governance","textPreview":"Core HR, Documents, Leave, Attendance, Reports, Governance","textChars":58,"textLines":1,"bbox":[30,470,218,84]}
+{"kind":"shape","id":"sh/ypkbupsz","slide":8,"bbox":[394,350,54,54]}
+{"kind":"shape","id":"sh/tgvu94rm","slide":8,"bbox":[452,377,208,3]}
+{"kind":"textbox","id":"sh/8fmt0za1","slide":8,"text":"Next","textPreview":"Next","textChars":4,"textLines":1,"bbox":[344,426,154,32]}
+{"kind":"textbox","id":"sh/7edc7u9g","slide":8,"text":"Polished frontend, demo workspace, pilots, file upload, dashboard refinement","textPreview":"Polished frontend, demo workspace, pilots, file upload, dashboard refinement","textChars":76,"textLines":1,"bbox":[312,470,218,84]}
+{"kind":"shape","id":"sh/6d4bypsv","slide":8,"bbox":[676,350,54,54]}
+{"kind":"shape","id":"sh/9kbux0r2","slide":8,"bbox":[734,377,208,3]}
+{"kind":"textbox","id":"sh/oj2tofah","slide":8,"text":"Expand","textPreview":"Expand","textChars":6,"textLines":1,"bbox":[626,426,154,32]}
+{"kind":"textbox","id":"sh/03mtkfid","slide":8,"text":"Payroll, Recruitment, Performance, Learning, Claims, Service Desk","textPreview":"Payroll, Recruitment, Performance, Learning, Claims, Service Desk","textChars":65,"textLines":1,"bbox":[594,470,218,84]}
+{"kind":"shape","id":"sh/14fudkzy","slide":8,"bbox":[958,350,54,54]}
+{"kind":"textbox","id":"sh/e14bi50n","slide":8,"text":"Later","textPreview":"Later","textChars":5,"textLines":1,"bbox":[908,426,154,32]}
+{"kind":"textbox","id":"sh/f2dcbahs","slide":8,"text":"AI assistant, mobile, SSO, advanced analytics, operational OS line","textPreview":"AI assistant, mobile, SSO, advanced analytics, operational OS line","textChars":66,"textLines":1,"bbox":[876,470,218,84]}
+{"kind":"notes","id":"nt/1darte","slide":8,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md Product Roadmap; docs/valtireo-product-mvp-status-2026-08-06.md Future/Post-MVP Modules.\nMake clear that future modules are staged and should not distract from pilot readiness."}
+{"kind":"slide","id":"sl/hso7tj","slide":9,"title":"valtireo.deck","textShapes":16}
+{"kind":"shape","id":"sh/1gripw3q","slide":9,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/ed0jehkz","slide":9,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/fe90nmlk","slide":9,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/sry1c729","slide":9,"text":"CUSTOMERS","textPreview":"CUSTOMERS","textChars":9,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/dcrilc3e","slide":9,"text":"Start where complexity is painful but buying can still move.","textPreview":"Start where complexity is painful but buying can still move.","textChars":60,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/qpgzah43","slide":9,"text":"Valtireo is best suited for institutions and growing teams that need structure, compliance, and administrative visibility without enterprise-suite complexity.","textPreview":"Valtireo is best suited for institutions and growing teams that need structure, compliance, and administrative visibility without enterpr...","textChars":158,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/rqp0jmlo","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/c721ob2d","slide":9,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/x8bixg3y","slide":9,"bbox":[112,326,430,48]}
+{"kind":"textbox","id":"sh/1gnu1o7u","slide":9,"text":"Schools and universities","textPreview":"Schools and universities","textChars":24,"textLines":1,"bbox":[126,334,402,38]}
+{"kind":"shape","id":"sh/0ved8jq9","slide":9,"bbox":[622,326,430,48]}
+{"kind":"textbox","id":"sh/fu5czepo","slide":9,"text":"Hospitals and healthcare groups","textPreview":"Hospitals and healthcare groups","textChars":31,"textLines":1,"bbox":[636,334,402,38]}
+{"kind":"shape","id":"sh/etwv6t8j","slide":9,"bbox":[112,398,430,48]}
+{"kind":"textbox","id":"sh/dsnuxo7y","slide":9,"text":"NGOs and foundations","textPreview":"NGOs and foundations","textChars":20,"textLines":1,"bbox":[126,406,402,38]}
+{"kind":"shape","id":"sh/sret4jqd","slide":9,"bbox":[622,398,430,48]}
+{"kind":"textbox","id":"sh/rqlcveps","slide":9,"text":"Professional service firms","textPreview":"Professional service firms","textChars":26,"textLines":1,"bbox":[636,406,402,38]}
+{"kind":"shape","id":"sh/qpcb2987","slide":9,"bbox":[112,470,430,48]}
+{"kind":"textbox","id":"sh/xo7u9872","slide":9,"text":"Manufacturing and multi-location companies","textPreview":"Manufacturing and multi-location companies","textChars":42,"textLines":1,"bbox":[126,478,402,38]}
+{"kind":"shape","id":"sh/cnydg3qh","slide":9,"bbox":[622,470,430,48]}
+{"kind":"textbox","id":"sh/wr6xcryt","slide":9,"text":"Public institutions and parastatals","textPreview":"Public institutions and parastatals","textChars":35,"textLines":1,"bbox":[636,478,402,38]}
+{"kind":"shape","id":"sh/xsfe5cfe","slide":9,"bbox":[134,572,446,82]}
+{"kind":"textbox","id":"sh/apofahgn","slide":9,"text":"Economic buyers","textPreview":"Economic buyers","textChars":15,"textLines":1,"bbox":[158,594,398,34]}
+{"kind":"textbox","id":"sh/vqxw3mx8","slide":9,"text":"CEO, founder, managing director, head of administration, HR director, COO, permanent secretary, or director of administration.","textPreview":"CEO, founder, managing director, head of administration, HR director, COO, permanent secretary, or director of administration.","textChars":126,"textLines":1,"bbox":[158,636,398,20]}
+{"kind":"shape","id":"sh/8n6x87yh","slide":9,"bbox":[690,572,446,82]}
+{"kind":"textbox","id":"sh/9ofe1cf2","slide":9,"text":"Daily users","textPreview":"Daily users","textChars":11,"textLines":1,"bbox":[714,594,398,34]}
+{"kind":"textbox","id":"sh/m14f6xgr","slide":9,"text":"HR officers, compliance teams, department heads, supervisors, employees, and ICT/admin support.","textPreview":"HR officers, compliance teams, department heads, supervisors, employees, and ICT/admin support.","textChars":95,"textLines":1,"bbox":[714,636,398,20]}
+{"kind":"notes","id":"nt/hso7tj","slide":9,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md Target Customers and Buyer Personas.\nIf a specific audience is chosen later, this slide can be made vertical-specific."}
+{"kind":"slide","id":"sl/i6j5w5","slide":10,"title":"valtireo.deck","textShapes":15}
+{"kind":"shape","id":"sh/on2lsjut","slide":10,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/nmtkzyd8","slide":10,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/2l03qtcn","slide":10,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/1kr2xovi","slide":10,"text":"GO TO MARKET","textPreview":"GO TO MARKET","textChars":12,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/0jilojux","slide":10,"text":"Sell a focused pilot before selling the whole vision.","textPreview":"Sell a focused pilot before selling the whole vision.","textChars":53,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/fi9kvedc","slide":10,"text":"The commercial motion should prove urgency around a few painful workflows, then expand the workspace as trust grows.","textPreview":"The commercial motion should prove urgency around a few painful workflows, then expand the workspace as trust grows.","textChars":116,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/eh03m9cr","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/dgr2t4v6","slide":10,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/sfilkzul","slide":10,"bbox":[92,342,248,166]}
+{"kind":"textbox","id":"sh/uxgbi947","slide":10,"text":"1. Validate","textPreview":"1. Validate","textChars":11,"textLines":1,"bbox":[116,364,200,34]}
+{"kind":"textbox","id":"sh/fypcbu5s","slide":10,"text":"20-30 discovery/demo conversations with HR and admin leaders.","textPreview":"20-30 discovery/demo conversations with HR and admin leaders.","textChars":61,"textLines":1,"bbox":[116,406,200,82]}
+{"kind":"shape","id":"sh/gzitkzmx","slide":10,"bbox":[384,342,248,166]}
+{"kind":"textbox","id":"sh/h0rud4ni","slide":10,"text":"2. Pilot","textPreview":"2. Pilot","textChars":8,"textLines":1,"bbox":[408,364,200,34]}
+{"kind":"textbox","id":"sh/6tgbep4v","slide":10,"text":"60-90 day paid pilots around employee records, documents, leave, attendance, and reports.","textPreview":"60-90 day paid pilots around employee records, documents, leave, attendance, and reports.","textChars":89,"textLines":1,"bbox":[408,406,200,82]}
+{"kind":"shape","id":"sh/7upc7u5g","slide":10,"bbox":[676,342,248,166]}
+{"kind":"textbox","id":"sh/svytgzm1","slide":10,"text":"3. Prove","textPreview":"3. Prove","textChars":8,"textLines":1,"bbox":[700,364,200,34]}
+{"kind":"textbox","id":"sh/tw7u94nm","slide":10,"text":"Capture before/after improvements, screenshots, objections, and testimonials.","textPreview":"Capture before/after improvements, screenshots, objections, and testimonials.","textChars":77,"textLines":1,"bbox":[700,406,200,82]}
+{"kind":"shape","id":"sh/i5wbapoz","slide":10,"bbox":[968,342,248,166]}
+{"kind":"textbox","id":"sh/j65c3a5k","slide":10,"text":"4. Repeat","textPreview":"4. Repeat","textChars":9,"textLines":1,"bbox":[992,364,200,34]}
+{"kind":"textbox","id":"sh/nal8b6lc","slide":10,"text":"Package sales by vertical: schools, healthcare, NGOs, growing enterprises.","textPreview":"Package sales by vertical: schools, healthcare, NGOs, growing enterprises.","textChars":74,"textLines":1,"bbox":[992,406,200,82]}
+{"kind":"textbox","id":"sh/m9crilkr","slide":10,"text":"Best initial offer: configure a Valtireo workspace and digitize records, document compliance, leave approvals, and basic attendance reporting within 30 days.","textPreview":"Best initial offer: configure a Valtireo workspace and digitize records, document compliance, leave approvals, and basic attendance repor...","textChars":157,"textLines":1,"bbox":[118,566,1040,52]}
+{"kind":"notes","id":"nt/i6j5w5","slide":10,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md Go-To-Market Strategy and Sales Strategy.\nThe deck should not over-index on investor fantasy. The first funding signal is a demo plus paid pilot commitments."}
+{"kind":"slide","id":"sl/quctyv","slide":11,"title":"valtireo.deck","textShapes":21}
+{"kind":"shape","id":"sh/o7i90bex","slide":11,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/369876xc","slide":11,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/2507y1wr","slide":11,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/dcbqdgve","slide":11,"text":"BUSINESS MODEL","textPreview":"BUSINESS MODEL","textChars":14,"textLines":1,"bbox":[86,82,360,30]}
+{"kind":"textbox","id":"sh/cb294be9","slide":11,"text":"Land with the operating layer, expand module by module.","textPreview":"Land with the operating layer, expand module by module.","textChars":55,"textLines":1,"bbox":[86,124,720,120]}
+{"kind":"textbox","id":"sh/bat8bqxo","slide":11,"text":"Pricing should stay simple at first, then validate module and seat economics through pilots and discovery calls.","textPreview":"Pricing should stay simple at first, then validate module and seat economics through pilots and discovery calls.","textChars":112,"textLines":1,"bbox":[88,262,620,78]}
+{"kind":"textbox","id":"sh/q9kr2lw3","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1138,650,60,24]}
+{"kind":"textbox","id":"sh/l0vqh0vq","slide":11,"text":"Organizational OS","textPreview":"Organizational OS","textChars":17,"textLines":1,"bbox":[948,650,170,24]}
+{"kind":"shape","id":"sh/0z298ve5","slide":11,"bbox":[100,316,252,134]}
+{"kind":"textbox","id":"sh/61o725k3","slide":11,"text":"Subscription","textPreview":"Subscription","textChars":12,"textLines":1,"bbox":[124,338,204,34]}
+{"kind":"textbox","id":"sh/72xobalo","slide":11,"text":"SaaS subscription for active organizations and users/employees.","textPreview":"SaaS subscription for active organizations and users/employees.","textChars":63,"textLines":1,"bbox":[124,380,204,50]}
+{"kind":"shape","id":"sh/836p4f29","slide":11,"bbox":[386,316,252,134]}
+{"kind":"textbox","id":"sh/t4fqdk3u","slide":11,"text":"Implementation","textPreview":"Implementation","textChars":14,"textLines":1,"bbox":[410,338,204,34]}
+{"kind":"textbox","id":"sh/u5o76pkz","slide":11,"text":"Setup, onboarding, training, and controlled configuration services.","textPreview":"Setup, onboarding, training, and controlled configuration services.","textChars":67,"textLines":1,"bbox":[410,380,204,50]}
+{"kind":"shape","id":"sh/v6x8fulk","slide":11,"bbox":[672,316,252,134]}
+{"kind":"textbox","id":"sh/g76p8z25","slide":11,"text":"Expansion","textPreview":"Expansion","textChars":9,"textLines":1,"bbox":[696,338,204,34]}
+{"kind":"textbox","id":"sh/h8fqh43q","slide":11,"text":"Future modules priced separately as customers activate more workflows.","textPreview":"Future modules priced separately as customers activate more workflows.","textChars":70,"textLines":1,"bbox":[696,380,204,50]}
+{"kind":"shape","id":"sh/a9k7ulkv","slide":11,"bbox":[958,316,252,134]}
+{"kind":"textbox","id":"sh/bado3qlg","slide":11,"text":"Support","textPreview":"Support","textChars":7,"textLines":1,"bbox":[982,338,204,34]}
+{"kind":"textbox","id":"sh/ze94vm18","slide":11,"text":"Optional retainers, SLA support, and dedicated success for institutions.","textPreview":"Optional retainers, SLA support, and dedicated success for institutions.","textChars":72,"textLines":1,"bbox":[982,380,204,50]}
+{"kind":"textbox","id":"sh/ed032h0n","slide":11,"text":"Key metrics to track","textPreview":"Key metrics to track","textChars":20,"textLines":1,"bbox":[120,524,260,30]}
+{"kind":"shape","id":"sh/1grmxwje","slide":11,"bbox":[400,506,200,40]}
+{"kind":"textbox","id":"sh/0fil4rit","slide":11,"text":"Organizations provisioned","textPreview":"Organizations provisioned","textChars":25,"textLines":1,"bbox":[414,514,172,30]}
+{"kind":"shape","id":"sh/rap4rm1c","slide":11,"bbox":[640,506,200,40]}
+{"kind":"textbox","id":"sh/q9g3yh0r","slide":11,"text":"Pilot conversion","textPreview":"Pilot conversion","textChars":16,"textLines":1,"bbox":[654,514,172,30]}
+{"kind":"shape","id":"sh/dcrmtwj2","slide":11,"bbox":[880,506,200,40]}
+{"kind":"textbox","id":"sh/cbil0rih","slide":11,"text":"Reports exported","textPreview":"Reports exported","textChars":16,"textLines":1,"bbox":[894,514,172,30]}
+{"kind":"shape","id":"sh/b6t4361g","slide":11,"bbox":[400,564,200,40]}
+{"kind":"textbox","id":"sh/a5knal0v","slide":11,"text":"Setup completion","textPreview":"Setup completion","textChars":16,"textLines":1,"bbox":[414,572,172,30]}
+{"kind":"shape","id":"sh/8fu98ju1","slide":11,"bbox":[640,564,200,40]}
+{"kind":"textbox","id":"sh/9g3ahovm","slide":11,"text":"Admin hours saved","textPreview":"Admin hours saved","textChars":17,"textLines":1,"bbox":[654,572,172,30]}
+{"kind":"shape","id":"sh/mdsr69cv","slide":11,"bbox":[880,564,200,40]}
+{"kind":"textbox","id":"sh/7elsfedg","slide":11,"text":"MRR / ACV","textPreview":"MRR / ACV","textChars":9,"textLines":1,"bbox":[894,572,172,30]}
+{"kind":"notes","id":"nt/quctyv","slide":11,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md Business Model, Pricing Strategy, and Key Metrics.\nNumbers should be added after discovery validates willingness to pay. Keep this version flexible."}
+{"kind":"slide","id":"sl/r70h81","slide":12,"title":"valtireo.deck","textShapes":9}
+{"kind":"shape","id":"sh/ilkfy9cf","slide":12,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/5ove9ovq","slide":12,"bbox":[0,0,34,720]}
+{"kind":"textbox","id":"sh/4n2x0ju5","slide":12,"text":"valtireo.deck","textPreview":"valtireo.deck","textChars":13,"textLines":1,"bbox":[64,36,180,24]}
+{"kind":"textbox","id":"sh/rqdwbydw","slide":12,"text":"THE ASK","textPreview":"THE ASK","textChars":7,"textLines":1,"bbox":[86,84,260,30]}
+{"kind":"textbox","id":"sh/qp4f2tcb","slide":12,"text":"Help Valtireo turn a serious MVP foundation into paid pilot proof.","textPreview":"Help Valtireo turn a serious MVP foundation into paid pilot proof.","textChars":66,"textLines":1,"bbox":[86,134,824,116]}
+{"kind":"textbox","id":"sh/dsvydov2","slide":12,"text":"Near-term priority: finish the polished demo workspace, run focused discovery, secure 2-3 paid pilots, and use real customer workflows to validate pricing and expansion modules.","textPreview":"Near-term priority: finish the polished demo workspace, run focused discovery, secure 2-3 paid pilots, and use real customer workflows to...","textChars":177,"textLines":1,"bbox":[88,276,780,92]}
+{"kind":"shape","id":"sh/srmx4juh","slide":12,"bbox":[92,448,440,128]}
+{"kind":"textbox","id":"sh/zedgfyds","slide":12,"text":"Use of resources","textPreview":"Use of resources","textChars":16,"textLines":1,"bbox":[116,470,392,34]}
+{"kind":"textbox","id":"sh/et4f6tc7","slide":12,"text":"Frontend completion, UI/brand design, demo environment, QA, collateral, discovery, and pilot implementation.","textPreview":"Frontend completion, UI/brand design, demo environment, QA, collateral, discovery, and pilot implementation.","textChars":108,"textLines":1,"bbox":[116,512,392,44]}
+{"kind":"shape","id":"sh/sril0va9","slide":12,"bbox":[600,448,440,128]}
+{"kind":"textbox","id":"sh/dsrmt0be","slide":12,"text":"Proof to create","textPreview":"Proof to create","textChars":15,"textLines":1,"bbox":[624,470,392,34]}
+{"kind":"textbox","id":"sh/qp03ylc3","slide":12,"text":"Working demo, committed pilots, case-study evidence, validated pricing, and repeatable sales motion.","textPreview":"Working demo, committed pilots, case-study evidence, validated pricing, and repeatable sales motion.","textChars":100,"textLines":1,"bbox":[624,512,392,44]}
+{"kind":"textbox","id":"sh/rq94rqto","slide":12,"text":"Leading Digitals | Valtireo","textPreview":"Leading Digitals | Valtireo","textChars":27,"textLines":1,"bbox":[92,628,360,26]}
+{"kind":"notes","id":"nt/r70h81","slide":12,"text":"[Sources] docs/valtireo-business-plan-v1-2026-08-11.md Funding and Resource Needs, Milestones, and Immediate Action Plan.\nAdjust this slide for investor, partner, or customer use. The current ask is broadly framed around resources and pilot proof."}

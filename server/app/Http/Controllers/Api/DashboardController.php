@@ -23,6 +23,6 @@ class DashboardController extends Controller
 
     public function me(Request $request, DashboardService $dashboard): JsonResponse
     {
-        return response()->json($dashboard->me($request->user()));
+        return response()->json($dashboard->me($request->user(), $request));
     }
 }

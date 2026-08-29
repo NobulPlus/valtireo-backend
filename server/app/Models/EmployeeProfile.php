@@ -16,8 +16,6 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'residential_address',
     'next_of_kin_name',
     'next_of_kin_phone',
-    'emergency_contact_name',
-    'emergency_contact_phone',
     'passport_photo_path',
     'completion_status',
 ])]

@@ -282,9 +282,17 @@ class CustomerOrganizationDemoSeeder extends Seeder
                     'residential_address' => $employeeData['residential_address'],
                     'next_of_kin_name' => $employeeData['next_of_kin_name'],
                     'next_of_kin_phone' => $employeeData['next_of_kin_phone'],
-                    'emergency_contact_name' => $employeeData['emergency_contact_name'],
-                    'emergency_contact_phone' => $employeeData['emergency_contact_phone'],
                     'completion_status' => $employeeData['profile_status'],
+                ]
+            );
+
+            $employee->emergencyContacts()->updateOrCreate(
+                ['employee_id' => $employee->id],
+                [
+                    'organization_id' => $employee->organization_id,
+                    'name' => $employeeData['emergency_contact_name'],
+                    'phone' => $employeeData['emergency_contact_phone'],
+                    'is_primary' => true,
                 ]
             );
 

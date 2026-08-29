@@ -36,6 +36,7 @@ import { useSetupLookups } from '@/features/workspace/api';
 import { downloadEmployeesCsv, useEmployees, type EmployeeFilters } from '@/features/employees/api';
 import { EMPLOYEE_STATUS_OPTIONS, statusLabel } from '@/features/employees/statusHelpers';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { Employee, EmployeeSummary } from '@/types/api';
 
 /** Pine/Teal/Blue family only — Gold/Cyan/Bridge Teal are reserved (index.css) and must not appear as general chart colors. */
@@ -159,6 +160,7 @@ function SummaryLinkCard({
 export function OrganizationDashboardView() {
   const navigate = useNavigate();
   const { session } = useAuth();
+  const { formatDate } = useDateFormatter();
   const lookups = useSetupLookups();
   const [selectedDepartment, setSelectedDepartment] = useState<{ id: number; name: string; total: number } | null>(null);
   const [showAllRecentEmployees, setShowAllRecentEmployees] = useState(false);
@@ -614,7 +616,7 @@ export function OrganizationDashboardView() {
                         <p className="text-xs text-muted">{invitation.email}</p>
                       </div>
                       <span className="text-xs text-muted">
-                        {invitation.expires_at ? `Expires ${new Date(invitation.expires_at).toLocaleDateString()}` : ''}
+                        {invitation.expires_at ? `Expires ${formatDate(invitation.expires_at)}` : ''}
                       </span>
                     </button>
                   </li>

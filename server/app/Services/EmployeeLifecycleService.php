@@ -13,20 +13,12 @@ class EmployeeLifecycleService
 {
     private const PRE_ACTIVE_STATUSES = ['draft', 'invited', 'onboarding'];
     private const ACTIVE_LIFECYCLE_STATUSES = ['active', 'suspended', 'exited'];
-    private const REQUIRED_BIODATA_FIELDS = [
-        'date_of_birth' => 'Date of birth',
-        'gender' => 'Gender',
-        'residential_address' => 'Residential address',
-        'next_of_kin_name' => 'Next of kin name',
-        'next_of_kin_phone' => 'Next of kin phone',
-        'emergency_contact_name' => 'Emergency contact name',
-        'emergency_contact_phone' => 'Emergency contact phone',
-    ];
 
     public function __construct(
         private readonly EmployeeProfileActivityService $activities,
         private readonly EmployeeOnboardingService $onboarding,
         private readonly LeaveEntitlementProvisioningService $leaveEntitlements,
+        private readonly EmployeeActivationReadinessService $activationReadiness,
     ) {
     }
 
@@ -67,7 +59,7 @@ class EmployeeLifecycleService
             }
 
             if ($newStatus === 'active' && $previousStatus !== 'active') {
-                $this->ensureBiodataIsReadyForActivation($employee);
+                $this->activationReadiness->ensureReady($employee);
             }
 
             $history = $employee->statusHistories()->create([
@@ -178,30 +170,5 @@ class EmployeeLifecycleService
         if ($employee->organization_id !== $actor->organization_id) {
             abort(404);
         }
-    }
-
-    private function ensureBiodataIsReadyForActivation(Employee $employee): void
-    {
-        $employee->loadMissing('profile');
-        $profile = $employee->profile;
-        $missing = [];
-
-        foreach (self::REQUIRED_BIODATA_FIELDS as $field => $label) {
-            if (! $profile || blank($profile->{$field})) {
-                $missing[] = $label;
-            }
-        }
-
-        if ($missing === []) {
-            return;
-        }
-
-        $message = count($missing) <= 3
-            ? 'Cannot activate employee. Missing biodata: '.implode(', ', $missing).'.'
-            : 'Cannot activate employee. Important biodata is missing. Review the employee biodata before activation.';
-
-        throw ValidationException::withMessages([
-            'new_status' => [$message],
-        ]);
     }
 }

@@ -23,8 +23,6 @@ class UpdateEmployeeProfileRequest extends FormRequest
             'residential_address' => ['nullable', 'string', 'max:1000'],
             'next_of_kin_name' => ['nullable', 'string', 'max:255'],
             'next_of_kin_phone' => ['nullable', 'string', 'max:50'],
-            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
-            'emergency_contact_phone' => ['nullable', 'string', 'max:50'],
             'passport_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }

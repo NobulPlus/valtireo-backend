@@ -21,7 +21,7 @@ export function DashboardPage() {
 
   const availableTabs: Tab[] = [
     ...(hasPermission('reports.view') ? (['organization'] as Tab[]) : []),
-    ...(hasManagerScope ? (['manager'] as Tab[]) : []),
+    ...(hasManagerScope || hasPermission('reports.view') ? (['manager'] as Tab[]) : []),
     'me',
   ];
 

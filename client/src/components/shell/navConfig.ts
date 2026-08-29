@@ -76,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'My leave', to: '/me/leave', icon: CalendarCheck2 },
       { label: 'My attendance', to: '/me/attendance', icon: Clock },
       { label: 'Org chart', to: '/me/org-chart', icon: Network, employeeExperienceKey: 'show_org_chart' },
+      { label: 'Directory', to: '/me/directory', icon: Users, employeeExperienceKey: 'allow_employee_directory' },
     ],
   },
   {

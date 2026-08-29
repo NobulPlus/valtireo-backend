@@ -22,6 +22,10 @@ class LeaveRequestResource extends JsonResource
             'total_days' => (float) $this->total_days,
             'status' => $this->status,
             'reason' => $this->reason,
+            'evidence_file_name' => $this->evidence_file_name,
+            'evidence_mime_type' => $this->evidence_mime_type,
+            'evidence_file_size' => $this->evidence_file_size,
+            'evidence_download_url' => $this->evidence_file_path ? url("/api/leave/requests/{$this->id}/evidence/download") : null,
             'submitted_at' => $this->submitted_at,
             'reviewed_at' => $this->reviewed_at,
             'employee' => $this->whenLoaded('employee', fn () => [

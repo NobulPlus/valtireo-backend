@@ -166,6 +166,8 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/{employeeDocument}/view', [EmployeeDocumentController::class, 'view']);
         Route::get('/{employeeDocument}', [EmployeeDocumentController::class, 'show']);
         Route::patch('/{employeeDocument}/review', [EmployeeDocumentController::class, 'review']);
+        Route::patch('/{employeeDocument}/acknowledge', [EmployeeDocumentController::class, 'acknowledge']);
+        Route::post('/{employeeDocument}/signed-copy', [EmployeeDocumentController::class, 'signedCopy']);
     });
 
     Route::prefix('leave')->group(function () {
@@ -185,6 +187,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/requests', [LeaveRequestController::class, 'index']);
         Route::post('/requests', [LeaveRequestController::class, 'store']);
         Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
+        Route::get('/requests/{leaveRequest}/evidence/download', [LeaveRequestController::class, 'downloadEvidence']);
         Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
     });
 
@@ -205,6 +208,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     Route::get('/employees', [EmployeeController::class, 'index']);
     Route::get('/employees/export', [EmployeeController::class, 'export']);
     Route::get('/employees/org-chart', [EmployeeController::class, 'orgChart']);
+    Route::get('/employees/directory', [EmployeeController::class, 'directory']);
     Route::post('/employees', [EmployeeController::class, 'store']);
     Route::get('/employees/{employee}/export', [EmployeeController::class, 'exportOne']);
     Route::post('/employees/{employee}/correction-requests', [EmployeeController::class, 'requestCorrection']);

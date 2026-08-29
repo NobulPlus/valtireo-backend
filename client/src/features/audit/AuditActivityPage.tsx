@@ -12,6 +12,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { RequirePermission } from '@/components/shell/RequirePermission';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { ActivityFeedEntry, AuditLogEntry } from '@/types/api';
 import { useActivityFeed, useAuditLogs } from '@/features/audit/api';
 
@@ -21,12 +22,6 @@ const TAB_LABELS: Record<Tab, string> = {
   activity: 'Activity feed',
   audit: 'Audit log',
 };
-
-function formatDateTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
-}
 
 function prettify(value: string): string {
   return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -46,6 +41,7 @@ interface FilterProps {
 }
 
 function AuditDetailModal({ entry, onClose }: { entry: AuditLogEntry; onClose: () => void }) {
+  const { formatDateTime } = useDateFormatter();
   const keys = Array.from(new Set([...Object.keys(entry.old_values), ...Object.keys(entry.new_values)])).sort();
 
   return (
@@ -98,7 +94,7 @@ function AuditDetailModal({ entry, onClose }: { entry: AuditLogEntry; onClose: (
   );
 }
 
-function auditColumns(): Column<AuditLogEntry>[] {
+function auditColumns(formatDateTime: (value: string) => string): Column<AuditLogEntry>[] {
   return [
     { key: 'event', header: 'Event', render: (row) => <StatusBadge status={row.event} /> },
     {
@@ -120,6 +116,7 @@ function auditColumns(): Column<AuditLogEntry>[] {
 }
 
 function AuditLogTable({ event, dateFrom, dateTo }: FilterProps) {
+  const { formatDateTime } = useDateFormatter();
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState<AuditLogEntry | null>(null);
 
@@ -140,14 +137,14 @@ function AuditLogTable({ event, dateFrom, dateTo }: FilterProps) {
 
   return (
     <>
-      <DataTable columns={auditColumns()} rows={entries} rowKey={(row) => row.id} onRowClick={setDetail} />
+      <DataTable columns={auditColumns(formatDateTime)} rows={entries} rowKey={(row) => row.id} onRowClick={setDetail} />
       {query.data && <Pagination meta={query.data.meta} onPageChange={setPage} />}
       {detail && <AuditDetailModal entry={detail} onClose={() => setDetail(null)} />}
     </>
   );
 }
 
-function activityColumns(): Column<ActivityFeedEntry>[] {
+function activityColumns(formatDateTime: (value: string) => string): Column<ActivityFeedEntry>[] {
   return [
     {
       key: 'title',
@@ -176,6 +173,7 @@ function activityColumns(): Column<ActivityFeedEntry>[] {
 }
 
 function ActivityFeedTable({ event, dateFrom, dateTo }: FilterProps) {
+  const { formatDateTime } = useDateFormatter();
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -195,7 +193,7 @@ function ActivityFeedTable({ event, dateFrom, dateTo }: FilterProps) {
 
   return (
     <>
-      <DataTable columns={activityColumns()} rows={entries} rowKey={(row) => row.id} />
+      <DataTable columns={activityColumns(formatDateTime)} rows={entries} rowKey={(row) => row.id} />
       {query.data && <Pagination meta={query.data.meta} onPageChange={setPage} />}
     </>
   );

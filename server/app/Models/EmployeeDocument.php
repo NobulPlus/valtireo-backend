@@ -16,6 +16,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'employee_id',
     'document_type_id',
     'document_requirement_id',
+    'replaces_document_id',
     'uploaded_by_id',
     'reviewed_by_id',
     'title',
@@ -30,6 +31,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'review_note',
     'submitted_at',
     'reviewed_at',
+    'acknowledged_at',
 ])]
 class EmployeeDocument extends Model implements AuditableContract
 {
@@ -53,6 +55,17 @@ class EmployeeDocument extends Model implements AuditableContract
     public function requirement(): BelongsTo
     {
         return $this->belongsTo(DocumentRequirement::class, 'document_requirement_id');
+    }
+
+    /** The HR-provided document this signed copy was uploaded against, if any. */
+    public function replacesDocument(): BelongsTo
+    {
+        return $this->belongsTo(EmployeeDocument::class, 'replaces_document_id');
+    }
+
+    public function replacedBy(): HasMany
+    {
+        return $this->hasMany(EmployeeDocument::class, 'replaces_document_id');
     }
 
     public function uploadedBy(): BelongsTo
@@ -86,6 +99,7 @@ class EmployeeDocument extends Model implements AuditableContract
             'expires_at' => 'date',
             'submitted_at' => 'datetime',
             'reviewed_at' => 'datetime',
+            'acknowledged_at' => 'datetime',
         ];
     }
 }

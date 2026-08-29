@@ -23,8 +23,6 @@ class EmployeeProfileResource extends JsonResource
             'residential_address' => $this->residential_address,
             'next_of_kin_name' => $this->next_of_kin_name,
             'next_of_kin_phone' => $this->next_of_kin_phone,
-            'emergency_contact_name' => $this->emergency_contact_name,
-            'emergency_contact_phone' => $this->emergency_contact_phone,
             'passport_photo_path' => $this->passport_photo_path,
             'passport_photo_url' => $this->passport_photo_path ? Storage::disk('public')->url($this->passport_photo_path) : null,
             'completion_status' => $this->completion_status,

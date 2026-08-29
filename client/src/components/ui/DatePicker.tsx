@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 
 interface DatePickerProps {
   value: string;
@@ -77,6 +78,7 @@ function computePosition(trigger: HTMLElement): PopoverPosition {
 }
 
 export function DatePicker({ value, onChange, placeholder = 'Select date', className }: DatePickerProps) {
+  const { formatDate } = useDateFormatter();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
   const [cursor, setCursor] = useState(() => fromInputDate(value) ?? new Date());
@@ -166,7 +168,7 @@ export function DatePicker({ value, onChange, placeholder = 'Select date', class
       >
         <span className="inline-flex min-w-0 items-center gap-2">
           <CalendarDays className="h-4 w-4 flex-shrink-0 text-teal" />
-          <span className={cn('truncate', !value && 'text-muted')}>{value || placeholder}</span>
+          <span className={cn('truncate', !value && 'text-muted')}>{value ? formatDate(value) : placeholder}</span>
         </span>
       </button>
 

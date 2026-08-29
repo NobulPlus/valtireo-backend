@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Documents\ReviewEmployeeDocumentRequest;
 use App\Http\Requests\Documents\SubmitEmployeeDocumentRequest;
+use App\Http\Requests\Documents\SubmitSignedCopyRequest;
 use App\Http\Resources\EmployeeDocumentResource;
 use App\Models\EmployeeDocument;
 use App\Services\DocumentComplianceService;
@@ -52,7 +53,15 @@ class EmployeeDocumentController extends Controller
             'local'
         );
 
-        $document = $documents->submit($request->user(), $data);
+        try {
+            $document = $documents->submit($request->user(), $data);
+        } catch (\Throwable $exception) {
+            if (! empty($data['file_path'])) {
+                Storage::disk('local')->delete($data['file_path']);
+            }
+
+            throw $exception;
+        }
 
         return response()->json([
             'document' => new EmployeeDocumentResource($document),
@@ -102,6 +111,50 @@ class EmployeeDocumentController extends Controller
         return response()->json([
             'document' => new EmployeeDocumentResource($document),
         ]);
+    }
+
+    public function acknowledge(Request $request, EmployeeDocument $employeeDocument, DocumentComplianceService $documents): JsonResponse
+    {
+        $document = $documents->acknowledge($request->user(), $employeeDocument);
+
+        return response()->json([
+            'document' => new EmployeeDocumentResource($document),
+        ]);
+    }
+
+    public function signedCopy(SubmitSignedCopyRequest $request, EmployeeDocument $employeeDocument, DocumentComplianceService $documents): JsonResponse
+    {
+        abort_unless($employeeDocument->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->employee?->id === $employeeDocument->employee_id, 403);
+
+        $file = $request->file('file');
+        $filePath = $file->store(
+            "organizations/{$request->user()->organization_id}/employees/{$employeeDocument->employee_id}/documents",
+            'local'
+        );
+
+        try {
+            $document = $documents->submit($request->user(), [
+                'employee_id' => $employeeDocument->employee_id,
+                'document_type_id' => $employeeDocument->document_type_id,
+                'document_requirement_id' => $employeeDocument->document_requirement_id,
+                'replaces_document_id' => $employeeDocument->id,
+                'title' => "{$employeeDocument->title} (signed)",
+                'file_name' => $file->getClientOriginalName(),
+                'mime_type' => $file->getClientMimeType(),
+                'file_size' => $file->getSize(),
+                'file_path' => $filePath,
+                'notes' => $request->string('notes')->toString() ?: null,
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk('local')->delete($filePath);
+
+            throw $exception;
+        }
+
+        return response()->json([
+            'document' => new EmployeeDocumentResource($document),
+        ], 201);
     }
 
     public function compliance(Request $request, DocumentComplianceService $documents): JsonResponse

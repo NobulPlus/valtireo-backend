@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { FileText, Plus, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -12,18 +12,47 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
 import { useMyDashboard } from '@/features/dashboard/api';
-import { useCancelLeaveRequest, useCreateLeaveRequest, useLeaveTypes, useMyLeaveRequests } from '@/features/leave/api';
+import { openLeaveEvidenceInNewTab, useCancelLeaveRequest, useCreateLeaveRequest, useLeaveTypes, useMyLeaveRequests } from '@/features/leave/api';
 import { ApiError } from '@/lib/apiClient';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { LeaveRequest } from '@/types/api';
 
 function actionError(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})/);
-  return dateOnly ? dateOnly[1] : value;
+/** Date-only (UTC) comparison — API dates arrive as full ISO datetimes. */
+function dateOnly(value: string): string {
+  return value.slice(0, 10);
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * A request is still "active" while it's either awaiting a decision, or
+ * approved with at least one day strictly in the future left to return —
+ * the same condition that makes it cancellable. Once nothing is left to
+ * cancel (or it was rejected/cancelled outright), it's history, not a
+ * request anymore.
+ */
+function isActiveRequest(request: LeaveRequest): boolean {
+  if (request.status === 'submitted' || request.status === 'changes_requested') return true;
+  if (request.status === 'approved') return dateOnly(request.ends_on) > today();
+  return false;
+}
+
+function cancelLeaveNotice(request: LeaveRequest): string {
+  if (request.status !== 'approved') {
+    return 'This will cancel your leave request. You can optionally add a note.';
+  }
+
+  if (dateOnly(request.starts_on) > today()) {
+    return 'This leave has not started yet — all days will be returned to your balance.';
+  }
+
+  return 'This leave is already in progress. Days up to today stay recorded as used; any remaining days will be returned to your balance automatically.';
 }
 
 function CancelLeaveButton({ request, onCancelled }: { request: LeaveRequest; onCancelled: () => void }) {
@@ -60,7 +89,7 @@ function CancelLeaveButton({ request, onCancelled }: { request: LeaveRequest; on
           </>
         }
       >
-        <p className="mb-3 text-sm text-muted">This will cancel your leave request. You can optionally add a note.</p>
+        <p className="mb-3 text-sm text-muted">{cancelLeaveNotice(request)}</p>
         <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Reason (optional)" />
       </Modal>
     </>
@@ -69,6 +98,7 @@ function CancelLeaveButton({ request, onCancelled }: { request: LeaveRequest; on
 
 function MyLeaveContent() {
   const toast = useToast();
+  const { formatDate } = useDateFormatter();
   const dashboardQuery = useMyDashboard();
   const requestsQuery = useMyLeaveRequests();
   const leaveTypesQuery = useLeaveTypes();
@@ -76,18 +106,31 @@ function MyLeaveContent() {
 
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [form, setForm] = useState({ leave_type_id: '', starts_on: '', ends_on: '', reason: '' });
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const selectedLeaveType = (leaveTypesQuery.data?.data ?? []).find((type) => String(type.id) === form.leave_type_id);
+  const evidenceRequired = selectedLeaveType?.requires_attachment === true;
+
+  async function handleViewEvidence(request: LeaveRequest) {
+    try {
+      await openLeaveEvidenceInNewTab(request);
+    } catch (error) {
+      toast.error('Could not open evidence', actionError(error, 'Could not open this leave evidence.'));
+    }
+  }
 
   async function handleSubmitRequest() {
-    if (!form.leave_type_id || !form.starts_on || !form.ends_on) return;
+    if (!form.leave_type_id || !form.starts_on || !form.ends_on || (evidenceRequired && !evidenceFile)) return;
     try {
       await createMutation.mutateAsync({
         leave_type_id: Number(form.leave_type_id),
         starts_on: form.starts_on,
         ends_on: form.ends_on,
         reason: form.reason || undefined,
+        evidence: evidenceFile,
       });
       setRequestModalOpen(false);
       setForm({ leave_type_id: '', starts_on: '', ends_on: '', reason: '' });
+      setEvidenceFile(null);
       toast.success('Leave requested', 'Your request has been submitted for approval.');
     } catch (error) {
       toast.error('Could not submit request', actionError(error, 'Could not submit your leave request.'));
@@ -96,6 +139,8 @@ function MyLeaveContent() {
 
   const balances = dashboardQuery.data?.leave?.balances ?? [];
   const requests = requestsQuery.data?.data ?? [];
+  const activeRequests = requests.filter(isActiveRequest);
+  const history = requests.filter((request) => !isActiveRequest(request));
 
   return (
     <div>
@@ -123,32 +168,76 @@ function MyLeaveContent() {
         </div>
       )}
 
-      <Card>
+      <Card className="mb-5">
         <CardHeader>
           <CardTitle>Requests</CardTitle>
         </CardHeader>
         <CardBody className="p-0">
           {requestsQuery.isLoading && <LoadingState label="Loading your leave requests…" />}
           {requestsQuery.isError && <ErrorState error={requestsQuery.error} onRetry={() => requestsQuery.refetch()} />}
-          {requestsQuery.data && requests.length === 0 && (
-            <EmptyState title="No leave requests yet" description="Requests you submit will appear here." />
+          {requestsQuery.data && activeRequests.length === 0 && (
+            <EmptyState title="No open requests" description="Requests you submit will appear here until they're resolved." />
           )}
-          {requests.length > 0 && (
+          {activeRequests.length > 0 && (
             <ul className="divide-y divide-border">
-              {requests.map((request) => (
+              {activeRequests.map((request) => (
                 <li key={request.id} className="flex items-center justify-between px-5 py-3 text-sm">
                   <div>
                     <p className="font-medium text-strong">{request.leave_type?.name ?? 'Leave'}</p>
                     <p className="text-xs text-muted">
                       {formatDate(request.starts_on)} → {formatDate(request.ends_on)} · {request.total_days} day(s)
                     </p>
+                    {request.evidence_download_url && (
+                      <button
+                        type="button"
+                        onClick={() => handleViewEvidence(request)}
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal hover:underline"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {request.evidence_file_name ?? 'View evidence'}
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     <StatusBadge status={request.status} />
-                    {(request.status === 'pending' || request.status === 'approved') && (
-                      <CancelLeaveButton request={request} onCancelled={() => requestsQuery.refetch()} />
+                    <CancelLeaveButton request={request} onCancelled={() => requestsQuery.refetch()} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>History</CardTitle>
+        </CardHeader>
+        <CardBody className="p-0">
+          {requestsQuery.data && history.length === 0 && (
+            <EmptyState title="No leave history yet" description="Completed, cancelled, or rejected leave will appear here." />
+          )}
+          {history.length > 0 && (
+            <ul className="divide-y divide-border">
+              {history.map((request) => (
+                <li key={request.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <div>
+                    <p className="font-medium text-strong">{request.leave_type?.name ?? 'Leave'}</p>
+                    <p className="text-xs text-muted">
+                      {formatDate(request.starts_on)} → {formatDate(request.ends_on)} · {request.total_days} day(s)
+                    </p>
+                    {request.evidence_download_url && (
+                      <button
+                        type="button"
+                        onClick={() => handleViewEvidence(request)}
+                        className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal hover:underline"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {request.evidence_file_name ?? 'View evidence'}
+                      </button>
                     )}
                   </div>
+                  <StatusBadge status={request.status} />
                 </li>
               ))}
             </ul>
@@ -166,7 +255,7 @@ function MyLeaveContent() {
             <ModalSendAction
               title="Submit request"
               isLoading={createMutation.isPending}
-              disabled={!form.leave_type_id || !form.starts_on || !form.ends_on}
+              disabled={!form.leave_type_id || !form.starts_on || !form.ends_on || (evidenceRequired && !evidenceFile)}
               onClick={handleSubmitRequest}
             />
           </>
@@ -177,10 +266,16 @@ function MyLeaveContent() {
             <span className="mb-1 block text-xs font-medium text-muted">Leave type</span>
             <SelectMenu
               value={form.leave_type_id}
-              onChange={(value) => setForm((current) => ({ ...current, leave_type_id: value }))}
+              onChange={(value) => {
+                setForm((current) => ({ ...current, leave_type_id: value }));
+                setEvidenceFile(null);
+              }}
               options={(leaveTypesQuery.data?.data ?? []).map((type) => ({ value: String(type.id), label: type.name }))}
               placeholder="Select leave type"
             />
+            {evidenceRequired && (
+              <span className="mt-1 block text-xs text-pending">This leave type requires supporting evidence.</span>
+            )}
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-muted">Starts on</span>
@@ -193,6 +288,18 @@ function MyLeaveContent() {
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-muted">Reason</span>
             <Textarea value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">
+              Evidence {evidenceRequired ? '' : '(optional)'}
+            </span>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong"
+            />
+            {evidenceFile && <span className="mt-1 block text-xs text-muted">{evidenceFile.name}</span>}
           </label>
         </div>
       </Modal>

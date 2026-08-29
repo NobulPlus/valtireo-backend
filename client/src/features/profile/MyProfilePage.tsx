@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -13,6 +14,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
 import {
+  useAcknowledgeDocument,
   useCreateDependent,
   useCreateEmergencyContact,
   useDeleteDependent,
@@ -20,18 +22,22 @@ import {
   useMyDocumentTypes,
   useMyProfileOverview,
   useSubmitMyDocument,
+  useSubmitSignedCopy,
   useUpdateDependent,
   useUpdateEmergencyContact,
   useUpdateMyCustomFieldValues,
   useUpdateMyProfile,
 } from '@/features/profile/api';
 import { ApiError } from '@/lib/apiClient';
+import { useDateFormatter } from '@/lib/dateFormat';
+import { downloadDocumentFile } from '@/lib/documents';
 import { isValidEmail } from '@/lib/validation';
 import { cn } from '@/lib/cn';
 import type {
   Dependent,
   EmergencyContact,
   EmployeeCustomFieldValue,
+  EmployeeDocument,
   EmployeeProfileOverview,
 } from '@/types/api';
 
@@ -44,14 +50,6 @@ const GENDER_OPTIONS: SelectMenuOption[] = [
   { value: 'non_binary', label: 'Non-binary' },
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
 ];
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})(?:T00:00:00(?:\.000000)?Z?)?$/);
-  if (dateOnly) return dateOnly[1];
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
 
 function formatText(value: string | null | undefined): string {
   if (!value) return '-';
@@ -95,8 +93,14 @@ function ProfileField({ label, children }: { label: string; children: ReactNode 
 
 function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOverview; onRefetch: () => void }) {
   const toast = useToast();
+  const { formatDate, formatDateTime } = useDateFormatter();
   const { employee, profile, emergency_contacts, dependents, documents, custom_fields, activities } = overview;
-  const [tab, setTab] = useState<Tab>('overview');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const requested = searchParams.get('tab');
+    const validTabs: Tab[] = ['overview', 'biodata', 'contacts', 'dependents', 'documents', 'custom_fields'];
+    return validTabs.includes(requested as Tab) ? (requested as Tab) : 'overview';
+  });
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'overview', label: 'Overview' },
@@ -115,8 +119,6 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
     residential_address: profile?.residential_address ?? '',
     next_of_kin_name: profile?.next_of_kin_name ?? '',
     next_of_kin_phone: profile?.next_of_kin_phone ?? '',
-    emergency_contact_name: profile?.emergency_contact_name ?? '',
-    emergency_contact_phone: profile?.emergency_contact_phone ?? '',
   });
   const [passportPhoto, setPassportPhoto] = useState<File | null>(null);
   const [passportPreview, setPassportPreview] = useState<string | null>(null);
@@ -134,8 +136,6 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
         residential_address: biodata.residential_address || null,
         next_of_kin_name: biodata.next_of_kin_name || null,
         next_of_kin_phone: biodata.next_of_kin_phone || null,
-        emergency_contact_name: biodata.emergency_contact_name || null,
-        emergency_contact_phone: biodata.emergency_contact_phone || null,
         passport_photo: passportPhoto,
       });
       setPassportPhoto(null);
@@ -275,6 +275,41 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const documentTypesQuery = useMyDocumentTypes();
   const submitDocumentMutation = useSubmitMyDocument();
+  const acknowledgeDocumentMutation = useAcknowledgeDocument();
+  const submitSignedCopyMutation = useSubmitSignedCopy();
+  const [signatureTarget, setSignatureTarget] = useState<EmployeeDocument | null>(null);
+  const [signedCopyFile, setSignedCopyFile] = useState<File | null>(null);
+
+  async function handleAcknowledgeDocument(documentId: number) {
+    try {
+      await acknowledgeDocumentMutation.mutateAsync(documentId);
+      toast.success('Document acknowledged');
+      onRefetch();
+    } catch (error) {
+      toast.error('Could not acknowledge document', actionError(error, 'Could not acknowledge this document.'));
+    }
+  }
+
+  async function handleSubmitSignedCopy() {
+    if (!signatureTarget || !signedCopyFile) return;
+    try {
+      await submitSignedCopyMutation.mutateAsync({ documentId: signatureTarget.id, file: signedCopyFile });
+      setSignatureTarget(null);
+      setSignedCopyFile(null);
+      toast.success('Signed copy uploaded', 'HR will review it shortly.');
+      onRefetch();
+    } catch (error) {
+      toast.error('Could not upload signed copy', actionError(error, 'Could not upload your signed copy.'));
+    }
+  }
+
+  async function handleDownloadDocument(doc: EmployeeDocument) {
+    try {
+      await downloadDocumentFile(doc.id, doc.file_name ?? doc.title);
+    } catch (error) {
+      toast.error('Could not download document', actionError(error, 'Could not download this document.'));
+    }
+  }
 
   async function handleSubmitDocument() {
     if (!documentFile || !documentForm.document_type_id) return;
@@ -360,7 +395,7 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
                     <li key={activity.id} className="px-4 py-2.5 text-sm">
                       <p className="font-medium text-strong">{activity.title}</p>
                       {activity.description && <p className="text-muted">{activity.description}</p>}
-                      <p className="mt-1 text-xs text-muted">{formatDate(activity.created_at)}</p>
+                      <p className="mt-1 text-xs text-muted">{formatDateTime(activity.created_at)}</p>
                     </li>
                   ))}
                 </ul>
@@ -425,18 +460,6 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
               </ProfileField>
               <ProfileField label="Next of kin phone">
                 <PhoneInput value={biodata.next_of_kin_phone} onChange={(value) => setBiodata((current) => ({ ...current, next_of_kin_phone: value }))} />
-              </ProfileField>
-              <ProfileField label="Emergency contact name">
-                <Input
-                  value={biodata.emergency_contact_name}
-                  onChange={(event) => setBiodata((current) => ({ ...current, emergency_contact_name: event.target.value }))}
-                />
-              </ProfileField>
-              <ProfileField label="Emergency contact phone">
-                <PhoneInput
-                  value={biodata.emergency_contact_phone}
-                  onChange={(value) => setBiodata((current) => ({ ...current, emergency_contact_phone: value }))}
-                />
               </ProfileField>
               <div className="sm:col-span-2">
                 <ProfileField label="Residential address">
@@ -552,22 +575,52 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
               <EmptyState title="No documents yet" description="Documents you submit will appear here." />
             ) : (
               <ul className="divide-y divide-border">
-                {documents.map((doc) => (
-                  <li key={doc.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                    <div>
-                      <p className="font-medium text-strong">{doc.title}</p>
-                      <p className="text-xs text-muted">{doc.document_type?.name}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <StatusBadge status={doc.status} />
-                      {doc.download_url && (
-                        <a href={doc.download_url} className="text-muted hover:text-teal" title="Download" aria-label="Download">
+                {documents.map((doc) => {
+                  const needsAcknowledgment = doc.document_type?.signature_method === 'acknowledge' && !doc.acknowledged_at;
+                  const needsSignature = doc.status === 'awaiting_signature' || (doc.document_type?.signature_method === 'signed_copy' && ['rejected', 'changes_requested'].includes(doc.status));
+                  const displayStatus = needsAcknowledgment ? 'pending_acknowledgment' : doc.status;
+                  const replacement = doc.status === 'superseded' ? documents.find((other) => other.replaces_document_id === doc.id) : null;
+
+                  return (
+                    <li key={doc.id} className={cn('flex items-center justify-between px-5 py-3 text-sm', doc.status === 'superseded' && 'opacity-60')}>
+                      <div>
+                        <p className="font-medium text-strong">{doc.title}</p>
+                        <p className="text-xs text-muted">
+                          {doc.document_type?.name}
+                          {replacement && ` · Replaced by your signed copy (now ${replacement.status})`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <StatusBadge status={displayStatus} />
+                        {needsAcknowledgment && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            isLoading={acknowledgeDocumentMutation.isPending}
+                            onClick={() => handleAcknowledgeDocument(doc.id)}
+                          >
+                            Acknowledge
+                          </Button>
+                        )}
+                        {needsSignature && (
+                          <Button type="button" variant="secondary" size="sm" onClick={() => setSignatureTarget(doc)}>
+                            Upload signed copy
+                          </Button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadDocument(doc)}
+                          className="text-muted hover:text-teal"
+                          title="Download"
+                          aria-label="Download"
+                        >
                           <Download className="h-4 w-4" />
-                        </a>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardBody>
@@ -735,6 +788,55 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
           </ProfileField>
           <ProfileField label="Notes">
             <Textarea value={documentForm.notes} onChange={(event) => setDocumentForm((current) => ({ ...current, notes: event.target.value }))} />
+          </ProfileField>
+        </div>
+      </Modal>
+
+      <Modal
+        open={signatureTarget !== null}
+        onClose={() => {
+          setSignatureTarget(null);
+          setSignedCopyFile(null);
+        }}
+        title="Upload signed copy"
+        footer={
+          <>
+            <ModalCancelAction
+              onClick={() => {
+                setSignatureTarget(null);
+                setSignedCopyFile(null);
+              }}
+            />
+            <ModalSendAction
+              title="Upload"
+              isLoading={submitSignedCopyMutation.isPending}
+              disabled={!signedCopyFile}
+              onClick={handleSubmitSignedCopy}
+            />
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Download <strong className="text-strong">{signatureTarget?.title}</strong>, sign it, then upload the scanned or
+            photographed signed copy here. HR will review it before it counts as complete.
+          </p>
+          {signatureTarget && (
+            <button
+              type="button"
+              onClick={() => handleDownloadDocument(signatureTarget)}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-teal hover:underline"
+            >
+              <Download className="h-3.5 w-3.5" /> Download the document to sign
+            </button>
+          )}
+          <ProfileField label="Signed copy">
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              onChange={(event) => setSignedCopyFile(event.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-strong file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong hover:file:bg-surface-soft"
+            />
           </ProfileField>
         </div>
       </Modal>

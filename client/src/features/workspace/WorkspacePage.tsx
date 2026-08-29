@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
 import { useSetupChecklist, useUploadWorkspaceLogo, useRemoveWorkspaceLogo, useWorkspace } from '@/features/workspace/api';
 import { api, ApiError } from '@/lib/apiClient';
+import { formatDateWithPattern, formatTimeWithPattern, type DateFormatPattern, type TimeFormatPattern } from '@/lib/dateFormat';
 import type { WorkspaceSettings } from '@/types/api';
 import { cn } from '@/lib/cn';
 import { isValidEmail } from '@/lib/validation';
@@ -56,6 +57,7 @@ function WorkspaceContent() {
     density: string;
     timezone: string;
     date_format: string;
+    time_format: string;
     currency: string;
     allow_employee_directory: boolean;
     show_org_chart: boolean;
@@ -80,6 +82,7 @@ function WorkspaceContent() {
         density: workspace.theme.density,
         timezone: workspace.localization.timezone,
         date_format: workspace.localization.date_format,
+        time_format: workspace.localization.time_format,
         currency: workspace.localization.currency,
         allow_employee_directory: workspace.employee_experience.allow_employee_directory,
         show_org_chart: workspace.employee_experience.show_org_chart,
@@ -111,6 +114,7 @@ function WorkspaceContent() {
         localization: {
           timezone: form?.timezone,
           date_format: form?.date_format,
+          time_format: form?.time_format,
           currency: form?.currency,
         },
         employee_experience: {
@@ -193,10 +197,29 @@ function WorkspaceContent() {
                   onChange={(event) => setForm({ ...form, timezone: event.target.value })}
                 />
               </Field>
-              <Field label="Date format">
-                <Input
+              <Field
+                label="Date format"
+                hint={`Example: ${formatDateWithPattern(new Date().toISOString(), form.date_format as DateFormatPattern)}`}
+              >
+                <SelectMenu
                   value={form.date_format}
-                  onChange={(event) => setForm({ ...form, date_format: event.target.value })}
+                  onChange={(value) => setForm({ ...form, date_format: value })}
+                  options={[
+                    { value: 'd/m/Y', label: 'DD/MM/YYYY' },
+                    { value: 'm/d/Y', label: 'MM/DD/YYYY' },
+                    { value: 'Y-m-d', label: 'YYYY-MM-DD' },
+                    { value: 'd M Y', label: 'DD Mon YYYY' },
+                  ]}
+                />
+              </Field>
+              <Field label="Time format" hint={`Example: ${formatTimeWithPattern(new Date().toISOString(), form.time_format as TimeFormatPattern)}`}>
+                <SelectMenu
+                  value={form.time_format}
+                  onChange={(value) => setForm({ ...form, time_format: value })}
+                  options={[
+                    { value: '24h', label: '24-hour' },
+                    { value: '12h', label: '12-hour' },
+                  ]}
                 />
               </Field>
               <Field label="Currency">

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import { EmptyState, LoadingState } from '@/components/ui/States';
 import {
   useMarkAllNotificationsRead,
@@ -18,7 +19,8 @@ export const SEVERITY_DOT: Record<string, string> = {
   danger: 'bg-danger',
 };
 
-export function timeAgo(value: string): string {
+/** Relative for the first week, then falls back to the organization's chosen date format. */
+export function timeAgo(value: string, formatDate: (value: string) => string): string {
   const diffMs = Date.now() - new Date(value).getTime();
   const minutes = Math.round(diffMs / 60_000);
 
@@ -29,10 +31,11 @@ export function timeAgo(value: string): string {
   const days = Math.round(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  return new Date(value).toLocaleDateString();
+  return formatDate(value);
 }
 
 function NotificationRow({ notification, onRead }: { notification: NotificationEntry; onRead: (notification: NotificationEntry) => void }) {
+  const { formatDate } = useDateFormatter();
   const unread = !notification.read_at;
 
   return (
@@ -50,7 +53,7 @@ function NotificationRow({ notification, onRead }: { notification: NotificationE
           {notification.title ?? 'Notification'}
         </span>
         {notification.message && <span className="mt-0.5 block line-clamp-2 text-xs leading-5 text-muted">{notification.message}</span>}
-        <span className="mt-1 block text-[11px] text-muted">{timeAgo(notification.created_at)}</span>
+        <span className="mt-1 block text-[11px] text-muted">{timeAgo(notification.created_at, formatDate)}</span>
       </span>
     </button>
   );

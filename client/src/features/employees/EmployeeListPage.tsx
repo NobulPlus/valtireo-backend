@@ -40,6 +40,7 @@ import { OrgChartView } from '@/features/employees/OrgChartView';
 import { CONFIRMATION_STATUS_OPTIONS, EMPLOYEE_STATUS_OPTIONS, isReadyForOnboardingApproval, statusLabel } from '@/features/employees/statusHelpers';
 import { ApiError } from '@/lib/apiClient';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import type { Employee } from '@/types/api';
 
 const BOARD_COLUMNS = [
@@ -499,6 +500,8 @@ function EmployeeKanbanCard({
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
+  const { formatDate } = useDateFormatter();
+
   return (
     <article
       draggable={draggable}
@@ -538,7 +541,7 @@ function EmployeeKanbanCard({
         {employee.probation_ends_at && (
           <p className={cn('flex items-center gap-1.5', new Date(employee.probation_ends_at) < new Date() && 'text-warning')}>
             <CalendarClock className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="truncate">Probation ends {new Date(employee.probation_ends_at).toLocaleDateString()}</span>
+            <span className="truncate">Probation ends {formatDate(employee.probation_ends_at)}</span>
           </p>
         )}
       </div>

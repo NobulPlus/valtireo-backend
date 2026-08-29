@@ -12,6 +12,7 @@ import { MyProfilePage } from '@/features/profile/MyProfilePage';
 import { MyLeavePage } from '@/features/leave/MyLeavePage';
 import { MyAttendancePage } from '@/features/attendance/MyAttendancePage';
 import { MyOrgChartPage } from '@/features/employees/MyOrgChartPage';
+import { MyDirectoryPage } from '@/features/employees/MyDirectoryPage';
 import { NotificationsPage } from '@/features/notifications/NotificationsPage';
 import { PlatformDashboardPage } from '@/features/platform/PlatformDashboardPage';
 import { PlatformOrganizationCreatePage } from '@/features/platform/PlatformOrganizationCreatePage';
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="me/leave" element={<MyLeavePage />} />
         <Route path="me/attendance" element={<MyAttendancePage />} />
         <Route path="me/org-chart" element={<MyOrgChartPage />} />
+        <Route path="me/directory" element={<MyDirectoryPage />} />
         <Route path="workspace" element={<WorkspacePage />} />
         <Route path="settings/control-center" element={<ControlCenterPage />} />
         <Route path="settings/structure" element={<StructureSettingsPage />} />

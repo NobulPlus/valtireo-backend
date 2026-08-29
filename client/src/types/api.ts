@@ -223,8 +223,6 @@ export interface EmployeeProfileSummary {
   residential_address?: string | null;
   next_of_kin_name?: string | null;
   next_of_kin_phone?: string | null;
-  emergency_contact_name?: string | null;
-  emergency_contact_phone?: string | null;
   passport_photo_path?: string | null;
   passport_photo_url?: string | null;
   completion_status: ProfileCompletionStatus;
@@ -303,6 +301,8 @@ export interface Dependent {
   is_beneficiary: boolean;
 }
 
+export type DocumentSignatureMethod = 'none' | 'acknowledge' | 'signed_copy';
+
 export interface EmployeeDocument {
   id: number;
   title: string;
@@ -315,7 +315,10 @@ export interface EmployeeDocument {
   view_url?: string;
   mime_type?: string;
   submitted_at?: string | null;
-  document_type?: LookupRef | null;
+  reviewed_at?: string | null;
+  acknowledged_at?: string | null;
+  replaces_document_id?: number | null;
+  document_type?: (LookupRef & { requires_expiry_date?: boolean; signature_method?: DocumentSignatureMethod }) | null;
 }
 
 export interface EmployeeStatusHistoryEntry {
@@ -393,6 +396,7 @@ export interface LeaveType {
   name: string;
   code: string;
   is_paid?: boolean;
+  requires_attachment?: boolean;
 }
 
 export interface LeaveRequest {
@@ -404,6 +408,10 @@ export interface LeaveRequest {
   total_days: number;
   status: string;
   reason: string | null;
+  evidence_file_name: string | null;
+  evidence_mime_type: string | null;
+  evidence_file_size: number | null;
+  evidence_download_url: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   leave_type?: LookupRef | null;
@@ -460,10 +468,18 @@ export interface ApprovalRequest {
   action: string;
   title: string;
   status: string;
-  current_step_order: number;
+  current_step_order: number | null;
   submitted_at: string | null;
   completed_at: string | null;
   decisions?: ApprovalDecision[];
+  document?: { id: number; title: string; file_name: string; mime_type: string | null; download_url: string; view_url: string } | null;
+  leave_request?: {
+    id: number;
+    evidence_file_name: string | null;
+    evidence_mime_type: string | null;
+    evidence_file_size: number | null;
+    evidence_download_url: string | null;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -764,6 +780,25 @@ export interface OrgChartNode {
   is_department_head: boolean;
 }
 
+export interface EmployeeDirectoryEntry {
+  id: number;
+  full_name: string;
+  employee_number: string;
+  work_email: string;
+  phone: string | null;
+  department: LookupRef | null;
+  unit: LookupRef | null;
+  designation: string | null;
+  location: string | null;
+}
+
+export interface EmployeeDirectoryResponse extends Paginated<EmployeeDirectoryEntry> {
+  scope: {
+    department_id: number | null;
+    viewer_department_id: number | null;
+  };
+}
+
 export interface OrganizationDashboard {
   filters: Record<string, unknown>;
   employees: EmployeeCountBreakdown;
@@ -835,8 +870,14 @@ export interface OrganizationDashboard {
   };
 }
 
+export interface ManagerDashboardScope {
+  type: 'department' | 'direct_reports';
+  department?: LookupRef;
+  source: string;
+}
+
 export interface ManagerDashboard {
-  scope: Record<string, unknown>;
+  scope: ManagerDashboardScope;
   filters: Record<string, unknown>;
   employees: EmployeeCountBreakdown;
   team_health: {
@@ -914,12 +955,28 @@ export interface MyDashboard {
     }>;
   } | null;
   attendance: {
-    recent_records: Array<
-      Pick<AttendanceRecord, 'id' | 'attendance_date' | 'check_in_at' | 'check_out_at' | 'duration_minutes' | 'source' | 'status'>
-    >;
+    trend: Array<{ label: string; value: number; status: string }>;
+    range: { date_from: string; date_to: string };
     corrections_pending: number;
+    this_month: {
+      present: number;
+      late: number;
+      absent: number;
+      total_hours: number;
+    };
   } | null;
-  modules: EntitledModule[];
+  document_compliance: Array<{
+    requirement: { id: number; name: string; document_type: string };
+    state: 'missing' | 'expired' | 'expiring_soon' | 'pending_acknowledgment' | 'awaiting_signature' | 'rejected' | 'changes_requested';
+    expires_at: string | null;
+    document_id: number | null;
+  }>;
+  next_holiday: { name: string; date: string; days_away: number } | null;
+  tenure: {
+    years_of_service: number;
+    next_anniversary: string;
+    days_until_anniversary: number;
+  } | null;
 }
 
 /* ---------------------------------------------------------------------- */

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -10,6 +10,8 @@ import {
   MapPin,
   MoreHorizontal,
   Phone,
+  Plus,
+  Trash2,
   UserCog,
   UserRound,
   UserRoundCheck,
@@ -35,22 +37,33 @@ import {
   downloadEmployeeProfileCsv,
   searchEmployees,
   useChangeEmployeeManager,
+  useCreateEmployeeDependent,
+  useCreateEmployeeEmergencyContact,
+  useDeleteEmployeeDependent,
+  useDeleteEmployeeEmergencyContact,
+  useDocumentRequirementsForType,
+  useDocumentTypesForUpload,
   useEmployee,
   useRequestEmployeeCorrection,
+  useUpdateEmployeeDependent,
+  useUpdateEmployeeEmergencyContact,
   useUpdateEmployee,
+  useUploadEmployeeDocument,
 } from '@/features/employees/api';
 import { ApproveOnboardingModal } from '@/features/employees/ApproveOnboardingModal';
 import { ChangeStatusModal } from '@/features/employees/ChangeStatusModal';
 import { useSetupLookups } from '@/features/workspace/api';
 import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/apiClient';
-import type { Employee } from '@/types/api';
+import { useDateFormatter } from '@/lib/dateFormat';
+import type { Dependent, EmergencyContact, Employee } from '@/types/api';
 
-type Tab = 'overview' | 'biodata' | 'documents' | 'status' | 'reporting' | 'activity';
+type Tab = 'overview' | 'biodata' | 'contacts' | 'documents' | 'status' | 'reporting' | 'activity';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'biodata', label: 'Biodata' },
+  { key: 'contacts', label: 'Contacts' },
   { key: 'documents', label: 'Documents' },
   { key: 'status', label: 'Status history' },
   { key: 'reporting', label: 'Reporting history' },
@@ -88,28 +101,6 @@ function employeeInitials(name: string): string {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
-}
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '-';
-
-  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})(?:T00:00:00(?:\.000000)?Z?)?$/);
-  if (dateOnly) return dateOnly[1];
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-
-  const day = localDateString(date);
-  const time = new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-    .format(date)
-    .replace(/\s/g, '')
-    .toLowerCase();
-
-  return `${day} ${time}`;
 }
 
 function formatText(value: string | null | undefined): string {
@@ -179,6 +170,7 @@ function GenderBadge({ gender }: { gender?: string | null }) {
 function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const { hasPermission } = useAuth();
   const toast = useToast();
+  const { formatDate, formatDateTime } = useDateFormatter();
   const lookups = useSetupLookups();
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmApprove, setConfirmApprove] = useState(false);
@@ -186,6 +178,32 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [managerModalOpen, setManagerModalOpen] = useState(false);
+  const [documentModalOpen, setDocumentModalOpen] = useState(false);
+  const [documentForm, setDocumentForm] = useState({ document_type_id: '', document_requirement_id: '', title: '', issued_at: '', expires_at: '', notes: '' });
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<EmergencyContact | null>(null);
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    relationship: '',
+    phone: '',
+    alternate_phone: '',
+    email: '',
+    address: '',
+    is_primary: false,
+  });
+  const [dependentModalOpen, setDependentModalOpen] = useState(false);
+  const [editingDependent, setEditingDependent] = useState<Dependent | null>(null);
+  const [dependentForm, setDependentForm] = useState({
+    name: '',
+    relationship: '',
+    date_of_birth: '',
+    gender: '',
+    phone: '',
+    email: '',
+    address: '',
+    is_beneficiary: false,
+  });
   const [editForm, setEditForm] = useState({
     first_name: '',
     middle_name: '',
@@ -206,8 +224,6 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
     residential_address: '',
     next_of_kin_name: '',
     next_of_kin_phone: '',
-    emergency_contact_name: '',
-    emergency_contact_phone: '',
   });
   const editFormUnits = useMemo(
     () =>
@@ -232,10 +248,54 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const updateEmployeeMutation = useUpdateEmployee(employee.id);
   const managerMutation = useChangeEmployeeManager(employee.id);
   const correctionMutation = useRequestEmployeeCorrection(employee.id);
+  const documentTypesQuery = useDocumentTypesForUpload();
+  const documentRequirementsQuery = useDocumentRequirementsForType(
+    documentForm.document_type_id ? Number(documentForm.document_type_id) : undefined,
+  );
+  const uploadDocumentMutation = useUploadEmployeeDocument();
+  const createContactMutation = useCreateEmployeeEmergencyContact(employee.id);
+  const updateContactMutation = useUpdateEmployeeEmergencyContact(editingContact?.id);
+  const deleteContactMutation = useDeleteEmployeeEmergencyContact();
+  const createDependentMutation = useCreateEmployeeDependent(employee.id);
+  const updateDependentMutation = useUpdateEmployeeDependent(editingDependent?.id);
+  const deleteDependentMutation = useDeleteEmployeeDependent();
+
+  // Most document types only have a single active requirement — default to
+  // it rather than making HR notice and pick it, since leaving it unlinked
+  // means it won't count toward the employee's compliance checklist.
+  useEffect(() => {
+    const requirements = documentRequirementsQuery.data?.data ?? [];
+    if (requirements.length === 1 && !documentForm.document_requirement_id) {
+      setDocumentForm((current) => ({ ...current, document_requirement_id: String(requirements[0].id) }));
+    }
+  }, [documentRequirementsQuery.data, documentForm.document_requirement_id]);
 
   const canApprove = hasPermission('employees.update') && employee.status === 'onboarding';
   const canViewEmployee = hasPermission('employees.view');
   const canUpdateEmployee = hasPermission('employees.update');
+  const canUploadDocuments = hasPermission('employee_documents.create');
+
+  async function handleUploadDocument() {
+    if (!documentFile || !documentForm.document_type_id || !documentForm.title.trim()) return;
+    try {
+      await uploadDocumentMutation.mutateAsync({
+        employee_id: employee.id,
+        document_type_id: Number(documentForm.document_type_id),
+        document_requirement_id: documentForm.document_requirement_id ? Number(documentForm.document_requirement_id) : undefined,
+        title: documentForm.title,
+        file: documentFile,
+        issued_at: documentForm.issued_at || undefined,
+        expires_at: documentForm.expires_at || undefined,
+        notes: documentForm.notes || undefined,
+      });
+      setDocumentModalOpen(false);
+      setDocumentForm({ document_type_id: '', document_requirement_id: '', title: '', issued_at: '', expires_at: '', notes: '' });
+      setDocumentFile(null);
+      toast.success('Document uploaded', 'It now appears in the employee’s documents.');
+    } catch (error) {
+      toast.error('Could not upload document', error instanceof ApiError ? error.message : 'Could not upload this document.');
+    }
+  }
 
   function openEditModal(employeeToEdit: Employee) {
     setEditForm({
@@ -258,8 +318,6 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
       residential_address: employeeToEdit.profile?.residential_address ?? '',
       next_of_kin_name: employeeToEdit.profile?.next_of_kin_name ?? '',
       next_of_kin_phone: employeeToEdit.profile?.next_of_kin_phone ?? '',
-      emergency_contact_name: employeeToEdit.profile?.emergency_contact_name ?? '',
-      emergency_contact_phone: employeeToEdit.profile?.emergency_contact_phone ?? '',
     });
     setEditModalOpen(true);
   }
@@ -289,8 +347,6 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           residential_address: editForm.residential_address || null,
           next_of_kin_name: editForm.next_of_kin_name || null,
           next_of_kin_phone: editForm.next_of_kin_phone || null,
-          emergency_contact_name: editForm.emergency_contact_name || null,
-          emergency_contact_phone: editForm.emergency_contact_phone || null,
         },
       });
       setEditModalOpen(false);
@@ -312,6 +368,102 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
       toast.success('Correction requested', 'The request has been recorded on the employee activity timeline.');
     } catch (error) {
       toast.error('Could not request correction', actionError(error, 'Could not request correction.'));
+    }
+  }
+
+  function openContactModal(contact: EmergencyContact | null) {
+    setEditingContact(contact);
+    setContactForm({
+      name: contact?.name ?? '',
+      relationship: contact?.relationship ?? '',
+      phone: contact?.phone ?? '',
+      alternate_phone: contact?.alternate_phone ?? '',
+      email: contact?.email ?? '',
+      address: contact?.address ?? '',
+      is_primary: contact?.is_primary ?? false,
+    });
+    setContactModalOpen(true);
+  }
+
+  async function handleSaveContact() {
+    const payload = {
+      name: contactForm.name,
+      relationship: contactForm.relationship || null,
+      phone: contactForm.phone,
+      alternate_phone: contactForm.alternate_phone || null,
+      email: contactForm.email || null,
+      address: contactForm.address || null,
+      is_primary: contactForm.is_primary,
+    };
+
+    try {
+      if (editingContact) {
+        await updateContactMutation.mutateAsync(payload);
+      } else {
+        await createContactMutation.mutateAsync(payload);
+      }
+      setContactModalOpen(false);
+      toast.success('Emergency contact saved', 'The employee record now has the updated contact details.');
+    } catch (error) {
+      toast.error('Could not save contact', actionError(error, 'Could not save this emergency contact.'));
+    }
+  }
+
+  async function handleDeleteContact(contact: EmergencyContact) {
+    try {
+      await deleteContactMutation.mutateAsync(contact.id);
+      toast.success('Emergency contact removed', 'The employee record has been updated.');
+    } catch (error) {
+      toast.error('Could not remove contact', actionError(error, 'Could not remove this emergency contact.'));
+    }
+  }
+
+  function openDependentModal(dependent: Dependent | null) {
+    setEditingDependent(dependent);
+    setDependentForm({
+      name: dependent?.name ?? '',
+      relationship: dependent?.relationship ?? '',
+      date_of_birth: dependent?.date_of_birth ? dependent.date_of_birth.slice(0, 10) : '',
+      gender: dependent?.gender ?? '',
+      phone: dependent?.phone ?? '',
+      email: dependent?.email ?? '',
+      address: dependent?.address ?? '',
+      is_beneficiary: dependent?.is_beneficiary ?? false,
+    });
+    setDependentModalOpen(true);
+  }
+
+  async function handleSaveDependent() {
+    const payload = {
+      name: dependentForm.name,
+      relationship: dependentForm.relationship,
+      date_of_birth: dependentForm.date_of_birth || null,
+      gender: dependentForm.gender || null,
+      phone: dependentForm.phone || null,
+      email: dependentForm.email || null,
+      address: dependentForm.address || null,
+      is_beneficiary: dependentForm.is_beneficiary,
+    };
+
+    try {
+      if (editingDependent) {
+        await updateDependentMutation.mutateAsync(payload);
+      } else {
+        await createDependentMutation.mutateAsync(payload);
+      }
+      setDependentModalOpen(false);
+      toast.success('Dependent saved', 'The employee record now has the updated dependent details.');
+    } catch (error) {
+      toast.error('Could not save dependent', actionError(error, 'Could not save this dependent.'));
+    }
+  }
+
+  async function handleDeleteDependent(dependent: Dependent) {
+    try {
+      await deleteDependentMutation.mutateAsync(dependent.id);
+      toast.success('Dependent removed', 'The employee record has been updated.');
+    } catch (error) {
+      toast.error('Could not remove dependent', actionError(error, 'Could not remove this dependent.'));
     }
   }
 
@@ -502,9 +654,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                 <OverviewRow label="Employment type" value={employee.employment_type?.name ?? '—'} />
                 <OverviewRow label="Location" value={employee.location?.name ?? '—'} />
                 <OverviewRow label="Start date" value={formatDate(employee.start_date)} />
-                <OverviewRow label="Invited" value={employee.invited_at ? formatDate(employee.invited_at) : 'Not invited'} />
-                <OverviewRow label="Onboarding completed" value={formatDate(employee.onboarding_completed_at)} />
-                <OverviewRow label="Activated" value={formatDate(employee.activated_at)} />
+                <OverviewRow label="Invited" value={employee.invited_at ? formatDateTime(employee.invited_at) : 'Not invited'} />
+                <OverviewRow label="Onboarding completed" value={formatDateTime(employee.onboarding_completed_at)} />
+                <OverviewRow label="Activated" value={formatDateTime(employee.activated_at)} />
                 {employee.probation_ends_at && (
                   <OverviewRow
                     label="Probation ends"
@@ -532,8 +684,6 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                   </div>
                   <OverviewRow label="Next of kin" value={employee.profile.next_of_kin_name ?? '-'} />
                   <OverviewRow label="Next of kin phone" value={employee.profile.next_of_kin_phone ?? '-'} />
-                  <OverviewRow label="Emergency contact" value={employee.profile.emergency_contact_name ?? '-'} />
-                  <OverviewRow label="Emergency contact phone" value={employee.profile.emergency_contact_phone ?? '-'} />
                 </CardBody>
               ) : (
                 <CardBody>
@@ -543,20 +693,149 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
             </Card>
           )}
 
+          {tab === 'contacts' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Emergency contacts</CardTitle>
+                {canUpdateEmployee && (
+                  <Button type="button" size="icon" title="Add emergency contact" aria-label="Add emergency contact" onClick={() => openContactModal(null)}>
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </CardHeader>
+              <CardBody className="p-0">
+                {employee.emergency_contacts && employee.emergency_contacts.length > 0 ? (
+                  <ul className="divide-y divide-border">
+                    {employee.emergency_contacts.map((contact) => (
+                      <li key={contact.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 font-medium text-strong">
+                            {contact.name}
+                            {contact.is_primary && (
+                              <span className="rounded-full bg-teal/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+                                Primary
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted">{formatText(contact.relationship)}</p>
+                          {contact.email && (
+                            <a href={`mailto:${contact.email}`} className="mt-1 block truncate text-xs text-muted hover:text-teal hover:underline">
+                              {contact.email}
+                            </a>
+                          )}
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1.5">
+                          <a href={phoneHref(contact.phone)} className="flex items-center gap-1.5 text-strong hover:text-teal hover:underline">
+                            <Phone className="h-3.5 w-3.5 text-muted" />
+                            {contact.phone}
+                          </a>
+                          {canUpdateEmployee && (
+                            <>
+                              <Button type="button" variant="ghost" size="icon" aria-label="Edit emergency contact" title="Edit" onClick={() => openContactModal(contact)}>
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" variant="ghost" size="icon" aria-label="Remove emergency contact" title="Remove" onClick={() => handleDeleteContact(contact)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState title="No emergency contacts" description="The employee has not added any emergency contacts yet." />
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          {tab === 'contacts' && (
+            <Card className="mt-5">
+              <CardHeader>
+                <CardTitle>Dependents</CardTitle>
+                {canUpdateEmployee && (
+                  <Button type="button" size="icon" title="Add dependent" aria-label="Add dependent" onClick={() => openDependentModal(null)}>
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </CardHeader>
+              <CardBody className="p-0">
+                {employee.dependents && employee.dependents.length > 0 ? (
+                  <ul className="divide-y divide-border">
+                    {employee.dependents.map((dependent) => (
+                      <li key={dependent.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 font-medium text-strong">
+                            {dependent.name}
+                            {dependent.is_beneficiary && (
+                              <span className="rounded-full bg-teal/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+                                Beneficiary
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted">
+                            {formatText(dependent.relationship)} · {formatDate(dependent.date_of_birth)}
+                          </p>
+                          {dependent.email && (
+                            <a href={`mailto:${dependent.email}`} className="mt-1 block truncate text-xs text-muted hover:text-teal hover:underline">
+                              {dependent.email}
+                            </a>
+                          )}
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1.5">
+                          {dependent.phone && (
+                            <a href={phoneHref(dependent.phone)} className="flex items-center gap-1.5 text-strong hover:text-teal hover:underline">
+                              <Phone className="h-3.5 w-3.5 text-muted" />
+                              {dependent.phone}
+                            </a>
+                          )}
+                          {canUpdateEmployee && (
+                            <>
+                              <Button type="button" variant="ghost" size="icon" aria-label="Edit dependent" title="Edit" onClick={() => openDependentModal(dependent)}>
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" variant="ghost" size="icon" aria-label="Remove dependent" title="Remove" onClick={() => handleDeleteDependent(dependent)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <EmptyState title="No dependents" description="Dependents added for this employee will appear here." />
+                )}
+              </CardBody>
+            </Card>
+          )}
+
           {tab === 'documents' && (
             <Card>
+              <CardHeader>
+                <CardTitle>Documents</CardTitle>
+                {canUploadDocuments && (
+                  <Button type="button" size="sm" onClick={() => setDocumentModalOpen(true)}>
+                    <Plus className="h-3.5 w-3.5" /> Upload document
+                  </Button>
+                )}
+              </CardHeader>
               <CardBody className="p-0">
                 {employee.documents && employee.documents.length > 0 ? (
                   <ul className="divide-y divide-border">
-                    {employee.documents.map((doc) => (
-                      <li key={doc.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                        <div>
-                          <p className="font-medium text-strong">{doc.title}</p>
-                          <p className="text-xs text-muted">{doc.document_type?.name}</p>
-                        </div>
-                        <StatusBadge status={doc.status} />
-                      </li>
-                    ))}
+                    {employee.documents.map((doc) => {
+                      const needsAcknowledgment = doc.document_type?.signature_method === 'acknowledge' && !doc.acknowledged_at;
+                      return (
+                        <li key={doc.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                          <div>
+                            <p className="font-medium text-strong">{doc.title}</p>
+                            <p className="text-xs text-muted">{doc.document_type?.name}</p>
+                          </div>
+                          <StatusBadge status={needsAcknowledgment ? 'pending_acknowledgment' : doc.status} />
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <EmptyState title="No documents yet" description="Documents submitted for this employee will appear here." />
@@ -626,7 +905,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                         <p className="font-medium text-strong">{activity.title}</p>
                         {activity.description && <p className="text-muted">{activity.description}</p>}
                         <p className="mt-1 text-xs text-muted">
-                          {activity.actor?.name ?? 'System'} · {formatDate(activity.created_at)}
+                          {activity.actor?.name ?? 'System'} · {formatDateTime(activity.created_at)}
                         </p>
                       </li>
                     ))}
@@ -788,12 +1067,6 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
               <ActionField label="Next of kin phone">
                 <PhoneInput value={editForm.next_of_kin_phone} onChange={(value) => setEditForm((current) => ({ ...current, next_of_kin_phone: value }))} />
               </ActionField>
-              <ActionField label="Emergency contact name">
-                <Input value={editForm.emergency_contact_name} onChange={(event) => setEditForm((current) => ({ ...current, emergency_contact_name: event.target.value }))} />
-              </ActionField>
-              <ActionField label="Emergency contact phone">
-                <PhoneInput value={editForm.emergency_contact_phone} onChange={(value) => setEditForm((current) => ({ ...current, emergency_contact_phone: value }))} />
-              </ActionField>
               <div className="md:col-span-2">
                 <ActionField label="Residential address">
                   <Textarea value={editForm.residential_address} onChange={(event) => setEditForm((current) => ({ ...current, residential_address: event.target.value }))} />
@@ -886,6 +1159,197 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           </ActionField>
           <ActionField label="Note">
             <Textarea value={managerNote} onChange={(event) => setManagerNote(event.target.value)} placeholder="Optional internal note" />
+          </ActionField>
+        </div>
+      </Modal>
+
+      <Modal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        title={editingContact ? 'Edit emergency contact' : 'Add emergency contact'}
+        footer={
+          <>
+            <ModalCancelAction onClick={() => setContactModalOpen(false)} />
+            <ModalSaveAction
+              isLoading={createContactMutation.isPending || updateContactMutation.isPending}
+              disabled={
+                !contactForm.name.trim() ||
+                !contactForm.phone.trim() ||
+                (Boolean(contactForm.email) && !isValidEmail(contactForm.email))
+              }
+              onClick={handleSaveContact}
+            />
+          </>
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <ActionField label="Name">
+            <Input value={contactForm.name} onChange={(event) => setContactForm((current) => ({ ...current, name: event.target.value }))} />
+          </ActionField>
+          <ActionField label="Relationship">
+            <Input value={contactForm.relationship} onChange={(event) => setContactForm((current) => ({ ...current, relationship: event.target.value }))} />
+          </ActionField>
+          <ActionField label="Phone">
+            <PhoneInput value={contactForm.phone} onChange={(value) => setContactForm((current) => ({ ...current, phone: value }))} />
+          </ActionField>
+          <ActionField label="Alternate phone">
+            <PhoneInput value={contactForm.alternate_phone} onChange={(value) => setContactForm((current) => ({ ...current, alternate_phone: value }))} />
+          </ActionField>
+          <ActionField label="Email" error={contactForm.email && !isValidEmail(contactForm.email) ? 'Enter a valid email address' : undefined}>
+            <Input
+              type="email"
+              invalid={Boolean(contactForm.email) && !isValidEmail(contactForm.email)}
+              value={contactForm.email}
+              onChange={(event) => setContactForm((current) => ({ ...current, email: event.target.value }))}
+            />
+          </ActionField>
+          <label className="mt-6 flex items-center gap-2 text-sm text-strong">
+            <input
+              type="checkbox"
+              checked={contactForm.is_primary}
+              onChange={(event) => setContactForm((current) => ({ ...current, is_primary: event.target.checked }))}
+              className="h-4 w-4 rounded border-border"
+            />
+            Primary contact
+          </label>
+          <div className="md:col-span-2">
+            <ActionField label="Address">
+              <Textarea value={contactForm.address} onChange={(event) => setContactForm((current) => ({ ...current, address: event.target.value }))} />
+            </ActionField>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={dependentModalOpen}
+        onClose={() => setDependentModalOpen(false)}
+        title={editingDependent ? 'Edit dependent' : 'Add dependent'}
+        footer={
+          <>
+            <ModalCancelAction onClick={() => setDependentModalOpen(false)} />
+            <ModalSaveAction
+              isLoading={createDependentMutation.isPending || updateDependentMutation.isPending}
+              disabled={
+                !dependentForm.name.trim() ||
+                !dependentForm.relationship.trim() ||
+                (Boolean(dependentForm.email) && !isValidEmail(dependentForm.email))
+              }
+              onClick={handleSaveDependent}
+            />
+          </>
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <ActionField label="Name">
+            <Input value={dependentForm.name} onChange={(event) => setDependentForm((current) => ({ ...current, name: event.target.value }))} />
+          </ActionField>
+          <ActionField label="Relationship">
+            <Input value={dependentForm.relationship} onChange={(event) => setDependentForm((current) => ({ ...current, relationship: event.target.value }))} />
+          </ActionField>
+          <ActionField label="Date of birth">
+            <DatePicker value={dependentForm.date_of_birth} onChange={(value) => setDependentForm((current) => ({ ...current, date_of_birth: value }))} />
+          </ActionField>
+          <ActionField label="Gender">
+            <SelectMenu value={dependentForm.gender} onChange={(value) => setDependentForm((current) => ({ ...current, gender: value }))} options={GENDER_OPTIONS} />
+          </ActionField>
+          <ActionField label="Phone">
+            <PhoneInput value={dependentForm.phone} onChange={(value) => setDependentForm((current) => ({ ...current, phone: value }))} />
+          </ActionField>
+          <ActionField label="Email" error={dependentForm.email && !isValidEmail(dependentForm.email) ? 'Enter a valid email address' : undefined}>
+            <Input
+              type="email"
+              invalid={Boolean(dependentForm.email) && !isValidEmail(dependentForm.email)}
+              value={dependentForm.email}
+              onChange={(event) => setDependentForm((current) => ({ ...current, email: event.target.value }))}
+            />
+          </ActionField>
+          <label className="flex items-center gap-2 text-sm text-strong">
+            <input
+              type="checkbox"
+              checked={dependentForm.is_beneficiary}
+              onChange={(event) => setDependentForm((current) => ({ ...current, is_beneficiary: event.target.checked }))}
+              className="h-4 w-4 rounded border-border"
+            />
+            Beneficiary
+          </label>
+          <div className="md:col-span-2">
+            <ActionField label="Address">
+              <Textarea value={dependentForm.address} onChange={(event) => setDependentForm((current) => ({ ...current, address: event.target.value }))} />
+            </ActionField>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={documentModalOpen}
+        onClose={() => setDocumentModalOpen(false)}
+        title="Upload document"
+        footer={
+          <>
+            <ModalCancelAction onClick={() => setDocumentModalOpen(false)} />
+            <ModalSendAction
+              title="Upload"
+              isLoading={uploadDocumentMutation.isPending}
+              disabled={!documentFile || !documentForm.document_type_id || !documentForm.title.trim()}
+              onClick={handleUploadDocument}
+            />
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <ActionField label="Document type">
+            <SelectMenu
+              value={documentForm.document_type_id}
+              onChange={(value) => {
+                const selectedType = documentTypesQuery.data?.data.find((type) => String(type.id) === value);
+                setDocumentForm((current) => ({
+                  ...current,
+                  document_type_id: value,
+                  document_requirement_id: '',
+                  title: current.title || selectedType?.name || current.title,
+                }));
+              }}
+              options={(documentTypesQuery.data?.data ?? []).map((type) => ({ value: String(type.id), label: type.name }))}
+              placeholder="Select document type"
+            />
+          </ActionField>
+          {(documentRequirementsQuery.data?.data?.length ?? 0) > 0 && (
+            <ActionField label="Satisfies requirement">
+              <SelectMenu
+                value={documentForm.document_requirement_id}
+                onChange={(value) => setDocumentForm((current) => ({ ...current, document_requirement_id: value }))}
+                options={[
+                  { value: '', label: 'Not tied to a specific requirement' },
+                  ...(documentRequirementsQuery.data?.data ?? []).map((requirement) => ({
+                    value: String(requirement.id),
+                    label: requirement.name,
+                  })),
+                ]}
+              />
+            </ActionField>
+          )}
+          <ActionField label="Title">
+            <Input
+              value={documentForm.title}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, title: event.target.value }))}
+              placeholder="e.g. Employment Contract"
+            />
+          </ActionField>
+          <ActionField label="File">
+            <input
+              type="file"
+              onChange={(event) => setDocumentFile(event.target.files?.[0] ?? null)}
+              className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong"
+            />
+          </ActionField>
+          <ActionField label="Issued on (optional)">
+            <DatePicker value={documentForm.issued_at} onChange={(value) => setDocumentForm((current) => ({ ...current, issued_at: value }))} />
+          </ActionField>
+          <ActionField label="Expires on (optional)">
+            <DatePicker value={documentForm.expires_at} onChange={(value) => setDocumentForm((current) => ({ ...current, expires_at: value }))} />
+          </ActionField>
+          <ActionField label="Notes">
+            <Textarea value={documentForm.notes} onChange={(event) => setDocumentForm((current) => ({ ...current, notes: event.target.value }))} />
           </ActionField>
         </div>
       </Modal>

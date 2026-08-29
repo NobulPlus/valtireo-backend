@@ -19,6 +19,7 @@ class EmployeeDocumentResource extends JsonResource
             'employee_id' => $this->employee_id,
             'document_type_id' => $this->document_type_id,
             'document_requirement_id' => $this->document_requirement_id,
+            'replaces_document_id' => $this->replaces_document_id,
             'title' => $this->title,
             'file_name' => $this->file_name,
             'file_path' => $this->file_path,
@@ -33,6 +34,7 @@ class EmployeeDocumentResource extends JsonResource
             'review_note' => $this->review_note,
             'submitted_at' => $this->submitted_at,
             'reviewed_at' => $this->reviewed_at,
+            'acknowledged_at' => $this->acknowledged_at,
             'employee' => $this->whenLoaded('employee', fn () => [
                 'id' => $this->employee->id,
                 'employee_number' => $this->employee->employee_number,
@@ -44,6 +46,7 @@ class EmployeeDocumentResource extends JsonResource
                 'code' => $this->documentType->code,
                 'name' => $this->documentType->name,
                 'requires_expiry_date' => $this->documentType->requires_expiry_date,
+                'signature_method' => $this->documentType->signature_method,
             ]),
             'requirement' => $this->whenLoaded('requirement', fn () => $this->requirement ? [
                 'id' => $this->requirement->id,

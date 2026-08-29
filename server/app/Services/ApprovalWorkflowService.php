@@ -6,6 +6,7 @@ use App\Models\ApprovalWorkflow;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ApprovalWorkflowService
 {
@@ -41,6 +42,12 @@ class ApprovalWorkflowService
             $workflow->update($data);
 
             if (is_array($steps)) {
+                if ($workflow->requests()->where('status', 'pending')->exists()) {
+                    throw ValidationException::withMessages([
+                        'steps' => ['This workflow has approval requests in progress. Wait for them to complete (or cancel them) before changing its steps.'],
+                    ]);
+                }
+
                 $workflow->steps()->delete();
                 $this->replaceSteps($workflow, $steps);
             }
