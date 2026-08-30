@@ -62,8 +62,13 @@ class OrganizationProvisioningService
             ]);
 
             $workspace = app(WorkspaceSettingsService::class)->update($organization, $workspaceSettings);
-            app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
+            app(DefaultTicketCategorySeedingService::class)->seedForOrganization($organization);
+            // Roles must exist before workflow seeding — the service desk
+            // workflows below route certain categories to specific roles
+            // (see DefaultApprovalWorkflowService::CATEGORY_ROLE_MAP).
+            app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
             $roles = $this->roleSeeding->seedForOrganization($organization);
+            app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
 
             $modules = PlatformModule::query()
                 ->whereIn('key', array_values(array_unique($moduleKeys)))

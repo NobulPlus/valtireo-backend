@@ -101,6 +101,16 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(ApprovalWorkflow::class);
     }
 
+    public function ticketCategories(): HasMany
+    {
+        return $this->hasMany(TicketCategory::class);
+    }
+
+    public function assets(): HasMany
+    {
+        return $this->hasMany(Asset::class);
+    }
+
     public function approvalRequests(): HasMany
     {
         return $this->hasMany(ApprovalRequest::class);

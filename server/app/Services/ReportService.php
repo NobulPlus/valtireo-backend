@@ -7,6 +7,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\LeaveEntitlement;
 use App\Models\LeaveRequest;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -148,6 +149,15 @@ class ReportService
                 'filters' => ['search', 'employee_id', 'department_id', 'status', 'source', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Attendance Date', 'Status', 'Check In', 'Check Out', 'Duration Minutes', 'Source', 'Shift', 'Notes'],
             ],
+            [
+                'key' => 'ticket_log',
+                'name' => 'Service Desk Ticket Log',
+                'module' => 'service_desk',
+                'description' => 'Tickets by category, priority, status, assignee, and resolution timing.',
+                'permission' => 'service_desk.view',
+                'filters' => ['search', 'status', 'priority', 'ticket_category_id', 'assigned_to_user_id', 'employee_id', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
+                'csv_headers' => ['Employee Number', 'Full Name', 'Category', 'Priority', 'Status', 'Assigned To', 'Subject', 'Submitted At', 'Resolved At', 'SLA Due At'],
+            ],
         ];
     }
 
@@ -160,6 +170,7 @@ class ReportService
             'leave_requests' => $this->leaveRequestsQuery($user, $request),
             'attendance_summary' => $this->attendanceSummaryQuery($user, $request),
             'attendance_exceptions' => $this->attendanceExceptionsQuery($user, $request),
+            'ticket_log' => $this->ticketLogQuery($user, $request),
             default => abort(404),
         };
     }
@@ -299,6 +310,24 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
+    private function ticketLogQuery(User $user, Request $request): Builder
+    {
+        $sortBy = $this->allowed($request->string('sort_by', 'submitted_at')->toString(), ['id', 'submitted_at', 'resolved_at', 'priority', 'status'], 'submitted_at');
+
+        return Ticket::query()
+            ->with(['employee.department', 'category', 'assignedTo'])
+            ->where('organization_id', $user->organization_id)
+            ->when($request->string('search')->toString(), fn (Builder $query, string $search) => $query->whereHas('employee', fn (Builder $query) => $this->employeeSearch($query, $search)))
+            ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($request->string('priority')->toString(), fn (Builder $query, string $priority) => $query->where('priority', $priority))
+            ->when($request->integer('ticket_category_id'), fn (Builder $query, int $id) => $query->where('ticket_category_id', $id))
+            ->when($request->integer('assigned_to_user_id'), fn (Builder $query, int $id) => $query->where('assigned_to_user_id', $id))
+            ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employee_id', $id))
+            ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('submitted_at', '>=', $date->toDateString()))
+            ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('submitted_at', '<=', $date->toDateString()))
+            ->orderBy($sortBy, $this->direction($request));
+    }
+
     private function row(string $key, mixed $row): array
     {
         return match ($key) {
@@ -384,6 +413,19 @@ class ReportService
                 'work_shift' => $row->workShift?->name,
                 'notes' => $row->notes,
             ],
+            'ticket_log' => [
+                'id' => $row->id,
+                'employee_number' => $row->employee?->employee_number,
+                'full_name' => $this->employeeName($row->employee),
+                'category' => $row->category?->name,
+                'priority' => $row->priority,
+                'status' => $row->status,
+                'assigned_to' => $row->assignedTo?->name,
+                'subject' => $row->subject,
+                'submitted_at' => $row->submitted_at?->toDateTimeString(),
+                'resolved_at' => $row->resolved_at?->toDateTimeString(),
+                'sla_due_at' => $row->sla_due_at?->toDateTimeString(),
+            ],
             default => [],
         };
     }
@@ -399,6 +441,7 @@ class ReportService
             'leave_requests' => [$data['employee_number'], $data['full_name'], $data['leave_type'], $data['leave_period'], $data['status'], $data['starts_on'], $data['ends_on'], $data['total_days'], $data['reason'], $data['submitted_at'], $data['reviewed_at']],
             'attendance_summary' => [$data['employee_number'], $data['full_name'], $data['total_records'], $data['present_count'], $data['late_count'], $data['absent_count'], $data['half_day_count'], $data['corrected_count'], $data['worked_minutes']],
             'attendance_exceptions' => [$data['employee_number'], $data['full_name'], $data['attendance_date'], $data['status'], $data['check_in_at'], $data['check_out_at'], $data['duration_minutes'], $data['source'], $data['work_shift'], $data['notes']],
+            'ticket_log' => [$data['employee_number'], $data['full_name'], $data['category'], $data['priority'], $data['status'], $data['assigned_to'], $data['subject'], $data['submitted_at'], $data['resolved_at'], $data['sla_due_at']],
             default => [],
         };
     }

@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\EmployeeDocument;
 use App\Models\LeaveRequest;
+use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -56,6 +57,19 @@ class ApprovalRequestResource extends JsonResource
                 'evidence_mime_type' => $this->approvable->evidence_mime_type,
                 'evidence_file_size' => $this->approvable->evidence_file_size,
                 'evidence_download_url' => $this->approvable->evidence_file_path ? url("/api/leave/requests/{$this->approvable->id}/evidence/download") : null,
+            ] : null),
+            'ticket' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof Ticket ? [
+                'id' => $this->approvable->id,
+                'category' => $this->approvable->loadMissing('category')->category ? [
+                    'id' => $this->approvable->category->id,
+                    'name' => $this->approvable->category->name,
+                    'code' => $this->approvable->category->code,
+                ] : null,
+                'subject' => $this->approvable->subject,
+                'description' => $this->approvable->description,
+                'attachment_file_name' => $this->approvable->attachment_file_name,
+                'attachment_mime_type' => $this->approvable->attachment_mime_type,
+                'attachment_download_url' => $this->approvable->attachment_file_path ? url("/api/tickets/{$this->approvable->id}/attachment/download") : null,
             ] : null),
             'workflow' => new ApprovalWorkflowResource($this->whenLoaded('workflow')),
             'decisions' => ApprovalDecisionResource::collection($this->whenLoaded('decisions')),

@@ -38,8 +38,10 @@ export function WorkspaceThemeBridge({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     const sidebarColor = safeHex(theme?.sidebar_color, DEFAULT_THEME.sidebar);
     const buttonColor = safeHex(theme?.button_color, DEFAULT_THEME.button);
+    const primaryColor = safeHex(theme?.primary_color, DEFAULT_THEME.primary);
 
-    root.style.setProperty('--workspace-primary', safeHex(theme?.primary_color, DEFAULT_THEME.primary));
+    root.style.setProperty('--workspace-primary', primaryColor);
+    root.style.setProperty('--workspace-primary-fg', contrastingForeground(primaryColor));
     root.style.setProperty('--workspace-accent', safeHex(theme?.accent_color, DEFAULT_THEME.accent));
     root.style.setProperty('--workspace-sidebar', sidebarColor);
     root.style.setProperty('--workspace-sidebar-fg', contrastingForeground(sidebarColor));

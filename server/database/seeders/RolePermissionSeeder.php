@@ -110,7 +110,11 @@ class RolePermissionSeeder extends Seeder
             'performance.view',
             'learning.view',
             'service_desk.view',
+            'service_desk.create',
+            'service_desk.cancel',
             'assets.view',
+            'assets.create',
+            'assets.update',
             'financial_admin.view',
             'ai_assistant.use',
         ];

@@ -1,8 +1,8 @@
 import { cn } from '@/lib/cn';
 
-type Tone = 'success' | 'warning' | 'danger' | 'info' | 'pending' | 'draft';
+export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'pending' | 'draft';
 
-const toneClasses: Record<Tone, string> = {
+export const toneClasses: Record<Tone, string> = {
   success: 'bg-success-bg text-success',
   warning: 'bg-warning-bg text-warning',
   danger: 'bg-danger-bg text-danger',
@@ -34,6 +34,11 @@ const STATUS_TONE: Record<string, Tone> = {
   submitted: 'info',
   approved: 'success',
   changes_requested: 'warning',
+  // Service desk ticket lifecycle
+  in_progress: 'info',
+  on_hold: 'warning',
+  resolved: 'success',
+  closed: 'draft',
   // Documents / approvals / leave / attendance
   missing: 'danger',
   expired: 'danger',

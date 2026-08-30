@@ -18,7 +18,8 @@ const variantClasses: Record<Variant, string> = {
     'bg-surface text-strong border border-border hover:bg-surface-soft focus-visible:outline-teal',
   ghost: 'bg-transparent text-muted hover:bg-surface-soft hover:text-strong',
   danger: 'bg-danger text-white hover:opacity-90 focus-visible:outline-danger',
-  onHero: 'bg-white/10 text-white border border-white/20 hover:bg-white/15 focus-visible:outline-white',
+  onHero:
+    'bg-[rgb(var(--workspace-primary-fg,255_255_255)/0.1)] text-[rgb(var(--workspace-primary-fg,255_255_255))] border border-[rgb(var(--workspace-primary-fg,255_255_255)/0.2)] hover:bg-[rgb(var(--workspace-primary-fg,255_255_255)/0.15)] focus-visible:outline-[rgb(var(--workspace-primary-fg,255_255_255))]',
 };
 
 const sizeClasses: Record<Size, string> = {

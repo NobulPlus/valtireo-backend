@@ -10,6 +10,10 @@ import { EmployeeCreatePage } from '@/features/employees/EmployeeCreatePage';
 import { EmployeeDetailPage } from '@/features/employees/EmployeeDetailPage';
 import { MyProfilePage } from '@/features/profile/MyProfilePage';
 import { MyLeavePage } from '@/features/leave/MyLeavePage';
+import { MyTicketsPage } from '@/features/tickets/MyTicketsPage';
+import { TicketQueuePage } from '@/features/tickets/TicketQueuePage';
+import { AssetManagementPage } from '@/features/assets/AssetManagementPage';
+import { MyAssetsPage } from '@/features/assets/MyAssetsPage';
 import { MyAttendancePage } from '@/features/attendance/MyAttendancePage';
 import { MyOrgChartPage } from '@/features/employees/MyOrgChartPage';
 import { MyDirectoryPage } from '@/features/employees/MyDirectoryPage';
@@ -64,6 +68,8 @@ export default function App() {
         <Route path="employees/:id" element={<EmployeeDetailPage />} />
         <Route path="me/profile" element={<MyProfilePage />} />
         <Route path="me/leave" element={<MyLeavePage />} />
+        <Route path="me/tickets" element={<MyTicketsPage />} />
+        <Route path="me/assets" element={<MyAssetsPage />} />
         <Route path="me/attendance" element={<MyAttendancePage />} />
         <Route path="me/org-chart" element={<MyOrgChartPage />} />
         <Route path="me/directory" element={<MyDirectoryPage />} />
@@ -72,9 +78,11 @@ export default function App() {
         <Route path="settings/structure" element={<StructureSettingsPage />} />
         <Route path="settings/roles" element={<RolesPermissionsPage />} />
         <Route path="settings/custom-fields" element={<CustomFieldsPage />} />
+        <Route path="settings/assets" element={<AssetManagementPage />} />
         <Route path="documents" element={<DocumentsControlPage />} />
         <Route path="approvals" element={<ApprovalsControlPage />} />
         <Route path="approvals/:id" element={<ApprovalsControlPage />} />
+        <Route path="service-desk" element={<TicketQueuePage />} />
         <Route path="leave" element={<LeaveControlPage />} />
         <Route path="attendance" element={<AttendanceControlPage />} />
         <Route path="reports" element={<ReportsControlPage />} />

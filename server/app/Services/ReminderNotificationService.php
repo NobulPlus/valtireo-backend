@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\EmployeeInvitation;
 use App\Models\LeaveRequest;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -15,8 +16,10 @@ use Spatie\Permission\PermissionRegistrar;
 
 class ReminderNotificationService
 {
-    public function __construct(private readonly NotificationDispatchService $notifications)
-    {
+    public function __construct(
+        private readonly NotificationDispatchService $notifications,
+        private readonly TicketReportingService $ticketReporting,
+    ) {
     }
 
     /**
@@ -29,6 +32,7 @@ class ReminderNotificationService
             'onboarding_follow_up' => $this->onboardingFollowUps($onboardingDays),
             'pending_approvals' => $this->pendingApprovalReminders($approvalDays),
             'probation_review' => $this->probationReviewReminders($probationDays),
+            'sla_breach' => $this->slaBreachReminders(),
         ];
     }
 
@@ -234,6 +238,57 @@ class ReminderNotificationService
                                 'reminder_key' => $reminderKey,
                                 'probation_ends_at' => $employee->probation_ends_at->toDateString(),
                                 'overdue' => $isOverdue,
+                            ],
+                        ]);
+
+                        $sent++;
+                    }
+                }
+            });
+
+        return $sent;
+    }
+
+    private function slaBreachReminders(): int
+    {
+        $sent = 0;
+        $usersByOrganization = [];
+
+        $this->ticketReporting
+            ->applyBreachPredicate(Ticket::query()->with(['assignedTo', 'category']))
+            ->chunk(100, function ($tickets) use (&$sent, &$usersByOrganization): void {
+                foreach ($tickets as $ticket) {
+                    $usersByOrganization[$ticket->organization_id] ??= User::query()
+                        ->where('organization_id', $ticket->organization_id)
+                        ->get();
+
+                    app(PermissionRegistrar::class)->setPermissionsTeamId($ticket->organization_id);
+
+                    $recipients = $ticket->assignedTo
+                        ? collect([$ticket->assignedTo])
+                        : $usersByOrganization[$ticket->organization_id]->filter(fn (User $user) => $user->can('service_desk.view'));
+
+                    foreach ($recipients as $recipient) {
+                        $reminderKey = "sla_breach:{$ticket->id}";
+
+                        if ($this->alreadySent($recipient, $reminderKey)) {
+                            continue;
+                        }
+
+                        $this->notifications->notify($recipient, [
+                            'category' => 'service_desk',
+                            'event' => 'ticket.sla_breached',
+                            'severity' => 'warning',
+                            'title' => 'Ticket SLA breached',
+                            'message' => "\"{$ticket->subject}\" has passed its resolution SLA.",
+                            'action_label' => 'View ticket',
+                            'action_url' => "/service-desk?ticket={$ticket->id}",
+                            'entity_type' => 'ticket',
+                            'entity_id' => $ticket->id,
+                            'metadata' => [
+                                'reminder_key' => $reminderKey,
+                                'ticket_category_id' => $ticket->ticket_category_id,
+                                'sla_due_at' => $ticket->sla_due_at?->toDateTimeString(),
                             ],
                         ]);
 

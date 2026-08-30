@@ -187,7 +187,7 @@ class PlatformModuleSeeder extends Seeder
                 'key' => 'service_desk',
                 'description' => 'Internal requests, tickets, support queues, and SLAs.',
                 'category' => 'operations',
-                'required_permission' => 'service_desk.view',
+                'required_permission' => null,
                 'is_active' => true,
                 'sort_order' => 240,
             ],
@@ -238,6 +238,7 @@ class PlatformModuleSeeder extends Seeder
             'deployment',
             'reports',
             'audit_logs',
+            'service_desk',
         ];
     }
 }

@@ -18,6 +18,7 @@ use App\Models\LeaveRequest;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
 use App\Models\PlatformModule;
+use App\Models\Ticket;
 use App\Models\Unit;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -28,8 +29,10 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class DashboardService
 {
-    public function __construct(private readonly DocumentComplianceService $documentCompliance)
-    {
+    public function __construct(
+        private readonly DocumentComplianceService $documentCompliance,
+        private readonly TicketReportingService $ticketReporting,
+    ) {
     }
 
     /**
@@ -56,6 +59,7 @@ class DashboardService
             'structure' => $this->structureMetrics($organization),
             'modules' => $this->moduleMetrics($organization),
             'approvals' => $this->approvalsSummary($organization),
+            'service_desk' => $this->serviceDeskSummary($organization),
             'leave' => $this->leaveSummary($organization),
             'attendance' => $this->attendanceSummary($organization),
             'documents' => $this->documentsSummary($user),
@@ -426,6 +430,23 @@ class DashboardService
     /**
      * @return array<string, int>
      */
+    private function serviceDeskSummary(Organization $organization): array
+    {
+        $query = Ticket::query()->where('organization_id', $organization->id);
+
+        return [
+            'open' => (clone $query)->whereNotIn('status', ['resolved', 'rejected', 'cancelled'])->count(),
+            'unassigned' => (clone $query)
+                ->whereNotIn('status', ['resolved', 'rejected', 'cancelled'])
+                ->whereNull('assigned_to_user_id')
+                ->count(),
+            'sla_breached' => $this->ticketReporting->breachedTicketsQuery($organization->id)->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
     private function leaveSummary(Organization $organization): array
     {
         $query = LeaveRequest::query()->where('organization_id', $organization->id);
@@ -747,6 +768,13 @@ class DashboardService
             $actions[] = [
                 'key' => 'leave_approval',
                 'label' => 'Your leave request is awaiting approval.',
+            ];
+        }
+
+        if ($employee->tickets()->whereIn('status', ['submitted', 'changes_requested'])->exists()) {
+            $actions[] = [
+                'key' => 'ticket_pending',
+                'label' => 'Your service desk ticket is awaiting review.',
             ];
         }
 

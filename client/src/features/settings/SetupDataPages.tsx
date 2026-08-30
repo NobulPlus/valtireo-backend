@@ -18,6 +18,7 @@ import {
   FileCheck2,
   FileClock,
   FileText,
+  Paperclip,
   Pencil,
   Plus,
   Power,
@@ -58,6 +59,7 @@ import {
 import { useEmployees } from '@/features/employees/api';
 import { openLeaveEvidenceInNewTab } from '@/features/leave/api';
 import { usePermissionCatalog, useRoles } from '@/features/settings/rolesApi';
+import { openTicketAttachmentInNewTab, useTicketCategories } from '@/features/tickets/api';
 import { useSetupLookups } from '@/features/workspace/api';
 import { api, apiClient, ApiError } from '@/lib/apiClient';
 import { openDocumentInNewTab } from '@/lib/documents';
@@ -1721,6 +1723,14 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
     }
   }
 
+  async function handleViewTicketAttachment(ticket: NonNullable<ApprovalRequest['ticket']>) {
+    try {
+      await openTicketAttachmentInNewTab(ticket);
+    } catch (error) {
+      toast.error('Could not open attachment', error instanceof ApiError ? error.message : 'Could not open this attachment.');
+    }
+  }
+
   async function handleSubmit() {
     try {
       await actMutation.mutateAsync({ action: decisionAction, note: note.trim() || undefined });
@@ -1779,9 +1789,29 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
                   <FileText className="h-4 w-4" />
                 </button>
               )}
+              {request.ticket?.attachment_download_url && (
+                <button
+                  type="button"
+                  onClick={() => handleViewTicketAttachment(request.ticket!)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-teal"
+                  title={`View ${request.ticket.attachment_file_name ?? 'ticket attachment'}`}
+                  aria-label={`View ${request.ticket.attachment_file_name ?? 'ticket attachment'}`}
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
+              )}
               <StatusBadge status={request.status} />
             </div>
           </div>
+
+          {request.ticket && (
+            <div className="rounded-md bg-surface-soft px-3 py-2.5 text-sm">
+              <span className="mb-1 inline-block rounded-full bg-teal/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-teal">
+                {request.ticket.category?.name ?? 'Uncategorized'}
+              </span>
+              <p className="whitespace-pre-wrap text-strong">{request.ticket.description}</p>
+            </div>
+          )}
 
           {isPending ? (
             <>
@@ -1857,6 +1887,14 @@ function ApprovalRequestsPanel({ openRequestId, onOpenRequestHandled }: { openRe
     }
   }
 
+  async function handleViewTicketAttachment(ticket: NonNullable<ApprovalRequest['ticket']>) {
+    try {
+      await openTicketAttachmentInNewTab(ticket);
+    } catch (error) {
+      toast.error('Could not open attachment', error instanceof ApiError ? error.message : 'Could not open this attachment.');
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -1903,6 +1941,17 @@ function ApprovalRequestsPanel({ openRequestId, onOpenRequestHandled }: { openRe
                       <Eye className="h-4 w-4" />
                     </button>
                   )}
+                  {request.ticket?.attachment_download_url && (
+                    <button
+                      type="button"
+                      onClick={() => handleViewTicketAttachment(request.ticket!)}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-teal"
+                      title={`View ${request.ticket.attachment_file_name ?? 'ticket attachment'}`}
+                      aria-label={`View ${request.ticket.attachment_file_name ?? 'ticket attachment'}`}
+                    >
+                      <Paperclip className="h-4 w-4" />
+                    </button>
+                  )}
                   <StatusBadge status={request.status} />
                   {request.status === 'pending' && (
                     <Button type="button" size="sm" onClick={() => setActingOn(request)}>
@@ -1921,11 +1970,31 @@ function ApprovalRequestsPanel({ openRequestId, onOpenRequestHandled }: { openRe
 }
 
 /** (module, action) pairs are what a real submission is routed by — these three are the only ones the app ever submits against. */
-const WORKFLOW_TARGET_OPTIONS: Array<{ value: string; label: string; module: string; action: string }> = [
+const STATIC_WORKFLOW_TARGET_OPTIONS: Array<{ value: string; label: string; module: string; action: string }> = [
   { value: 'leave.submit', label: 'Leave requests', module: 'leave', action: 'submit' },
   { value: 'employee_documents.submit', label: 'Employee documents', module: 'employee_documents', action: 'submit' },
   { value: 'attendance.correction', label: 'Attendance corrections', module: 'attendance', action: 'correction' },
 ];
+
+/** Service desk workflows are keyed one-per-category (module=service_desk,
+ * action=<category code>) — see TicketService::submit(). The picker mirrors
+ * whatever categories the org currently has, instead of a hardcoded list. */
+function useWorkflowTargetOptions(): Array<{ value: string; label: string; module: string; action: string }> {
+  const categoriesQuery = useTicketCategories({ is_active: true });
+
+  return useMemo(
+    () => [
+      ...STATIC_WORKFLOW_TARGET_OPTIONS,
+      ...(categoriesQuery.data?.data ?? []).map((category) => ({
+        value: `service_desk.${category.code.toLowerCase()}`,
+        label: `Service desk – ${category.name}`,
+        module: 'service_desk',
+        action: category.code.toLowerCase(),
+      })),
+    ],
+    [categoriesQuery.data],
+  );
+}
 
 const APPROVER_TYPE_OPTIONS: Array<{ value: ApproverType; label: string }> = [
   { value: 'direct_manager', label: "Employee's direct manager" },
@@ -1963,8 +2032,9 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
   const permissionsQuery = usePermissionCatalog();
   const createMutation = useCreateApprovalWorkflow();
   const updateMutation = useUpdateApprovalWorkflow(workflow && workflow !== 'new' ? workflow.id : 0);
+  const targetOptions = useWorkflowTargetOptions();
 
-  const [target, setTarget] = useState(WORKFLOW_TARGET_OPTIONS[0].value);
+  const [target, setTarget] = useState('leave.submit');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -1974,8 +2044,8 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
 
   useEffect(() => {
     if (workflow && workflow !== 'new') {
-      const matchedTarget = WORKFLOW_TARGET_OPTIONS.find((option) => option.module === workflow.module && option.action === workflow.action);
-      setTarget(matchedTarget?.value ?? WORKFLOW_TARGET_OPTIONS[0].value);
+      const matchedTarget = targetOptions.find((option) => option.module === workflow.module && option.action === workflow.action);
+      setTarget(matchedTarget?.value ?? 'leave.submit');
       setName(workflow.name);
       setDescription(workflow.description ?? '');
       setIsActive(workflow.is_active);
@@ -1994,7 +2064,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
           })),
       );
     } else if (workflow === 'new') {
-      setTarget(WORKFLOW_TARGET_OPTIONS[0].value);
+      setTarget('leave.submit');
       setName('');
       setDescription('');
       setIsActive(true);
@@ -2002,7 +2072,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
       setAutoApproveWhenNoSteps(false);
       setSteps([emptyStep(1)]);
     }
-  }, [workflow]);
+  }, [workflow, targetOptions]);
 
   function addStep() {
     setSteps((current) => [...current, emptyStep(current.length + 1)]);
@@ -2024,7 +2094,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
   }
 
   async function handleSubmit() {
-    const targetOption = WORKFLOW_TARGET_OPTIONS.find((option) => option.value === target) ?? WORKFLOW_TARGET_OPTIONS[0];
+    const targetOption = targetOptions.find((option) => option.value === target) ?? targetOptions[0];
     const payload: ApprovalWorkflowPayload = {
       module: targetOption.module,
       action: targetOption.action,
@@ -2076,7 +2146,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
       <div className="space-y-4">
         <label className="block text-sm">
           <span className="mb-1 block text-xs font-medium text-muted">Applies to</span>
-          <SelectMenu value={target} onChange={setTarget} options={WORKFLOW_TARGET_OPTIONS} />
+          <SelectMenu value={target} onChange={setTarget} options={targetOptions} />
         </label>
         <label className="block text-sm">
           <span className="mb-1 block text-xs font-medium text-muted">Workflow name</span>
@@ -2208,6 +2278,7 @@ function WorkflowFormModal({ workflow, onClose }: { workflow: ApprovalWorkflow |
 
 function ApprovalWorkflowsPanel() {
   const workflowsQuery = useApprovalWorkflows();
+  const targetOptions = useWorkflowTargetOptions();
   const [editing, setEditing] = useState<ApprovalWorkflow | 'new' | null>(null);
   const workflows = workflowsQuery.data?.data ?? [];
 
@@ -2235,7 +2306,7 @@ function ApprovalWorkflowsPanel() {
                 <div className="min-w-0">
                   <p className="truncate font-medium text-strong">{workflow.name}</p>
                   <p className="text-xs text-muted">
-                    {WORKFLOW_TARGET_OPTIONS.find((option) => option.module === workflow.module && option.action === workflow.action)?.label ??
+                    {targetOptions.find((option) => option.module === workflow.module && option.action === workflow.action)?.label ??
                       `${formatSnakeCase(workflow.module)} · ${formatSnakeCase(workflow.action)}`}
                     {' · '}
                     {workflow.steps.length} step{workflow.steps.length === 1 ? '' : 's'}
@@ -2254,6 +2325,52 @@ function ApprovalWorkflowsPanel() {
       </CardBody>
       <WorkflowFormModal workflow={editing} onClose={() => setEditing(null)} />
     </Card>
+  );
+}
+
+export function TicketCategoriesPanel() {
+  return (
+    <DataPanel
+      config={{
+        title: 'Ticket categories',
+        description: 'The categories employees choose from when raising a service desk ticket.',
+        endpoint: '/tickets/categories',
+        columns: [
+          { key: 'name', label: 'Name' },
+          { key: 'code', label: 'Code' },
+          { key: 'is_active', label: 'Active' },
+        ],
+        action: {
+          label: 'Add category',
+          endpoint: '/tickets/categories',
+          successMessage: 'Ticket category created',
+          invalidateKeys: [['control-panel', '/tickets/categories'], ['tickets', 'categories']],
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'code', label: 'Code', required: true },
+            { name: 'description', label: 'Description', type: 'textarea' },
+            { name: 'response_sla_hours', label: 'Response SLA (hours)', type: 'number', help: 'Optional — leave blank for no response SLA.' },
+            { name: 'resolution_sla_hours', label: 'Resolution SLA (hours)', type: 'number', help: 'Optional — leave blank for no resolution SLA.' },
+            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+          ],
+        },
+        edit: {
+          label: 'Edit category',
+          endpoint: (row) => `/tickets/categories/${row.id}`,
+          method: 'patch',
+          successMessage: 'Ticket category updated',
+          invalidateKeys: [['control-panel', '/tickets/categories'], ['tickets', 'categories']],
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'code', label: 'Code', required: true },
+            { name: 'description', label: 'Description' },
+            { name: 'response_sla_hours', label: 'Response SLA (hours)', type: 'number', help: 'Optional — leave blank for no response SLA.' },
+            { name: 'resolution_sla_hours', label: 'Resolution SLA (hours)', type: 'number', help: 'Optional — leave blank for no resolution SLA.' },
+            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true, help: 'Inactive categories are hidden from new ticket submissions without deleting history.' },
+          ],
+        },
+      }}
+    />
   );
 }
 

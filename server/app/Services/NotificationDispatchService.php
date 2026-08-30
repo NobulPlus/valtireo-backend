@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflowStep;
+use App\Models\Department;
 use App\Models\EmployeeDocument;
 use App\Models\EmployeeInvitation;
 use App\Models\Organization;
+use App\Models\Ticket;
+use App\Models\TicketComment;
 use App\Models\User;
 use App\Notifications\ValtireoNotification;
 use Illuminate\Support\Collection;
@@ -217,7 +220,121 @@ class NotificationDispatchService
             return ['View my leave', '/me/leave'];
         }
 
+        if ($isSubject && $approvalRequest->module === 'service_desk') {
+            return ['View my tickets', '/me/tickets'];
+        }
+
         return [null, null];
+    }
+
+    public function ticketAssigned(Ticket $ticket): void
+    {
+        $ticket->loadMissing(['assignedTo', 'employee', 'category']);
+        $recipient = $ticket->assignedTo;
+
+        if (! $recipient) {
+            return;
+        }
+
+        $this->notify($recipient, [
+            'category' => 'service_desk',
+            'event' => 'ticket.assigned',
+            'title' => 'A ticket has been assigned to you',
+            'message' => "\"{$ticket->subject}\" ({$ticket->category?->name}) has been assigned to you.",
+            'action_label' => 'View ticket',
+            'action_url' => "/service-desk?ticket={$ticket->id}",
+            'entity_type' => 'ticket',
+            'entity_id' => $ticket->id,
+            'metadata' => [
+                'ticket_category_id' => $ticket->ticket_category_id,
+            ],
+        ]);
+    }
+
+    /**
+     * Additional targeting on top of the normal category-workflow
+     * notification: alerts service-desk resolvers who belong to the ticket's
+     * chosen destination department, so a ticket explicitly routed to e.g.
+     * Facilities reaches people on that team even if the category's own
+     * workflow step routes more broadly (or to a different role).
+     */
+    public function ticketDepartmentAlert(Ticket $ticket, Department $department, User $submitter): void
+    {
+        $ticket->loadMissing('category');
+
+        $recipients = User::query()
+            ->where('organization_id', $ticket->organization_id)
+            ->with('employee')
+            ->get()
+            ->filter(fn (User $user) => $user->employee?->department_id === $department->id && $user->can('service_desk.view'))
+            ->reject(fn (User $user) => $user->id === $submitter->id);
+
+        foreach ($recipients as $recipient) {
+            $this->notify($recipient, [
+                'category' => 'service_desk',
+                'event' => 'ticket.department_alert',
+                'title' => "New ticket for {$department->name}",
+                'message' => "\"{$ticket->subject}\" ({$ticket->category?->name}) was routed to {$department->name}.",
+                'action_label' => 'View ticket',
+                'action_url' => "/service-desk?ticket={$ticket->id}",
+                'entity_type' => 'ticket',
+                'entity_id' => $ticket->id,
+                'metadata' => [
+                    'ticket_category_id' => $ticket->ticket_category_id,
+                    'department_id' => $department->id,
+                ],
+            ]);
+        }
+    }
+
+    public function ticketCommentAdded(Ticket $ticket, TicketComment $comment, User $author): void
+    {
+        $ticket->loadMissing(['assignedTo', 'employee.user', 'category', 'watchers.user']);
+        $isEmployeeAuthor = $ticket->employee?->user_id === $author->id;
+        $watchers = $ticket->watchers
+            ->pluck('user')
+            ->filter();
+
+        $recipients = $isEmployeeAuthor
+            ? $this->ticketResolverRecipients($ticket)
+            : collect([$ticket->employee?->user])->filter();
+
+        $recipients = $recipients
+            ->merge($watchers)
+            ->unique('id')
+            ->values();
+
+        foreach ($recipients->reject(fn (User $user) => $user->id === $author->id) as $recipient) {
+            $this->notify($recipient, [
+                'category' => 'service_desk',
+                'event' => 'ticket.comment_added',
+                'title' => 'New reply on a ticket',
+                'message' => "{$author->name} replied on \"{$ticket->subject}\".",
+                'action_label' => $isEmployeeAuthor ? 'View ticket' : 'View my tickets',
+                'action_url' => $isEmployeeAuthor ? "/service-desk?ticket={$ticket->id}" : '/me/tickets',
+                'entity_type' => 'ticket',
+                'entity_id' => $ticket->id,
+                'metadata' => [
+                    'ticket_comment_id' => $comment->id,
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function ticketResolverRecipients(Ticket $ticket): Collection
+    {
+        if ($ticket->assignedTo) {
+            return collect([$ticket->assignedTo]);
+        }
+
+        return User::query()
+            ->where('organization_id', $ticket->organization_id)
+            ->get()
+            ->filter(fn (User $user) => $user->can('service_desk.view'))
+            ->values();
     }
 
     public function documentNeedsAcknowledgment(EmployeeDocument $document): void

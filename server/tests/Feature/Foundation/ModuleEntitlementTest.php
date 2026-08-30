@@ -54,6 +54,7 @@ class ModuleEntitlementTest extends TestCase
 
         $this->assertTrue($moduleKeys->contains('employee_self_service'));
         $this->assertTrue($moduleKeys->contains('leave'));
+        $this->assertTrue($moduleKeys->contains('service_desk'));
         $this->assertFalse($moduleKeys->contains('payroll'));
         $this->assertFalse($moduleKeys->contains('users_roles'));
     }

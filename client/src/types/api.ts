@@ -419,6 +419,103 @@ export interface LeaveRequest {
   updated_at: string;
 }
 
+export interface TicketCategory {
+  id: number;
+  organization_id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  response_sla_hours: number | null;
+  resolution_sla_hours: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Asset {
+  id: number;
+  organization_id: number;
+  name: string;
+  asset_tag: string;
+  category: string;
+  status: string;
+  assigned_to: { id: number; employee_number: string; full_name: string } | null;
+  assigned_at: string | null;
+  notes: string | null;
+  tickets?: Array<{ id: number; subject: string; status: string; submitted_at: string | null }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketComment {
+  id: number;
+  ticket_id: number;
+  user: { id: number; name: string; email: string } | null;
+  comment: string;
+  visibility: string;
+  attachment_file_name: string | null;
+  attachment_mime_type: string | null;
+  attachment_file_size: number | null;
+  attachment_download_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketActivity {
+  id: number;
+  event: string;
+  previous_status: string | null;
+  new_status: string | null;
+  visibility: string;
+  note: string | null;
+  metadata: Record<string, unknown> | null;
+  actor: { id: number; name: string; email: string } | null;
+  created_at: string;
+}
+
+export interface TicketWatcher {
+  id: number;
+  user: { id: number; name: string; email: string } | null;
+  created_at: string;
+}
+
+export interface Ticket {
+  id: number;
+  employee_id: number;
+  requested_by_id: number | null;
+  employee?: { id: number; employee_number: string; full_name: string; work_email: string };
+  category: { id: number; name: string; code: string } | null;
+  asset: { id: number; name: string; asset_tag: string } | null;
+  department: { id: number; name: string; code: string | null } | null;
+  subject: string;
+  description: string;
+  status: string;
+  priority: string;
+  escalation_level: number;
+  escalated_at: string | null;
+  sla_due_at: string | null;
+  attachment_file_name: string | null;
+  attachment_mime_type: string | null;
+  attachment_file_size: number | null;
+  attachment_download_url: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  first_responded_at: string | null;
+  resolved_at: string | null;
+  on_hold_at: string | null;
+  hold_reason: string | null;
+  closed_at: string | null;
+  satisfaction_rating: number | null;
+  satisfaction_comment: string | null;
+  assigned_to: { id: number; name: string; email: string } | null;
+  comments?: TicketComment[];
+  activities?: TicketActivity[];
+  watchers?: TicketWatcher[];
+  approval_requests?: ApprovalRequest[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AttendanceRecord {
   id: number;
   employee_id: number;
@@ -479,6 +576,15 @@ export interface ApprovalRequest {
     evidence_mime_type: string | null;
     evidence_file_size: number | null;
     evidence_download_url: string | null;
+  } | null;
+  ticket?: {
+    id: number;
+    category: { id: number; name: string; code: string } | null;
+    subject: string;
+    description: string;
+    attachment_file_name: string | null;
+    attachment_mime_type: string | null;
+    attachment_download_url: string | null;
   } | null;
   created_at: string;
   updated_at: string;
@@ -826,6 +932,11 @@ export interface OrganizationDashboard {
   approvals: {
     pending: number;
     needs_attention: number;
+  };
+  service_desk: {
+    open: number;
+    unassigned: number;
+    sla_breached: number;
   };
   leave: {
     pending: number;

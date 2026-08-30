@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ApprovalRequestController;
+use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\ApprovalWorkflowController;
 use App\Http\Controllers\Api\AttendanceCorrectionRequestController;
 use App\Http\Controllers\Api\AttendanceRecordController;
@@ -31,6 +32,9 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SetupChecklistController;
 use App\Http\Controllers\Api\SetupLookupController;
 use App\Http\Controllers\Api\TemplateController;
+use App\Http\Controllers\Api\TicketCategoryController;
+use App\Http\Controllers\Api\TicketCommentController;
+use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\WorkspaceController;
 use App\Http\Controllers\Api\WorkShiftController;
 use App\Http\Controllers\Api\PermissionController;
@@ -189,6 +193,40 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
         Route::get('/requests/{leaveRequest}/evidence/download', [LeaveRequestController::class, 'downloadEvidence']);
         Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
+    });
+
+    Route::prefix('tickets')->group(function () {
+        Route::get('/categories', [TicketCategoryController::class, 'index']);
+        Route::post('/categories', [TicketCategoryController::class, 'store']);
+        Route::get('/categories/{ticketCategory}', [TicketCategoryController::class, 'show']);
+        Route::patch('/categories/{ticketCategory}', [TicketCategoryController::class, 'update']);
+        Route::get('/resolvers', [TicketController::class, 'resolvers']);
+        Route::get('/reporting', [TicketController::class, 'reporting']);
+        Route::get('/', [TicketController::class, 'index']);
+        Route::post('/', [TicketController::class, 'store']);
+        Route::get('/{ticket}', [TicketController::class, 'show']);
+        Route::get('/{ticket}/attachment/download', [TicketController::class, 'downloadAttachment']);
+        Route::patch('/{ticket}/cancel', [TicketController::class, 'cancel']);
+        Route::patch('/{ticket}/assign', [TicketController::class, 'assign']);
+        Route::patch('/{ticket}/priority', [TicketController::class, 'updatePriority']);
+        Route::patch('/{ticket}/start', [TicketController::class, 'start']);
+        Route::patch('/{ticket}/hold', [TicketController::class, 'hold']);
+        Route::patch('/{ticket}/resume', [TicketController::class, 'resume']);
+        Route::patch('/{ticket}/escalate', [TicketController::class, 'escalate']);
+        Route::patch('/{ticket}/resolve', [TicketController::class, 'resolve']);
+        Route::patch('/{ticket}/close', [TicketController::class, 'close']);
+        Route::patch('/{ticket}/reopen', [TicketController::class, 'reopen']);
+        Route::post('/{ticket}/watch', [TicketController::class, 'watch']);
+        Route::delete('/{ticket}/watch', [TicketController::class, 'unwatch']);
+        Route::post('/{ticket}/comments', [TicketCommentController::class, 'store']);
+        Route::get('/{ticket}/comments/{ticketComment}/attachment/download', [TicketCommentController::class, 'downloadAttachment']);
+    });
+
+    Route::prefix('assets')->group(function () {
+        Route::get('/', [AssetController::class, 'index']);
+        Route::post('/', [AssetController::class, 'store']);
+        Route::get('/{asset}', [AssetController::class, 'show']);
+        Route::patch('/{asset}', [AssetController::class, 'update']);
     });
 
     Route::prefix('attendance')->group(function () {

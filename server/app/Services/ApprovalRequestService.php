@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\LeaveEntitlement;
 use App\Models\LeaveRequest;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -240,6 +241,12 @@ class ApprovalRequestService
             return;
         }
 
+        if ($approvable instanceof Ticket) {
+            $this->syncTicketStatus($approvalRequest, $approvable);
+
+            return;
+        }
+
         if (! $approvable instanceof EmployeeDocument) {
             return;
         }
@@ -298,6 +305,37 @@ class ApprovalRequestService
         $leaveRequest->update([
             'status' => $nextStatus,
             'reviewed_at' => now(),
+        ]);
+    }
+
+    private function syncTicketStatus(ApprovalRequest $approvalRequest, Ticket $ticket): void
+    {
+        if (! in_array($approvalRequest->status, ['approved', 'rejected', 'changes_requested', 'cancelled'], true)) {
+            return;
+        }
+
+        if ($ticket->status === $approvalRequest->status) {
+            return;
+        }
+
+        $previousStatus = $ticket->status;
+
+        $ticket->update([
+            'status' => $approvalRequest->status,
+            'reviewed_at' => now(),
+        ]);
+
+        $ticket->activities()->create([
+            'organization_id' => $ticket->organization_id,
+            'actor_id' => $approvalRequest->decisions()->latest('id')->value('actor_id'),
+            'event' => 'approval_status_changed',
+            'previous_status' => $previousStatus,
+            'new_status' => $approvalRequest->status,
+            'visibility' => 'public',
+            'note' => null,
+            'metadata' => [
+                'approval_request_id' => $approvalRequest->id,
+            ],
         ]);
     }
 

@@ -163,6 +163,16 @@ class Employee extends Model implements AuditableContract
         return $this->hasMany(AttendanceRecord::class);
     }
 
+    public function assets(): HasMany
+    {
+        return $this->hasMany(Asset::class, 'assigned_to_employee_id');
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
     public function attendanceCorrectionRequests(): HasMany
     {
         return $this->hasMany(AttendanceCorrectionRequest::class);

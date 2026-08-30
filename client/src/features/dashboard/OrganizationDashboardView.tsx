@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Download,
   FileWarning,
+  Headset,
   MapPin,
   Plus,
   RotateCcw,
@@ -307,13 +308,28 @@ export function OrganizationDashboardView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="-mx-6 overflow-hidden rounded-b-[28px] bg-[radial-gradient(120%_140%_at_8%_0%,_#1a544d_0%,_#123f3a_42%,_#0c2c28_100%)] px-6 pb-9 pt-5 text-white sm:px-8">
+      <div
+        className="-mx-6 overflow-hidden rounded-b-[28px] px-6 pb-9 pt-5 sm:px-8"
+        style={{
+          background:
+            'radial-gradient(120% 140% at 8% 0%, color-mix(in srgb, var(--workspace-primary, #123f3a) 78%, white 22%) 0%, var(--workspace-primary, #123f3a) 42%, color-mix(in srgb, var(--workspace-primary, #123f3a) 82%, black 18%) 100%)',
+          color: 'rgb(var(--workspace-primary-fg, 255 255 255))',
+        }}
+      >
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-[11.5px] font-bold uppercase tracking-wide text-teal-light/80">
+            <p
+              className="text-[11.5px] font-bold uppercase tracking-wide"
+              style={{ color: 'rgb(var(--workspace-primary-fg, 255 255 255) / 0.8)' }}
+            >
               {todayLabel} &middot; {session?.organization?.name ?? 'Organization'} overview
             </p>
-            <p className="mt-1.5 max-w-[62ch] text-[15px] font-medium text-white/90">{overviewParts.join(' · ')}.</p>
+            <p
+              className="mt-1.5 max-w-[62ch] text-[15px] font-medium"
+              style={{ color: 'rgb(var(--workspace-primary-fg, 255 255 255) / 0.9)' }}
+            >
+              {overviewParts.join(' · ')}.
+            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="onHero" size="sm" onClick={handleExportEmployees} isLoading={exporting}>
@@ -417,7 +433,7 @@ export function OrganizationDashboardView() {
         </CardBody>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <SummaryLinkCard
           icon={ClipboardCheck}
           iconClassName="bg-teal-light text-pine"
@@ -426,6 +442,17 @@ export function OrganizationDashboardView() {
           stats={[
             { label: 'pending', value: data.approvals.pending },
             { label: 'needs attention', value: data.approvals.needs_attention, tone: data.approvals.needs_attention > 0 ? 'warning' : 'default' },
+          ]}
+        />
+        <SummaryLinkCard
+          icon={Headset}
+          iconClassName="bg-info-bg text-info"
+          title="Service desk"
+          onClick={() => navigate('/service-desk')}
+          stats={[
+            { label: 'open', value: data.service_desk.open },
+            { label: 'unassigned', value: data.service_desk.unassigned, tone: data.service_desk.unassigned > 0 ? 'warning' : 'default' },
+            { label: 'SLA breached', value: data.service_desk.sla_breached, tone: data.service_desk.sla_breached > 0 ? 'danger' : 'default' },
           ]}
         />
         <SummaryLinkCard

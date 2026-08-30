@@ -83,13 +83,17 @@ class DatabaseSeeder extends Seeder
 
         $this->call(OrganizationStructureSeeder::class);
         $this->call(PlatformModuleSeeder::class);
-        $this->call(ApprovalWorkflowSeeder::class);
+        $this->call(TicketCategorySeeder::class);
 
         // Roles are organization-owned — seed this org's starter role set
         // (and point Spatie's team context at it) before any assignRole()
-        // call below.
+        // call below, and before workflow seeding, since the service desk
+        // workflows route certain categories to specific roles (see
+        // DefaultApprovalWorkflowService::CATEGORY_ROLE_MAP).
         app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
         $roles = app(DefaultRoleSeedingService::class)->seedForOrganization($organization);
+
+        $this->call(ApprovalWorkflowSeeder::class);
 
         $admin = User::query()->firstOrCreate(
             ['email' => 'admin@valtireo.test'],

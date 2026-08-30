@@ -34,6 +34,7 @@ class DashboardTest extends TestCase
                 'structure' => ['departments', 'units', 'locations', 'designations', 'grade_levels', 'employment_types'],
                 'modules' => ['available', 'active', 'locked'],
                 'approvals' => ['pending', 'needs_attention'],
+                'service_desk' => ['open', 'unassigned', 'sla_breached'],
                 'leave' => ['pending', 'upcoming'],
                 'attendance' => ['present', 'late', 'absent'],
                 'documents' => ['missing', 'expiring_soon', 'expired'],
@@ -226,6 +227,56 @@ class DashboardTest extends TestCase
                 'next_holiday',
                 'tenure',
             ]);
+    }
+
+    public function test_organization_dashboard_reflects_service_desk_counts(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+
+        Sanctum::actingAs($admin);
+        $baseline = $this->getJson('/api/dashboard/organization')->json();
+
+        Sanctum::actingAs($employeeUser);
+        $categoryId = \App\Models\TicketCategory::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('code', 'IT')
+            ->value('id');
+        $this->postJson('/api/tickets', [
+            'ticket_category_id' => $categoryId,
+            'subject' => 'Dashboard count test',
+            'description' => 'Should bump open + unassigned counts.',
+        ])->assertCreated();
+
+        Sanctum::actingAs($admin);
+        $this->getJson('/api/dashboard/organization')
+            ->assertOk()
+            ->assertJsonPath('service_desk.open', $baseline['service_desk']['open'] + 1)
+            ->assertJsonPath('service_desk.unassigned', $baseline['service_desk']['unassigned'] + 1);
+    }
+
+    public function test_employee_dashboard_shows_pending_action_for_an_open_ticket(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($employeeUser);
+
+        $this->getJson('/api/dashboard/me')->assertOk()->assertJsonMissing(['key' => 'ticket_pending']);
+
+        $categoryId = \App\Models\TicketCategory::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('code', 'IT')
+            ->value('id');
+        $this->postJson('/api/tickets', [
+            'ticket_category_id' => $categoryId,
+            'subject' => 'Pending action test',
+            'description' => 'Should surface as a pending action.',
+        ])->assertCreated();
+
+        $this->getJson('/api/dashboard/me')->assertOk()->assertJsonFragment(['key' => 'ticket_pending']);
     }
 
     public function test_personal_dashboard_attendance_trend_defaults_to_last_7_days_and_respects_a_custom_range(): void
