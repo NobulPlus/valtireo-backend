@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ServiceDesk\AssignTicketRequest;
 use App\Http\Requests\ServiceDesk\CancelTicketRequest;
 use App\Http\Requests\ServiceDesk\CloseTicketRequest;
+use App\Http\Requests\ServiceDesk\DeclineTicketRequest;
 use App\Http\Requests\ServiceDesk\EscalateTicketRequest;
 use App\Http\Requests\ServiceDesk\HoldTicketRequest;
 use App\Http\Requests\ServiceDesk\ReopenTicketRequest;
+use App\Http\Requests\ServiceDesk\ResubmitTicketRequest;
 use App\Http\Requests\ServiceDesk\ResolveTicketRequest;
 use App\Http\Requests\ServiceDesk\ResumeTicketRequest;
 use App\Http\Requests\ServiceDesk\StartTicketRequest;
@@ -31,7 +33,7 @@ class TicketController extends Controller
     public function resolvers(Request $request): JsonResponse
     {
         abort_unless(
-            $request->user()->can('service_desk.view') || $request->user()->can('service_desk.create'),
+            $request->user()->can('service_desk.view') || $request->user()->can('service_desk.create') || $request->user()->employee?->status === 'active',
             403
         );
 
@@ -39,14 +41,20 @@ class TicketController extends Controller
             ->where('organization_id', $request->user()->organization_id)
             ->with('employee.department')
             ->get()
-            ->filter(fn (User $user) => $user->can('service_desk.view'))
+            ->filter(fn (User $user) => $user->employee?->status === 'active')
             ->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'can_view_service_desk_queue' => $user->can('service_desk.view'),
                 'department' => $user->employee?->department ? [
                     'id' => $user->employee->department->id,
                     'name' => $user->employee->department->name,
+                ] : null,
+                'employee' => $user->employee ? [
+                    'id' => $user->employee->id,
+                    'employee_number' => $user->employee->employee_number,
+                    'status' => $user->employee->status,
                 ] : null,
             ])
             ->values();
@@ -63,7 +71,12 @@ class TicketController extends Controller
 
     public function index(Request $request, TicketService $tickets): AnonymousResourceCollection
     {
-        abort_unless($request->user()->can('service_desk.view') || $request->user()->can('service_desk.create'), 403);
+        abort_unless(
+            $request->user()->can('service_desk.view')
+                || $request->user()->can('service_desk.create')
+                || $request->user()->employee?->status === 'active',
+            403
+        );
 
         $query = Ticket::query()
             ->with($tickets->relations())
@@ -94,7 +107,11 @@ class TicketController extends Controller
                 ->whereNotIn('status', ['resolved', 'closed', 'rejected', 'cancelled']));
 
         if (! $request->user()->can('service_desk.view')) {
-            $query->where('employee_id', $request->user()->employee?->id);
+            $query->where(function (Builder $query) use ($request): void {
+                $query
+                    ->where('employee_id', $request->user()->employee?->id)
+                    ->orWhere('assigned_to_user_id', $request->user()->id);
+            });
         } else {
             if ($request->integer('employee_id')) {
                 $query->where('employee_id', $request->integer('employee_id'));
@@ -141,7 +158,12 @@ class TicketController extends Controller
     public function show(Request $request, Ticket $ticket, TicketService $tickets): TicketResource
     {
         abort_unless($ticket->organization_id === $request->user()->organization_id, 404);
-        abort_unless($request->user()->can('service_desk.view') || $request->user()->employee?->id === $ticket->employee_id, 403);
+        abort_unless(
+            $request->user()->can('service_desk.view')
+                || $request->user()->employee?->id === $ticket->employee_id
+                || $request->user()->id === $ticket->assigned_to_user_id,
+            403
+        );
 
         return new TicketResource($ticket->load($tickets->relations()));
     }
@@ -149,7 +171,12 @@ class TicketController extends Controller
     public function downloadAttachment(Request $request, Ticket $ticket): StreamedResponse
     {
         abort_unless($ticket->organization_id === $request->user()->organization_id, 404);
-        abort_unless($request->user()->can('service_desk.view') || $request->user()->employee?->id === $ticket->employee_id, 403);
+        abort_unless(
+            $request->user()->can('service_desk.view')
+                || $request->user()->employee?->id === $ticket->employee_id
+                || $request->user()->id === $ticket->assigned_to_user_id,
+            403
+        );
         abort_unless(filled($ticket->attachment_file_path) && Storage::disk('local')->exists($ticket->attachment_file_path), 404);
 
         return Storage::disk('local')->download($ticket->attachment_file_path, $ticket->attachment_file_name);
@@ -158,6 +185,20 @@ class TicketController extends Controller
     public function cancel(CancelTicketRequest $request, Ticket $ticket, TicketService $tickets): JsonResponse
     {
         $ticket = $tickets->cancel($request->user(), $ticket);
+
+        return response()->json([
+            'ticket' => new TicketResource($ticket),
+        ]);
+    }
+
+    public function resubmit(ResubmitTicketRequest $request, Ticket $ticket, TicketService $tickets): JsonResponse
+    {
+        $data = $request->validated();
+        if ($request->hasFile('attachment')) {
+            $data['attachment'] = $request->file('attachment');
+        }
+
+        $ticket = $tickets->resubmit($request->user(), $ticket, $data);
 
         return response()->json([
             'ticket' => new TicketResource($ticket),
@@ -176,6 +217,15 @@ class TicketController extends Controller
     public function updatePriority(UpdateTicketPriorityRequest $request, Ticket $ticket, TicketService $tickets): JsonResponse
     {
         $ticket = $tickets->updatePriority($request->user(), $ticket, $request->string('priority')->toString());
+
+        return response()->json([
+            'ticket' => new TicketResource($ticket),
+        ]);
+    }
+
+    public function decline(DeclineTicketRequest $request, Ticket $ticket, TicketService $tickets): JsonResponse
+    {
+        $ticket = $tickets->decline($request->user(), $ticket, $request->string('reason')->toString());
 
         return response()->json([
             'ticket' => new TicketResource($ticket),

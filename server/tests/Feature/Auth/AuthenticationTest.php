@@ -13,8 +13,21 @@ class AuthenticationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_user_can_register(): void
+    public function test_public_registration_is_disabled_by_default(): void
     {
+        $this->postJson('/api/auth/register', [
+            'name' => 'Ada Lovelace',
+            'email' => 'ada@valtireo.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+        ])->assertForbidden()
+            ->assertJsonPath('message', 'Public registration is disabled. Valtireo workspaces are created by platform admins.');
+    }
+
+    public function test_user_can_register_when_public_registration_is_enabled(): void
+    {
+        config(['auth.public_registration' => true]);
+
         $response = $this->postJson('/api/auth/register', [
             'name' => 'Ada Lovelace',
             'email' => 'ada@valtireo.test',

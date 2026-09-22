@@ -33,7 +33,14 @@ class DefaultRoleSeedingService
                 ]
             );
 
-            $role->syncPermissions($definition['permissions']);
+            // Only a freshly-created role gets the default permission set —
+            // an org that has already customized a starter role (rename,
+            // re-permission) never has that customization silently
+            // overwritten by a later re-run of this seeder.
+            if ($role->wasRecentlyCreated) {
+                $role->syncPermissions($definition['permissions']);
+            }
+
             $roles->put($key, $role);
         }
 
@@ -70,11 +77,14 @@ class DefaultRoleSeedingService
                     'employee_documents.view', 'employee_documents.create', 'employee_documents.update',
                     'approval_workflows.view', 'approval_workflows.create', 'approval_workflows.update',
                     'approvals.view', 'approvals.action',
+                    'company_events.manage',
                     'leave_requests.view', 'leave_requests.create', 'leave_requests.approve',
                     'attendance.view', 'attendance.create', 'attendance.update', 'attendance.correct',
-                    'service_desk.view',
+                    'service_desk.create', 'service_desk.cancel', 'service_desk.view',
                     'assets.view',
                     'reports.view', 'audit_logs.view',
+                    'payroll.view', 'payroll.settings.view',
+                    'payroll.compensation.view', 'payroll.runs.view', 'payroll.reports.view',
                 ],
             ],
             'hr_officer' => [
@@ -89,9 +99,10 @@ class DefaultRoleSeedingService
                     'approval_workflows.view', 'approvals.view', 'approvals.action',
                     'leave_requests.view', 'leave_requests.create',
                     'attendance.view', 'attendance.create', 'attendance.update', 'attendance.correct',
-                    'service_desk.view',
+                    'service_desk.create', 'service_desk.cancel', 'service_desk.view',
                     'assets.view',
                     'reports.view',
+                    'payroll.view', 'payroll.compensation.view', 'payroll.runs.view',
                 ],
             ],
             'compliance_officer' => [
@@ -105,6 +116,7 @@ class DefaultRoleSeedingService
                     'employee_documents.view', 'employee_documents.create', 'employee_documents.update',
                     'approval_workflows.view', 'approvals.view', 'approvals.action',
                     'leave_requests.view', 'attendance.view', 'attendance.correct',
+                    'service_desk.create', 'service_desk.cancel',
                     'reports.view', 'audit_logs.view',
                 ],
             ],
@@ -115,7 +127,8 @@ class DefaultRoleSeedingService
                     'organizations.view', 'workspace_settings.view',
                     'users.view', 'users.create', 'users.update',
                     'roles.view', 'permissions.view', 'audit_logs.view',
-                    'approvals.view', 'approvals.action', 'service_desk.view',
+                    'approvals.view', 'approvals.action',
+                    'service_desk.create', 'service_desk.cancel', 'service_desk.view',
                     'assets.view', 'assets.create', 'assets.update',
                 ],
             ],
@@ -130,6 +143,7 @@ class DefaultRoleSeedingService
                     'approvals.view', 'approvals.action',
                     'leave_requests.view', 'leave_requests.approve',
                     'attendance.view', 'attendance.correct',
+                    'service_desk.create', 'service_desk.cancel',
                     'reports.view',
                 ],
             ],
@@ -143,6 +157,7 @@ class DefaultRoleSeedingService
                     'approvals.view', 'approvals.action',
                     'leave_requests.view', 'leave_requests.approve',
                     'attendance.view', 'attendance.correct',
+                    'service_desk.create', 'service_desk.cancel',
                 ],
             ],
             'employee' => [
@@ -153,6 +168,7 @@ class DefaultRoleSeedingService
                     'leave_requests.create', 'leave_requests.cancel',
                     'attendance.create', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel',
+                    'payroll.payslips.view_own',
                 ],
             ],
         ];

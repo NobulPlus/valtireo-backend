@@ -10,6 +10,7 @@ import {
   FileWarning,
   Headset,
   MapPin,
+  Package,
   Plus,
   RotateCcw,
   Search,
@@ -62,6 +63,7 @@ const SETUP_ITEM_LABELS: Record<string, string> = {
   locations: 'Locations',
   departments: 'Departments',
   units: 'Units',
+  clusters: 'Clusters',
   designations: 'Designations',
   grade_levels: 'Grade levels',
   employment_types: 'Employment types',
@@ -153,6 +155,60 @@ function SummaryLinkCard({
             </span>
           ))}
         </div>
+      </div>
+    </button>
+  );
+}
+
+function PriorityActionCard({
+  title,
+  value,
+  description,
+  action,
+  icon: Icon,
+  tone = 'default',
+  onClick,
+}: {
+  title: string;
+  value: number;
+  description: string;
+  action: string;
+  icon: LucideIcon;
+  tone?: 'default' | 'warning' | 'danger';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group flex min-h-[132px] flex-col justify-between rounded-2xl border bg-surface p-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-22px_rgba(15,35,32,0.45)]',
+        tone === 'danger'
+          ? 'border-danger-bg hover:border-danger/35'
+          : tone === 'warning'
+            ? 'border-warning-bg hover:border-warning/35'
+            : 'border-border hover:border-teal/35',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-xl',
+            tone === 'danger'
+              ? 'bg-danger-bg text-danger'
+              : tone === 'warning'
+                ? 'bg-warning-bg text-warning'
+                : 'bg-teal-light text-pine',
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="font-display text-2xl font-bold tabular-nums text-strong">{value}</span>
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-strong">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
+        <p className="mt-3 text-xs font-semibold text-teal">{action}</p>
       </div>
     </button>
   );
@@ -255,6 +311,12 @@ export function OrganizationDashboardView() {
     value: entry.total,
     color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
   }));
+  const clusterEntries = data.breakdowns.by_cluster.map((entry, index) => ({
+    id: entry.id,
+    label: entry.name,
+    value: entry.total,
+    color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+  }));
   const pendingInvitations = data.recent.invitations.filter((invitation) => invitation.status === 'pending');
   const recentEmployees = data.recent.employees.slice(0, 5);
   const onboardingTrend = data.trends.onboarding;
@@ -267,6 +329,44 @@ export function OrganizationDashboardView() {
 
   const activePercentage = data.employees.total > 0 ? Math.round((data.employees.active / data.employees.total) * 100) : 0;
   const setupItems = Object.entries(data.setup_completion.items) as Array<[string, boolean]>;
+  const commandItems = [
+    {
+      title: 'Profiles awaiting review',
+      value: data.onboarding.submitted_profiles,
+      description: 'Submitted employee profiles waiting for HR to approve onboarding.',
+      action: 'Open onboarding queue',
+      icon: ClipboardList,
+      tone: data.onboarding.submitted_profiles > 0 ? 'warning' as const : 'default' as const,
+      onClick: () => navigate('/employees?status=onboarding'),
+    },
+    {
+      title: 'Approval decisions',
+      value: data.approvals.pending,
+      description: 'Leave, document, attendance, and service approvals waiting for action.',
+      action: 'Review approvals',
+      icon: ClipboardCheck,
+      tone: data.approvals.pending > 0 ? 'warning' as const : 'default' as const,
+      onClick: () => navigate('/approvals'),
+    },
+    {
+      title: 'Attendance exceptions',
+      value: data.attendance.late + data.attendance.absent,
+      description: 'Late or absent records for today that may need HR attention.',
+      action: 'Open attendance',
+      icon: Timer,
+      tone: data.attendance.absent > 0 ? 'danger' as const : data.attendance.late > 0 ? 'warning' as const : 'default' as const,
+      onClick: () => navigate('/attendance'),
+    },
+    {
+      title: 'Operational risks',
+      value: data.service_desk.unassigned + data.service_desk.sla_breached + data.assets.maintenance + data.documents.expired,
+      description: 'Unassigned tickets, breached SLAs, assets in maintenance, and expired documents.',
+      action: 'Inspect operations',
+      icon: FileWarning,
+      tone: data.service_desk.sla_breached + data.documents.expired > 0 ? 'danger' as const : 'warning' as const,
+      onClick: () => navigate('/documents'),
+    },
+  ];
 
   const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
   const overviewParts = [
@@ -286,6 +386,7 @@ export function OrganizationDashboardView() {
         search: filters.search,
         status: filters.status,
         department_id: filters.department_id,
+        cluster_id: filters.cluster_id,
         date_from: filters.date_from,
         date_to: filters.date_to,
         date_column: filters.date_column,
@@ -390,7 +491,7 @@ export function OrganizationDashboardView() {
             <p className="mt-1 text-xs text-muted">Refine employee metrics, charts, recent employees, and the report export.</p>
           </div>
         </CardHeader>
-        <CardBody className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_130px_160px_210px_36px]">
+        <CardBody className="grid gap-3 md:grid-cols-[minmax(180px,1fr)_130px_150px_150px_210px_36px]">
           <div className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted" />
             <Input
@@ -410,8 +511,21 @@ export function OrganizationDashboardView() {
           />
           <SelectMenu
             value={filters.department_id ? String(filters.department_id) : ''}
-            onChange={(value) => updateFilter('department_id', value ? Number(value) : undefined)}
+            onChange={(value) => {
+              updateFilter('department_id', value ? Number(value) : undefined);
+              updateFilter('cluster_id', undefined);
+            }}
             options={lookupOptions(lookups.data?.departments, 'All departments')}
+          />
+          <SelectMenu
+            value={filters.cluster_id ? String(filters.cluster_id) : ''}
+            onChange={(value) => updateFilter('cluster_id', value ? Number(value) : undefined)}
+            options={lookupOptions(
+              (lookups.data?.clusters ?? []).filter(
+                (cluster) => !filters.department_id || cluster.department_id === filters.department_id,
+              ),
+              'All clusters',
+            )}
           />
           <DateRangePicker
             dateFrom={filters.date_from ?? ''}
@@ -433,7 +547,25 @@ export function OrganizationDashboardView() {
         </CardBody>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <section>
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <h3 className="font-display text-lg font-semibold text-strong">People operations today</h3>
+            <p className="mt-1 text-sm text-muted">A short command queue for HR and organization admins.</p>
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/reports')}>
+            <Download className="h-4 w-4" />
+            Report
+          </Button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {commandItems.map((item) => (
+            <PriorityActionCard key={item.title} {...item} />
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
         <SummaryLinkCard
           icon={ClipboardCheck}
           iconClassName="bg-teal-light text-pine"
@@ -453,6 +585,17 @@ export function OrganizationDashboardView() {
             { label: 'open', value: data.service_desk.open },
             { label: 'unassigned', value: data.service_desk.unassigned, tone: data.service_desk.unassigned > 0 ? 'warning' : 'default' },
             { label: 'SLA breached', value: data.service_desk.sla_breached, tone: data.service_desk.sla_breached > 0 ? 'danger' : 'default' },
+          ]}
+        />
+        <SummaryLinkCard
+          icon={Package}
+          iconClassName="bg-info-bg text-info"
+          title="Assets"
+          onClick={() => navigate('/settings/assets')}
+          stats={[
+            { label: 'assigned', value: data.assets.assigned },
+            { label: 'in maintenance', value: data.assets.maintenance, tone: data.assets.maintenance > 0 ? 'warning' : 'default' },
+            { label: 'available', value: data.assets.available },
           ]}
         />
         <SummaryLinkCard
@@ -608,13 +751,39 @@ export function OrganizationDashboardView() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>By status</CardTitle>
           </CardHeader>
           <CardBody>
             <RankedBarList valueLabel="Employees" entries={statusEntries} />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cluster coverage</CardTitle>
+            <p className="text-xs text-muted">
+              {data.structure.clusters_with_manager}/{data.structure.clusters} managed · {data.structure.clusters_with_supervisor}/{data.structure.clusters} supervised
+            </p>
+          </CardHeader>
+          <CardBody>
+            <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md bg-surface-soft px-2 py-2">
+                <p className="font-display text-lg font-bold text-strong">{data.structure.clusters}</p>
+                <p className="text-[11px] text-muted">Clusters</p>
+              </div>
+              <div className="rounded-md bg-surface-soft px-2 py-2">
+                <p className="font-display text-lg font-bold text-strong">{data.structure.clusters_with_manager}</p>
+                <p className="text-[11px] text-muted">Managers</p>
+              </div>
+              <div className="rounded-md bg-surface-soft px-2 py-2">
+                <p className="font-display text-lg font-bold text-strong">{data.structure.employees_without_cluster}</p>
+                <p className="text-[11px] text-muted">Unassigned</p>
+              </div>
+            </div>
+            <RankedBarList valueLabel="Employees" entries={clusterEntries} />
           </CardBody>
         </Card>
 

@@ -79,13 +79,17 @@ Move these after the MVP:
 - Recruitment/ATS
 - Performance appraisal
 - Learning management
-- Service desk
 - Connect/messaging
 - Central/community layer
 - Advanced AI
-- Assets
 - Financial/Admin workflows
 - Operational OS modules
+
+Note: Service desk and Assets were originally scoped as post-MVP here, but
+both have since been built as full modules (backend + frontend), gated behind
+the same module-subscription mechanism as every other optional module. See
+the "Completed and verified" sections below for the module list as it
+actually stands.
 
 ## Current Repository State
 
@@ -299,12 +303,25 @@ Completed leave foundation includes:
 - minimum notice and maximum days per request validation
 - overlap checks for submitted/approved leave
 - balance checks with pending and used days
+- leave handover assignee, notes, document upload/download, dashboard visibility, and in-app notifications
 - shared approval request creation for submitted leave
 - approval decision syncing into leave request status and balances
 - leave request cancellation
 - manager and employee dashboard leave metrics
 - demo leave setup and entitlements seeded for local/Postman testing
 - leave feature tests
+
+Completed calendar/company events foundation includes:
+
+- organization-wide events managed by Organization Admin/HR Director
+- department-scoped events managed by assigned department heads
+- organization admins/HR directors can manage events for any department
+- employee visibility scoped to organization-wide events plus their own department events
+- active/inactive event support using soft deactivation
+- date-range and search filtering for calendar views
+- in-app notifications to active employees in the event audience
+- cross-organization event isolation tests
+- company event feature tests
 
 Completed attendance foundation includes:
 
@@ -366,6 +383,7 @@ Completed notification foundation includes:
 - employee invitation accepted notifications
 - approval submitted notifications
 - approval decided notifications
+- leave handover assignment and status-change notifications
 - reminder command: `php artisan valtireo:send-reminders`
 - document expiry reminder notifications
 - employee onboarding follow-up reminder notifications
@@ -436,6 +454,18 @@ Completed employee profile extension work includes:
 - employee detail response includes loaded status and reporting history
 - demo profile extension data seeded for local/Postman testing
 - employee profile extension tests
+
+Completed and verified module-subscription hardening and cluster leadership work includes:
+
+- `EnsureModuleIsSubscribed` middleware, applied to the route groups for documents, leave, service desk, assets, attendance, employees, employee self-service, reports, and audit logs — the backend is now the source of truth for module access, not just the sidebar
+- reports and import templates check both the underlying permission and the module's active subscription before listing or serving a report/template
+- public registration closed by default (`AUTH_PUBLIC_REGISTRATION`, off unless explicitly enabled)
+- clusters are now a leadership unit, not just a grouping: `manager_employee_id` and `supervisor_employee_id` on `clusters`, validated to belong to the cluster's department and not already lead a different cluster
+- assigning someone as a cluster manager/supervisor auto-syncs their own `cluster_id`
+- organization dashboard reports cluster coverage (managed/supervised counts, unassigned employees, per-cluster headcount) and accepts a `cluster_id` filter
+- a cluster manager/supervisor gets a cluster-scoped manager dashboard automatically; department-scoped manager dashboards now require being the department's assigned head (`departments.head_employee_id`), not just holding the permission
+- employee reports and CSV/bulk-import support `cluster_code` alongside department/unit codes
+- setup checklist links corrected to match the actual frontend routes, and a "Add clusters" item added
 
 ## Database
 

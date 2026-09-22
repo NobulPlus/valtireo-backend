@@ -449,7 +449,7 @@ class PlatformAdminDashboardTest extends TestCase
         $response->assertJsonPath('organization.code', 'ZENITH-FREIGHT');
         $response->assertJsonPath('organization.status', 'invited');
         $response->assertJsonPath('admin.email', 'uche.nnamdi@zenithfreight.test');
-        $this->assertNotEmpty($response->json('invitation.temporary_password'));
+        $this->assertNotEmpty($response->json('invitation.setup_url'));
 
         $this->assertDatabaseHas('organizations', ['code' => 'ZENITH-FREIGHT']);
         $this->assertDatabaseHas('users', ['email' => 'uche.nnamdi@zenithfreight.test']);

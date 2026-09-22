@@ -34,6 +34,9 @@ function ThemeToggle() {
 export function Topbar() {
   const { session, logout, canChooseWorkspaceMode, workspaceMode, setWorkspaceMode, adminLandingRoute } = useAuth();
   const navigate = useNavigate();
+  const user = session?.user;
+  const userName = user?.name || 'User';
+  const userEmail = user?.email || 'Signed in';
 
   async function handleLogout() {
     await logout();
@@ -73,15 +76,15 @@ export function Topbar() {
               aria-label="Account menu"
             >
               <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-teal-light text-pine">
-                {session?.user.photo_url ? (
-                  <img src={session.user.photo_url} alt="" className="h-full w-full object-cover" />
+                {user?.photo_url ? (
+                  <img src={user.photo_url} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <User className="h-3.5 w-3.5" />
                 )}
               </span>
               <span className="hidden text-left sm:block">
                 <span className="block text-[13px] font-medium leading-tight text-strong">
-                  {session?.user.name}
+                  {userName}
                 </span>
                 <span className="block text-[11px] leading-tight text-muted">
                   {session?.roles[0] ?? 'Member'}
@@ -92,7 +95,7 @@ export function Topbar() {
           )}
         >
           <div className="border-b border-border px-3 py-2">
-            <p className="truncate text-[13px] font-medium text-strong">{session?.user.email}</p>
+            <p className="truncate text-[13px] font-medium text-strong">{userEmail}</p>
           </div>
           {canChooseWorkspaceMode && (
             <DropdownMenuItem icon={workspaceMode === 'admin' ? UserRound : Gauge} onClick={handleSwitchWorkspaceMode}>

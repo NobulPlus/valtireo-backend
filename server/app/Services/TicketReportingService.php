@@ -63,7 +63,9 @@ class TicketReportingService
             'on_hold_count' => $tickets->where('status', 'on_hold')->count(),
             'in_progress_count' => $tickets->where('status', 'in_progress')->count(),
             'escalated_count' => $tickets->where('escalation_level', '>', 0)->count(),
-            'sla_breach_count' => $this->breachedTicketsQuery($organizationId)->count(),
+            'sla_breach_count' => $this->breachedTicketsQuery($organizationId)
+                ->whereBetween('submitted_at', [$periodStart, $periodEnd])
+                ->count(),
         ];
     }
 

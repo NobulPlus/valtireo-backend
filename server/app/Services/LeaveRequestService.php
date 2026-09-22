@@ -18,8 +18,10 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveRequestService
 {
-    public function __construct(private readonly ApprovalRequestService $approvals)
-    {
+    public function __construct(
+        private readonly ApprovalRequestService $approvals,
+        private readonly NotificationDispatchService $notifications,
+    ) {
     }
 
     /**
@@ -33,6 +35,14 @@ class LeaveRequestService
                 ->where('organization_id', $actor->organization_id)
                 ->where('is_active', true)
                 ->findOrFail($data['leave_type_id']);
+
+            if ($leaveType->restricted_to_gender !== null
+                && strtolower(trim((string) $employee->profile?->gender)) !== $leaveType->restricted_to_gender) {
+                throw ValidationException::withMessages([
+                    'leave_type_id' => ["{$leaveType->name} is restricted to {$leaveType->restricted_to_gender} employees."],
+                ]);
+            }
+
             $startsOn = CarbonImmutable::parse($data['starts_on'])->startOfDay();
             $endsOn = CarbonImmutable::parse($data['ends_on'])->startOfDay();
             $period = $this->periodFor($actor, $startsOn, $endsOn);
@@ -57,6 +67,14 @@ class LeaveRequestService
             }
 
             $this->ensureNoOverlap($employee, $startsOn, $endsOn);
+            if (blank($data['handover_to_employee_id'] ?? null)
+                && (! blank($data['handover_note'] ?? null) || ($data['handover_document'] ?? null) instanceof UploadedFile)) {
+                throw ValidationException::withMessages([
+                    'handover_to_employee_id' => ['Select the employee receiving the handover before adding handover notes or documents.'],
+                ]);
+            }
+
+            $handoverTo = $this->handoverEmployee($employee, $data['handover_to_employee_id'] ?? null, $startsOn, $endsOn);
             $entitlement = $this->entitlementFor($employee, $leaveType, $period);
             $available = (float) $entitlement->days_allocated - (float) $entitlement->days_used - (float) $entitlement->days_pending;
 
@@ -81,6 +99,15 @@ class LeaveRequestService
                 );
             }
 
+            $handoverDocument = $data['handover_document'] ?? null;
+            $handoverPath = null;
+            if ($handoverDocument instanceof UploadedFile) {
+                $handoverPath = $handoverDocument->store(
+                    "organizations/{$employee->organization_id}/employees/{$employee->id}/leave-handovers",
+                    'local'
+                );
+            }
+
             try {
                 $leaveRequest = LeaveRequest::query()->create([
                     'organization_id' => $employee->organization_id,
@@ -88,15 +115,21 @@ class LeaveRequestService
                     'leave_type_id' => $leaveType->id,
                     'leave_period_id' => $period->id,
                     'requested_by_id' => $actor->id,
+                    'handover_to_employee_id' => $handoverTo?->id,
                     'starts_on' => $startsOn->toDateString(),
                     'ends_on' => $endsOn->toDateString(),
                     'total_days' => $totalDays,
                     'status' => 'submitted',
                     'reason' => $data['reason'] ?? null,
+                    'handover_note' => $data['handover_note'] ?? null,
                     'evidence_file_name' => $evidence instanceof UploadedFile ? $evidence->getClientOriginalName() : null,
                     'evidence_file_path' => $evidencePath,
                     'evidence_mime_type' => $evidence instanceof UploadedFile ? $evidence->getClientMimeType() : null,
                     'evidence_file_size' => $evidence instanceof UploadedFile ? $evidence->getSize() : null,
+                    'handover_file_name' => $handoverDocument instanceof UploadedFile ? $handoverDocument->getClientOriginalName() : null,
+                    'handover_file_path' => $handoverPath,
+                    'handover_mime_type' => $handoverDocument instanceof UploadedFile ? $handoverDocument->getClientMimeType() : null,
+                    'handover_file_size' => $handoverDocument instanceof UploadedFile ? $handoverDocument->getSize() : null,
                     'submitted_at' => now(),
                 ]);
 
@@ -106,6 +139,13 @@ class LeaveRequestService
                     $leaveRequest->comments()->create([
                         'user_id' => $actor->id,
                         'comment' => $data['reason'],
+                    ]);
+                }
+
+                if (! blank($data['handover_note'] ?? null)) {
+                    $leaveRequest->comments()->create([
+                        'user_id' => $actor->id,
+                        'comment' => 'Handover note: '.$data['handover_note'],
                     ]);
                 }
 
@@ -120,11 +160,20 @@ class LeaveRequestService
                         'leave_type_id' => $leaveType->id,
                         'total_days' => $totalDays,
                         'has_evidence' => $evidencePath !== null,
+                        'handover_to_employee_id' => $handoverTo?->id,
+                        'has_handover_document' => $handoverPath !== null,
                     ]
                 );
+
+                if ($handoverTo?->user) {
+                    $this->notifications->leaveHandoverAssigned($leaveRequest->refresh(), $actor);
+                }
             } catch (\Throwable $exception) {
                 if ($evidencePath) {
                     Storage::disk('local')->delete($evidencePath);
+                }
+                if ($handoverPath) {
+                    Storage::disk('local')->delete($handoverPath);
                 }
 
                 throw $exception;
@@ -200,6 +249,10 @@ class LeaveRequestService
                 'reviewed_at' => now(),
             ]);
 
+            if ($leaveRequest->handover_to_employee_id) {
+                $this->notifications->leaveHandoverStatusChanged($leaveRequest->refresh());
+            }
+
             $comment = trim(($splitNote ?? '').(blank($note) ? '' : ' '.$note));
             if (! blank($comment)) {
                 $leaveRequest->comments()->create([
@@ -222,6 +275,7 @@ class LeaveRequestService
             'leaveType',
             'leavePeriod',
             'requestedBy',
+            'handoverTo.user',
             'comments.user',
             'approvalRequests.approvable',
             'approvalRequests.workflow.steps',
@@ -290,6 +344,45 @@ class LeaveRequestService
                 'starts_on' => ['This employee already has an overlapping leave request.'],
             ]);
         }
+    }
+
+    private function handoverEmployee(Employee $employee, mixed $handoverEmployeeId, CarbonImmutable $startsOn, CarbonImmutable $endsOn): ?Employee
+    {
+        if (blank($handoverEmployeeId)) {
+            return null;
+        }
+
+        if ((int) $handoverEmployeeId === $employee->id) {
+            throw ValidationException::withMessages([
+                'handover_to_employee_id' => ['You cannot hand over leave responsibilities to yourself.'],
+            ]);
+        }
+
+        $handoverTo = Employee::query()
+            ->with('user')
+            ->where('organization_id', $employee->organization_id)
+            ->findOrFail((int) $handoverEmployeeId);
+
+        if ($handoverTo->status !== 'active') {
+            throw ValidationException::withMessages([
+                'handover_to_employee_id' => ['The selected handover employee must be active.'],
+            ]);
+        }
+
+        $overlap = LeaveRequest::query()
+            ->where('employee_id', $handoverTo->id)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->whereDate('starts_on', '<=', $endsOn->toDateString())
+            ->whereDate('ends_on', '>=', $startsOn->toDateString())
+            ->exists();
+
+        if ($overlap) {
+            throw ValidationException::withMessages([
+                'handover_to_employee_id' => ['The selected handover employee has an overlapping leave request.'],
+            ]);
+        }
+
+        return $handoverTo;
     }
 
     private function workingDays(Employee $employee, CarbonImmutable $startsOn, CarbonImmutable $endsOn): float

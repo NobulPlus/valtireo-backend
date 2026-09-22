@@ -19,7 +19,12 @@ class LeaveRequestController extends Controller
 {
     public function index(Request $request, LeaveRequestService $leave): AnonymousResourceCollection
     {
-        abort_unless($request->user()->can('leave_requests.view') || $request->user()->can('leave_requests.create'), 403);
+        abort_unless(
+            $request->user()->can('leave_requests.view')
+                || $request->user()->can('leave_requests.create')
+                || $request->user()->employee?->status === 'active',
+            403
+        );
 
         $query = LeaveRequest::query()
             ->with($leave->relations())
@@ -30,7 +35,12 @@ class LeaveRequestController extends Controller
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('ends_on', '<=', $date->toDateString()));
 
         if (! $request->user()->can('leave_requests.view')) {
-            $query->where('employee_id', $request->user()->employee?->id);
+            $employeeId = $request->user()->employee?->id;
+            abort_unless($employeeId, 403);
+
+            $query->where(fn (Builder $query) => $query
+                ->where('employee_id', $employeeId)
+                ->orWhere('handover_to_employee_id', $employeeId));
         } elseif ($request->integer('employee_id')) {
             $query->where('employee_id', $request->integer('employee_id'));
         }
@@ -44,6 +54,9 @@ class LeaveRequestController extends Controller
         if ($request->hasFile('evidence')) {
             $data['evidence'] = $request->file('evidence');
         }
+        if ($request->hasFile('handover_document')) {
+            $data['handover_document'] = $request->file('handover_document');
+        }
 
         $leaveRequest = $leave->submit($request->user(), $data);
 
@@ -55,7 +68,7 @@ class LeaveRequestController extends Controller
     public function show(Request $request, LeaveRequest $leaveRequest, LeaveRequestService $leave): LeaveRequestResource
     {
         abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
-        abort_unless($request->user()->can('leave_requests.view') || $request->user()->employee?->id === $leaveRequest->employee_id, 403);
+        abort_unless($request->user()->can('leave_requests.view') || in_array($request->user()->employee?->id, [$leaveRequest->employee_id, $leaveRequest->handover_to_employee_id], true), 403);
 
         return new LeaveRequestResource($leaveRequest->load($leave->relations()));
     }
@@ -67,6 +80,15 @@ class LeaveRequestController extends Controller
         abort_unless(filled($leaveRequest->evidence_file_path) && Storage::disk('local')->exists($leaveRequest->evidence_file_path), 404);
 
         return Storage::disk('local')->download($leaveRequest->evidence_file_path, $leaveRequest->evidence_file_name);
+    }
+
+    public function downloadHandoverDocument(Request $request, LeaveRequest $leaveRequest): StreamedResponse
+    {
+        abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('leave_requests.view') || in_array($request->user()->employee?->id, [$leaveRequest->employee_id, $leaveRequest->handover_to_employee_id], true), 403);
+        abort_unless(filled($leaveRequest->handover_file_path) && Storage::disk('local')->exists($leaveRequest->handover_file_path), 404);
+
+        return Storage::disk('local')->download($leaveRequest->handover_file_path, $leaveRequest->handover_file_name);
     }
 
     public function cancel(

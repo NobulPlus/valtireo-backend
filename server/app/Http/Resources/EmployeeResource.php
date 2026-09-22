@@ -76,7 +76,12 @@ class EmployeeResource extends JsonResource
                 'id' => $this->user->id,
                 'name' => $this->user->name,
                 'email' => $this->user->email,
-                'roles' => $this->user->relationLoaded('roles') ? $this->user->roles->pluck('name')->values() : [],
+                'roles' => $this->user->relationLoaded('roles') ? $this->user->roles->map(fn ($role) => [
+                    'id' => $role->id,
+                    'key' => $role->key,
+                    'name' => $role->name,
+                    'permissions_count' => $role->permissions_count,
+                ])->values() : [],
             ] : null),
             'invitations' => $this->whenLoaded('invitations', fn () => $this->invitations->map(fn ($invitation) => [
                 'id' => $invitation->id,
@@ -89,6 +94,8 @@ class EmployeeResource extends JsonResource
             'emergency_contacts' => EmployeeEmergencyContactResource::collection($this->whenLoaded('emergencyContacts')),
             'dependents' => EmployeeDependentResource::collection($this->whenLoaded('dependents')),
             'documents' => EmployeeDocumentResource::collection($this->whenLoaded('documents')),
+            'assets' => AssetResource::collection($this->whenLoaded('assets')),
+            'asset_assignment_history' => AssetAssignmentHistoryResource::collection($this->whenLoaded('assetAssignmentHistories')),
             'custom_fields' => EmployeeCustomFieldValueResource::collection($this->whenLoaded('customFieldValues')),
             'status_history' => EmployeeStatusHistoryResource::collection($this->whenLoaded('statusHistories')),
             'reporting_history' => EmployeeReportingHistoryResource::collection($this->whenLoaded('reportingHistories')),

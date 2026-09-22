@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Award, Briefcase, CalendarClock, FileWarning, PartyPopper, Timer } from 'lucide-react';
+import {
+  AlertCircle,
+  Award,
+  Briefcase,
+  CalendarClock,
+  CheckCircle2,
+  FileWarning,
+  Handshake,
+  PartyPopper,
+  Timer,
+  UserRound,
+  type LucideIcon,
+} from 'lucide-react';
 import { useMyDashboard } from '@/features/dashboard/api';
 import { LoadingState, ErrorState } from '@/components/ui/States';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -16,6 +28,68 @@ import { useDateFormatter } from '@/lib/dateFormat';
 
 function actionError(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
+}
+
+function DailyLifeCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
+  tone = 'default',
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+  detail: string;
+  tone?: 'default' | 'warning' | 'danger' | 'success';
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <span
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-xl',
+            tone === 'danger'
+              ? 'bg-danger-bg text-danger'
+              : tone === 'warning'
+                ? 'bg-warning-bg text-warning'
+                : tone === 'success'
+                  ? 'bg-success-bg text-success'
+                  : 'bg-teal-light text-pine',
+          )}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="font-display text-2xl font-bold tabular-nums text-strong">{value}</span>
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-strong">{label}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{detail}</p>
+      </div>
+    </>
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex min-h-[128px] flex-col justify-between rounded-2xl border bg-surface p-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all',
+        onClick && 'hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-24px_rgba(15,35,32,0.45)]',
+        tone === 'danger'
+          ? 'border-danger-bg'
+          : tone === 'warning'
+            ? 'border-warning-bg'
+            : tone === 'success'
+              ? 'border-success-bg'
+              : 'border-border',
+      )}
+    >
+      {content}
+    </button>
+  );
 }
 
 export function MyDashboardView() {
@@ -50,14 +124,92 @@ export function MyDashboardView() {
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} />;
   if (!data) return null;
 
-  const hasExpired = data.document_compliance.some((row) => row.state === 'expired');
+  const documentCompliance = data.document_compliance ?? [];
+  const pendingActions = data.pending_actions ?? [];
+  const leaveBalances = data.leave?.balances ?? [];
+  const handoverAssignments = data.leave?.handover_assignments ?? [];
+  const attendanceTrend = data.attendance?.trend ?? [];
+  const hasExpired = documentCompliance.some((row) => row.state === 'expired');
+  const urgentDocuments = documentCompliance.filter((row) => ['missing', 'expired', 'changes_requested', 'rejected'].includes(row.state));
+  const handoverCount = handoverAssignments.length;
+  const totalAvailableLeave = leaveBalances.reduce((sum, balance) => sum + balance.days_available, 0);
+  const profileStatus = data.profile?.completion_status ?? 'pending';
+  const todayStatus = attendanceTrend[attendanceTrend.length - 1]?.status.replaceAll('_', ' ') ?? 'No record';
 
   return (
     <div className="flex flex-col gap-5">
-      {data.pending_actions.length > 0 && (
+      <section
+        className="overflow-hidden rounded-3xl px-5 py-6 text-white shadow-[0_18px_46px_-30px_rgba(15,35,32,0.6)]"
+        style={{
+          background:
+            'linear-gradient(135deg, color-mix(in srgb, var(--workspace-primary, #123f3a) 92%, black 8%), color-mix(in srgb, var(--workspace-accent, #0f766e) 72%, black 28%))',
+        }}
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-white/65">My workspace today</p>
+            <h3 className="mt-1 font-display text-2xl font-semibold text-white">
+              {data.employee ? `Welcome back, ${data.employee.first_name}` : 'Welcome back'}
+            </h3>
+            <p className="mt-2 max-w-[64ch] text-sm leading-6 text-white/75">
+              Your profile, attendance, leave, documents, handovers, and upcoming company dates in one place.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="onHero" size="sm" onClick={() => navigate('/me/attendance')}>
+              <Timer className="h-4 w-4" />
+              Attendance
+            </Button>
+            <Button type="button" variant="onHero" size="sm" onClick={() => navigate('/me/leave')}>
+              <CalendarClock className="h-4 w-4" />
+              Leave
+            </Button>
+            <Button type="button" variant="onHero" size="sm" onClick={() => navigate('/calendar')}>
+              <CalendarClock className="h-4 w-4" />
+              Calendar
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <DailyLifeCard
+          icon={Timer}
+          label="Today"
+          value={todayStatus}
+          detail={`${data.attendance?.this_month.total_hours ?? 0} hours logged this month.`}
+          tone={todayStatus === 'absent' ? 'danger' : todayStatus === 'late' ? 'warning' : todayStatus === 'present' ? 'success' : 'default'}
+          onClick={() => navigate('/me/attendance')}
+        />
+        <DailyLifeCard
+          icon={CalendarClock}
+          label="Leave available"
+          value={totalAvailableLeave}
+          detail={`${data.leave?.pending_requests ?? 0} pending request(s), ${data.leave?.approved_requests ?? 0} approved.`}
+          onClick={() => navigate('/me/leave')}
+        />
+        <DailyLifeCard
+          icon={FileWarning}
+          label="Documents"
+          value={urgentDocuments.length}
+          detail={urgentDocuments.length ? 'Some documents need attention.' : 'No urgent document action right now.'}
+          tone={hasExpired ? 'danger' : urgentDocuments.length ? 'warning' : 'success'}
+          onClick={() => navigate('/me/profile?tab=documents')}
+        />
+        <DailyLifeCard
+          icon={Handshake}
+          label="Handovers"
+          value={handoverCount}
+          detail={handoverCount ? 'You are covering for colleagues on leave.' : 'No active handover assignment.'}
+          tone={handoverCount ? 'warning' : 'default'}
+          onClick={() => navigate('/me/leave')}
+        />
+      </div>
+
+      {pendingActions.length > 0 && (
         <Card className="border-pending-bg bg-pending-bg/30">
           <CardBody className="flex flex-col gap-2">
-            {data.pending_actions.map((action) => (
+            {pendingActions.map((action) => (
               <div key={action.key} className="flex items-center gap-2 text-sm text-pending">
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 {action.label}
@@ -67,14 +219,14 @@ export function MyDashboardView() {
         </Card>
       )}
 
-      {data.document_compliance.length > 0 && (
+      {documentCompliance.length > 0 && (
         <Card className={cn(hasExpired ? 'border-danger-bg bg-danger-bg/30' : 'border-warning-bg bg-warning-bg/30')}>
           <CardBody className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <FileWarning className={cn('h-4 w-4 flex-shrink-0', hasExpired ? 'text-danger' : 'text-warning')} />
                 <span className={hasExpired ? 'text-danger' : 'text-warning'}>
-                  {data.document_compliance.length} document{data.document_compliance.length === 1 ? '' : 's'} need{data.document_compliance.length === 1 ? 's' : ''} your attention
+                  {documentCompliance.length} document{documentCompliance.length === 1 ? '' : 's'} need{documentCompliance.length === 1 ? 's' : ''} your attention
                 </span>
               </div>
               <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/me/profile?tab=documents')}>
@@ -82,7 +234,7 @@ export function MyDashboardView() {
               </Button>
             </div>
             <ul className="flex flex-col gap-1.5">
-              {data.document_compliance.map((row) => (
+              {documentCompliance.map((row) => (
                 <li key={row.requirement.id} className="flex items-center justify-between text-sm">
                   <span className="text-strong">{row.requirement.name}</span>
                   <span className="flex items-center gap-2 text-xs text-muted">
@@ -133,7 +285,7 @@ export function MyDashboardView() {
                 </dd>
                 <dt className="text-muted">Profile status</dt>
                 <dd className="text-right">
-                  {data.profile ? <StatusBadge status={data.profile.completion_status} /> : '—'}
+                  <StatusBadge status={profileStatus} />
                 </dd>
               </dl>
             ) : (
@@ -154,9 +306,9 @@ export function MyDashboardView() {
             )}
           </CardHeader>
           <CardBody>
-            {data.leave && data.leave.balances.length > 0 ? (
+            {leaveBalances.length > 0 ? (
               <ul className="flex flex-col gap-3.5">
-                {data.leave.balances.map((balance) => {
+                {leaveBalances.map((balance) => {
                   const pct = balance.days_allocated > 0
                     ? Math.min(100, Math.round((balance.days_available / balance.days_allocated) * 100))
                     : 0;
@@ -222,7 +374,7 @@ export function MyDashboardView() {
                 </div>
                 <div className="px-5 py-4">
                   <AreaTrendChart
-                    entries={data.attendance.trend.map((day) => ({
+                    entries={attendanceTrend.map((day) => ({
                       label: day.label,
                       value: day.value,
                     }))}
@@ -279,7 +431,12 @@ export function MyDashboardView() {
                 Request leave
               </Button>
               <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/me/profile')}>
-                View profile
+                <UserRound className="h-4 w-4" />
+                Profile
+              </Button>
+              <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/me/tickets')}>
+                <CheckCircle2 className="h-4 w-4" />
+                Help
               </Button>
             </div>
           </CardBody>

@@ -114,4 +114,18 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Public Registration
+    |--------------------------------------------------------------------------
+    |
+    | Valtireo's v1 onboarding is platform-led: a platform admin provisions an
+    | organization and the organization's first admin/employee users are invited.
+    | Keep public registration disabled unless deliberately enabling a bootstrap
+    | or future self-service signup flow.
+    |
+    */
+
+    'public_registration' => env('AUTH_PUBLIC_REGISTRATION', false),
+
 ];

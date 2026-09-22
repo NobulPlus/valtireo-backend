@@ -329,7 +329,7 @@ function TicketQueueContent() {
 
 export function TicketQueuePage() {
   return (
-    <RequirePermission permission="service_desk.view">
+    <RequirePermission permission="service_desk.view" moduleKey="service_desk">
       <TicketQueueContent />
     </RequirePermission>
   );

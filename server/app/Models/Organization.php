@@ -81,6 +81,11 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(EmployeeDocument::class);
     }
 
+    public function verificationDocuments(): HasMany
+    {
+        return $this->hasMany(OrganizationVerificationDocument::class);
+    }
+
     public function employeeCustomFields(): HasMany
     {
         return $this->hasMany(EmployeeCustomField::class);
@@ -111,6 +116,11 @@ class Organization extends Model implements AuditableContract
         return $this->hasMany(Asset::class);
     }
 
+    public function assetCategories(): HasMany
+    {
+        return $this->hasMany(AssetCategory::class);
+    }
+
     public function approvalRequests(): HasMany
     {
         return $this->hasMany(ApprovalRequest::class);
@@ -129,6 +139,11 @@ class Organization extends Model implements AuditableContract
     public function leaveHolidays(): HasMany
     {
         return $this->hasMany(LeaveHoliday::class);
+    }
+
+    public function companyEvents(): HasMany
+    {
+        return $this->hasMany(CompanyEvent::class);
     }
 
     public function leaveWorkDays(): HasMany

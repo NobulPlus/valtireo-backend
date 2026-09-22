@@ -74,7 +74,7 @@ class OrganizationProvisioningTest extends TestCase
                 'admin',
                 'modules',
                 'workspace',
-                'invitation' => ['email', 'temporary_password', 'login_hint', 'delivery_status'],
+                'invitation' => ['email', 'setup_url', 'login_hint', 'delivery_status'],
                 'created_by',
             ]);
 
@@ -97,14 +97,14 @@ class OrganizationProvisioningTest extends TestCase
         );
     }
 
-    public function test_provisioned_admin_can_login_with_temporary_password(): void
+    public function test_provisioned_admin_can_accept_setup_link_and_login(): void
     {
         $this->seed();
 
         $superAdmin = User::query()->where('email', 'superadmin@valtireo.test')->firstOrFail();
         Sanctum::actingAs($superAdmin);
 
-        $temporaryPassword = $this->postJson('/api/platform/organizations', [
+        $setupUrl = $this->postJson('/api/platform/organizations', [
             'organization' => [
                 'name' => 'Northstar Labs',
                 'code' => 'NORTHSTAR',
@@ -117,16 +117,24 @@ class OrganizationProvisioningTest extends TestCase
             'modules' => ['organization_setup', 'employees'],
         ])
             ->assertCreated()
-            ->json('invitation.temporary_password');
+            ->json('invitation.setup_url');
 
-        $this->postJson('/api/auth/login', [
+        $setupToken = basename((string) parse_url($setupUrl, PHP_URL_PATH));
+
+        $this->postJson("/api/organization-admin-invitations/{$setupToken}/accept", [
             'email' => 'nora@northstar.test',
-            'password' => $temporaryPassword,
+            'password' => 'NewPassword1!',
+            'password_confirmation' => 'NewPassword1!',
         ])
             ->assertOk()
             ->assertJsonPath('user.email', 'nora@northstar.test')
             ->assertJsonPath('organization.code', 'NORTHSTAR')
             ->assertJsonPath('workspace.workspace_code', 'NORTHSTAR');
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'nora@northstar.test',
+            'password' => 'NewPassword1!',
+        ])->assertOk();
     }
 
     public function test_non_super_admin_cannot_provision_organization(): void

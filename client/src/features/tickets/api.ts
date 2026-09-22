@@ -149,6 +149,23 @@ export function useCancelTicket(ticketId: number) {
   });
 }
 
+export interface ResubmitTicketPayload {
+  subject?: string;
+  description?: string;
+  priority?: string;
+}
+
+export function useResubmitTicket(ticketId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ResubmitTicketPayload) => api.patch<{ ticket: Ticket }>(`/tickets/${ticketId}/resubmit`, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'me'] });
+    },
+  });
+}
+
 export function useAssignTicket(ticketId: number) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -183,6 +200,16 @@ export function useReopenTicket(ticketId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (reason: string) => api.patch(`/tickets/${ticketId}/reopen`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+    },
+  });
+}
+
+export function useDeclineTicket(ticketId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reason: string) => api.patch(`/tickets/${ticketId}/decline`, { reason }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },

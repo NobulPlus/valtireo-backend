@@ -16,6 +16,7 @@ import type { WorkspaceMode } from '@/context/AuthContext';
 export function WorkspaceModeModal() {
   const { session, adminLandingRoute, setWorkspaceMode } = useAuth();
   const navigate = useNavigate();
+  const firstName = session?.user?.name?.split(' ')[0] || 'there';
 
   function choose(mode: WorkspaceMode) {
     setWorkspaceMode(mode);
@@ -34,7 +35,7 @@ export function WorkspaceModeModal() {
         </div>
 
         <h1 className="font-display text-xl font-semibold text-strong">
-          Welcome back, {session?.user.name.split(' ')[0]}.
+          Welcome back, {firstName}.
         </h1>
         <p className="mt-1.5 text-sm text-muted">Where would you like to go?</p>
 

@@ -18,7 +18,7 @@ class UpdateOrganizationStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::in(['active', 'suspended'])],
+            'status' => ['required', Rule::in(['invited', 'setup_in_progress', 'pending_approval', 'active', 'suspended', 'rejected'])],
             'reason' => ['nullable', 'string', 'max:1000'],
         ];
     }

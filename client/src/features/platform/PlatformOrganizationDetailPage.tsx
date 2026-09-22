@@ -5,9 +5,12 @@ import {
   Ban,
   Building2,
   CalendarCheck,
+  CheckCircle2,
   FileCheck2,
+  FileText,
   Layers3,
   MapPin,
+  MessageSquareWarning,
   Pencil,
   Power,
   Settings2,
@@ -31,11 +34,13 @@ import { useDateFormatter } from '@/lib/dateFormat';
 import { isValidEmail } from '@/lib/validation';
 import {
   usePlatformOrganization,
+  usePlatformOrganizationVerificationDocuments,
+  useReviewOrganizationVerificationDocument,
   useUpdateOrganizationModule,
   useUpdateOrganizationStatus,
   useUpdateOrganizationWorkspace,
 } from '@/features/platform/api';
-import type { PlatformOrganizationDetail } from '@/types/api';
+import type { OrganizationVerificationDocument, PlatformOrganizationDetail } from '@/types/api';
 
 type ModuleRow = PlatformOrganizationDetail['modules'][number];
 type ModuleStatus = 'active' | 'trial' | 'suspended';
@@ -66,12 +71,17 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
   const [moduleDuration, setModuleDuration] = useState<Duration>('forever');
   const [moduleExpiresAt, setModuleExpiresAt] = useState('');
   const [editingWorkspace, setEditingWorkspace] = useState(false);
+  const [reviewingDocument, setReviewingDocument] = useState<OrganizationVerificationDocument | null>(null);
+  const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | 'request_changes'>('approve');
+  const [reviewNote, setReviewNote] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSupportEmail, setWorkspaceSupportEmail] = useState('');
   const [workspaceTimezone, setWorkspaceTimezone] = useState('');
   const statusMutation = useUpdateOrganizationStatus(id);
   const moduleMutation = useUpdateOrganizationModule(id);
   const workspaceMutation = useUpdateOrganizationWorkspace(id);
+  const verificationDocuments = usePlatformOrganizationVerificationDocuments(id);
+  const reviewVerificationDocument = useReviewOrganizationVerificationDocument(id);
 
   const org = data.organization;
   const isSuspended = org.status === 'suspended';
@@ -131,6 +141,34 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
     });
     setEditingWorkspace(false);
   }
+
+  function openReview(document: OrganizationVerificationDocument, action: 'approve' | 'reject' | 'request_changes') {
+    reviewVerificationDocument.reset();
+    setReviewingDocument(document);
+    setReviewAction(action);
+    setReviewNote('');
+  }
+
+  async function submitVerificationReview() {
+    if (!reviewingDocument) return;
+
+    await reviewVerificationDocument.mutateAsync({
+      documentId: reviewingDocument.id,
+      action: reviewAction,
+      note: reviewNote.trim() || undefined,
+    });
+    setReviewingDocument(null);
+    setReviewNote('');
+  }
+
+  const verification = verificationDocuments.data?.verification ?? data.verification;
+  const verificationRows = verificationDocuments.data?.documents.data ?? [];
+  const verificationError = reviewVerificationDocument.error instanceof ApiError ? reviewVerificationDocument.error.message : null;
+  const reviewTitle = reviewAction === 'approve'
+    ? 'Approve document'
+    : reviewAction === 'reject'
+      ? 'Reject document'
+      : 'Request changes';
 
   return (
     <div>
@@ -225,6 +263,68 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
           </CardBody>
         </Card>
       </div>
+
+      <Card className="mt-5">
+        <CardHeader>
+          <div>
+            <CardTitle>Organization verification</CardTitle>
+            <p className="mt-1 text-xs text-muted">
+              {verification.required_approved}/{verification.required_total} required documents approved · {verification.required_submitted}/{verification.required_total} submitted
+            </p>
+          </div>
+          <StatusBadge status={verification.is_verified ? 'verified' : verification.status} />
+        </CardHeader>
+        <CardBody>
+          {verificationDocuments.isLoading ? (
+            <LoadingState label="Loading verification documents..." />
+          ) : verificationDocuments.isError ? (
+            <ErrorState error={verificationDocuments.error} onRetry={() => verificationDocuments.refetch()} />
+          ) : verificationRows.length === 0 ? (
+            <EmptyState title="No verification documents submitted" description="This organization has not uploaded verification evidence yet." />
+          ) : (
+            <div className="space-y-3">
+              {verificationRows.map((document) => (
+                <div key={document.id} className="rounded-lg border border-border bg-surface-soft p-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted" />
+                        <p className="font-medium text-strong">{document.title}</p>
+                        <StatusBadge status={document.status} />
+                      </div>
+                      <p className="mt-1 text-xs text-muted">
+                        {document.document_type_label} · {document.file_name}
+                        {document.submitted_at ? ` · submitted ${formatDate(document.submitted_at)}` : ''}
+                      </p>
+                      {document.review_note && (
+                        <p className="mt-2 text-xs leading-5 text-muted">Review note: {document.review_note}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => window.open(document.download_url, '_blank', 'noopener,noreferrer')}>
+                        <FileText className="h-4 w-4" />
+                        View
+                      </Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => openReview(document, 'approve')}>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Approve
+                      </Button>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => openReview(document, 'request_changes')}>
+                        <MessageSquareWarning className="h-4 w-4" />
+                        Changes
+                      </Button>
+                      <Button type="button" variant="danger" size="sm" onClick={() => openReview(document, 'reject')}>
+                        <Ban className="h-4 w-4" />
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         <Card>
@@ -441,6 +541,43 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
           </Field>
 
           {workspaceMutationError && <Alert>{workspaceMutationError}</Alert>}
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(reviewingDocument)}
+        onClose={() => {
+          if (!reviewVerificationDocument.isPending) setReviewingDocument(null);
+        }}
+        title={reviewTitle}
+        footer={
+          <>
+            <ModalCancelAction disabled={reviewVerificationDocument.isPending} onClick={() => setReviewingDocument(null)} />
+            <ModalConfirmAction
+              title={reviewTitle}
+              variant={reviewAction === 'reject' ? 'danger' : 'primary'}
+              icon={reviewAction === 'approve' ? CheckCircle2 : reviewAction === 'reject' ? Ban : MessageSquareWarning}
+              isLoading={reviewVerificationDocument.isPending}
+              onClick={submitVerificationReview}
+            />
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-muted">
+            {reviewingDocument
+              ? `${reviewTitle} for ${reviewingDocument.title}. This updates the organization's verification progress.`
+              : ''}
+          </p>
+          <Field label={reviewAction === 'approve' ? 'Review note' : 'Reason'} hint={reviewAction === 'approve' ? 'Optional.' : 'Recommended so the organization knows what to fix.'}>
+            <Textarea
+              value={reviewNote}
+              onChange={(event) => setReviewNote(event.target.value)}
+              disabled={reviewVerificationDocument.isPending}
+              placeholder="Add a short note"
+            />
+          </Field>
+          {verificationError && <Alert>{verificationError}</Alert>}
         </div>
       </Modal>
     </div>

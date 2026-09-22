@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, BellOff, Paperclip, Star } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -6,7 +6,7 @@ import { ModalCancelAction } from '@/components/ui/ModalActions';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { SelectMenu } from '@/components/ui/SelectMenu';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { Textarea } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
 import { LoadingState } from '@/components/ui/States';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/context/AuthContext';
@@ -18,10 +18,12 @@ import {
   useAddTicketComment,
   useAssignTicket,
   useCloseTicket,
+  useDeclineTicket,
   useEscalateTicket,
   useHoldTicket,
   useReopenTicket,
   useResolveTicket,
+  useResubmitTicket,
   useResumeTicket,
   useStartTicket,
   useTicket,
@@ -61,6 +63,9 @@ const VISIBILITY_OPTIONS = [
 
 const ACTIVITY_LABELS: Record<string, string> = {
   ticket_submitted: 'Ticket submitted',
+  ticket_auto_approved: 'Auto-approved (directly routed)',
+  ticket_declined: 'Declined — sent back to requester',
+  ticket_resubmitted: 'Ticket resubmitted',
   ticket_assigned: 'Ticket assigned',
   ticket_unassigned: 'Ticket unassigned',
   department_notified: 'Department notified',
@@ -174,6 +179,9 @@ export function TicketDetailModal({
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [decisionAction, setDecisionAction] = useState<ApprovalDecisionAction>('approve');
   const [decisionNote, setDecisionNote] = useState('');
+  const [declineReason, setDeclineReason] = useState('');
+  const [resubmitSubject, setResubmitSubject] = useState('');
+  const [resubmitDescription, setResubmitDescription] = useState('');
   const [startNote, setStartNote] = useState('');
   const [holdReason, setHoldReason] = useState('');
   const [resumeNote, setResumeNote] = useState('');
@@ -187,11 +195,20 @@ export function TicketDetailModal({
 
   const ticket = ticketQuery.data;
   const pendingApproval = ticket?.approval_requests?.find((request) => request.status === 'pending');
-  const isWatching = ticket?.watchers?.some((watcher) => watcher.user?.id === session?.user.id) ?? false;
+  const isWatching = ticket?.watchers?.some((watcher) => watcher.user?.id === session?.user?.id) ?? false;
+
+  useEffect(() => {
+    if (ticket && ticket.status === 'changes_requested') {
+      setResubmitSubject(ticket.subject);
+      setResubmitDescription(ticket.description);
+    }
+  }, [ticket?.id, ticket?.status]);
 
   const addCommentMutation = useAddTicketComment(ticketId ?? 0);
   const assignMutation = useAssignTicket(ticketId ?? 0);
   const priorityMutation = useUpdateTicketPriority(ticketId ?? 0);
+  const declineMutation = useDeclineTicket(ticketId ?? 0);
+  const resubmitMutation = useResubmitTicket(ticketId ?? 0);
   const startMutation = useStartTicket(ticketId ?? 0);
   const holdMutation = useHoldTicket(ticketId ?? 0);
   const resumeMutation = useResumeTicket(ticketId ?? 0);
@@ -239,6 +256,27 @@ export function TicketDetailModal({
       toast.success('Decision recorded');
     } catch (error) {
       toast.error('Could not record decision', actionError(error, 'Could not record this decision.'));
+    }
+  }
+
+  async function handleDecline() {
+    if (!declineReason.trim()) return;
+    try {
+      await declineMutation.mutateAsync(declineReason.trim());
+      setDeclineReason('');
+      toast.success('Ticket declined');
+    } catch (error) {
+      toast.error('Could not decline ticket', actionError(error, 'Could not decline this ticket.'));
+    }
+  }
+
+  async function handleResubmit() {
+    if (!resubmitSubject.trim() || !resubmitDescription.trim()) return;
+    try {
+      await resubmitMutation.mutateAsync({ subject: resubmitSubject.trim(), description: resubmitDescription.trim() });
+      toast.success('Ticket resubmitted');
+    } catch (error) {
+      toast.error('Could not resubmit ticket', actionError(error, 'Could not resubmit this ticket.'));
     }
   }
 
@@ -404,6 +442,29 @@ export function TicketDetailModal({
             </button>
           )}
 
+          {ticket.status === 'changes_requested' && (
+            <div className="space-y-3 rounded-md border border-warning/40 bg-warning-bg/30 p-3">
+              <p className="text-xs font-medium text-muted">Changes were requested — update the details below and resubmit for approval.</p>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">Subject</span>
+                <Input value={resubmitSubject} onChange={(event) => setResubmitSubject(event.target.value)} />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">Description</span>
+                <Textarea value={resubmitDescription} onChange={(event) => setResubmitDescription(event.target.value)} />
+              </label>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!resubmitSubject.trim() || !resubmitDescription.trim()}
+                isLoading={resubmitMutation.isPending}
+                onClick={handleResubmit}
+              >
+                Resubmit
+              </Button>
+            </div>
+          )}
+
           {mode === 'resolver' && (
             <div className="space-y-4 rounded-md border border-border p-3">
               <label className="block text-sm">
@@ -436,6 +497,16 @@ export function TicketDetailModal({
                   />
                   <Button type="button" size="sm" isLoading={decisionMutation.isPending} onClick={handleDecision}>
                     Record decision
+                  </Button>
+                </div>
+              )}
+
+              {(ticket.status === 'submitted' || ticket.status === 'approved') && (
+                <div className="space-y-2 border-t border-border pt-3">
+                  <p className="text-xs font-medium text-muted">Decline</p>
+                  <Textarea value={declineReason} onChange={(event) => setDeclineReason(event.target.value)} placeholder="Reason to send back to the requester (required)" />
+                  <Button type="button" variant="secondary" size="sm" disabled={!declineReason.trim()} isLoading={declineMutation.isPending} onClick={handleDecline}>
+                    Decline
                   </Button>
                 </div>
               )}

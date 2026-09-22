@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Roles\StoreRoleRequest;
 use App\Http\Requests\Roles\UpdateRoleRequest;
+use App\Http\Resources\RoleActivityResource;
 use App\Http\Resources\RoleResource;
 use App\Models\Role;
+use App\Services\RoleActivityService;
 use App\Services\RoleManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,15 @@ class RoleController extends Controller
         abort_unless($request->user()->can('roles.view'), 403);
 
         return RoleResource::collection($roles->listFor($request->user()));
+    }
+
+    public function activities(Request $request, RoleActivityService $activity): AnonymousResourceCollection
+    {
+        abort_unless($request->user()->can('roles.view'), 403);
+
+        return RoleActivityResource::collection(
+            $activity->listFor($request->user(), $request->integer('role_id') ?: null, $request->integer('per_page', 25))
+        );
     }
 
     public function store(StoreRoleRequest $request, RoleManagementService $roles): JsonResponse

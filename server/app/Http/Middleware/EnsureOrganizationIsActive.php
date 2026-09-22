@@ -13,9 +13,9 @@ class EnsureOrganizationIsActive
         $user = $request->user();
         $organization = $user?->organization;
 
-        if ($organization?->status === 'suspended') {
+        if (in_array($organization?->status, ['suspended', 'rejected'], true)) {
             return response()->json([
-                'message' => 'This organization has been suspended. Please contact Valtireo support.',
+                'message' => 'This organization is not currently allowed to access Valtireo. Please contact Valtireo support.',
             ], 403);
         }
 

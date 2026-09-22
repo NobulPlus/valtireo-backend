@@ -39,6 +39,31 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const WORKSPACE_MODE_STORAGE_KEY = 'valtireo.workspace_mode';
 
+function normalizeSessionPayload<T extends Partial<SessionPayload>>(payload: T): T & SessionPayload {
+  const user = payload.user ?? {
+    id: 0,
+    organization_id: null,
+    name: 'User',
+    email: '',
+    email_verified_at: null,
+    photo_url: null,
+    created_at: '',
+    updated_at: '',
+  };
+
+  return {
+    ...payload,
+    user,
+    organization: payload.organization ?? null,
+    workspace: payload.workspace ?? null,
+    roles: Array.isArray(payload.roles) ? payload.roles : [],
+    permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
+    modules: Array.isArray(payload.modules) ? payload.modules : [],
+    has_manager_scope: Boolean(payload.has_manager_scope),
+    is_platform_admin: Boolean(payload.is_platform_admin),
+  } as T & SessionPayload;
+}
+
 function readStoredWorkspaceMode(): WorkspaceMode | null {
   const value = sessionStorage.getItem(WORKSPACE_MODE_STORAGE_KEY);
   return value === 'admin' || value === 'employee' ? value : null;
@@ -65,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const payload = await api.get<SessionPayload>('/auth/me');
-      setSession(payload);
+      setSession(normalizeSessionPayload(payload));
     } catch (error) {
       if (error instanceof ApiError && error.status !== 401) {
         // Network/server issue: keep the token, let the user retry rather
@@ -92,8 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       device_name: 'valtireo-web',
     });
     setStoredToken(payload.token);
-    setSession(payload);
-    return payload.is_platform_admin || payload.permissions.includes('reports.view') || payload.has_manager_scope;
+    const sessionPayload = normalizeSessionPayload(payload);
+    setSession(sessionPayload);
+    return sessionPayload.is_platform_admin || sessionPayload.permissions.includes('reports.view') || sessionPayload.has_manager_scope;
   }, []);
 
   const logout = useCallback(async () => {
@@ -109,12 +135,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => onWorkspaceSuspended(clearSession), [clearSession]);
 
   const hasPermission = useCallback(
-    (permission: string) => session?.permissions.includes(permission) ?? false,
+    (permission: string) => session?.permissions?.includes(permission) ?? false,
     [session],
   );
 
   const moduleByKey = useCallback(
-    (key: string) => session?.modules.find((module) => module.key === key),
+    (key: string) => session?.modules?.find((module) => module.key === key),
     [session],
   );
 

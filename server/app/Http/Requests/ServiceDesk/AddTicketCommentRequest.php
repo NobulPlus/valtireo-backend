@@ -2,18 +2,20 @@
 
 namespace App\Http\Requests\ServiceDesk;
 
+use App\Http\Requests\ServiceDesk\Concerns\AuthorizesServiceDeskAccess;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class AddTicketCommentRequest extends FormRequest
 {
+    use AuthorizesServiceDeskAccess;
+
     public function authorize(): bool
     {
         // Coarse gate only — whether this specific ticket belongs to the
         // actor (or they hold service_desk.view) is a per-ticket check the
         // service performs, mirroring cancel/assign/resolve/reopen.
-        return $this->user()?->can('service_desk.view') === true
-            || $this->user()?->can('service_desk.create') === true;
+        return $this->hasServiceDeskAccess();
     }
 
     public function rules(): array

@@ -28,6 +28,7 @@ class StoreLeaveTypeRequest extends FormRequest
             'auto_grant_on_activation' => ['sometimes', 'boolean'],
             'is_paid' => ['sometimes', 'boolean'],
             'requires_attachment' => ['sometimes', 'boolean'],
+            'restricted_to_gender' => ['nullable', 'string', Rule::in(['male', 'female'])],
             'minimum_notice_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'maximum_days_per_request' => ['nullable', 'integer', 'min:1', 'max:365'],
             'is_active' => ['sometimes', 'boolean'],

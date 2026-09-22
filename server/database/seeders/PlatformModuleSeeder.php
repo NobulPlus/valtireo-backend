@@ -235,10 +235,12 @@ class PlatformModuleSeeder extends Seeder
             'documents',
             'leave',
             'attendance',
+            'payroll',
             'deployment',
             'reports',
             'audit_logs',
             'service_desk',
+            'assets',
         ];
     }
 }

@@ -138,7 +138,7 @@ class ReminderNotificationService
         $usersByOrganization = [];
 
         ApprovalRequest::query()
-            ->with(['workflow.steps', 'requester', 'subjectEmployee.user'])
+            ->with(['workflow.steps', 'requester', 'subjectEmployee.user', 'subjectEmployee.department'])
             ->where('status', 'pending')
             ->whereDate('submitted_at', '<=', now()->subDays($days)->toDateString())
             ->chunk(100, function ($approvals) use (&$sent, &$usersByOrganization): void {
@@ -340,7 +340,7 @@ class ReminderNotificationService
                     'permission' => $step->approver_permission && $user->can($step->approver_permission),
                     'role' => $step->approverRole && $user->hasRole($step->approverRole),
                     'direct_manager' => $approval->subjectEmployee && $user->employee?->id === $approval->subjectEmployee->reporting_manager_id,
-                    'department_head' => $approval->subjectEmployee && $user->can('employees.view_department') && $user->employee?->department_id === $approval->subjectEmployee->department_id,
+                    'department_head' => $approval->subjectEmployee && $user->employee?->id === $approval->subjectEmployee->department?->head_employee_id,
                     default => false,
                 };
             })

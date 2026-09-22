@@ -22,6 +22,7 @@ export interface EmployeeFilters {
   confirmation_status?: string;
   department_id?: number;
   unit_id?: number;
+  cluster_id?: number;
   designation_id?: number;
   grade_level_id?: number;
   employment_type_id?: number;

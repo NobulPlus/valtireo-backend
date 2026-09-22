@@ -135,6 +135,91 @@ class EmployeeRoleAssignmentTest extends TestCase
         $this->assertFalse($user->hasRole('Employee'));
     }
 
+    public function test_admin_can_reset_an_active_employees_role_back_to_the_default(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-ROLE-008',
+            'work_email' => 'role-reset@valtireo.test',
+            'pending_role_id' => $this->roleId('supervisor'),
+        ]))->assertCreated();
+
+        $employee = Employee::query()->where('employee_number', 'EMP-ROLE-008')->firstOrFail();
+        $user = User::query()->where('email', 'role-reset@valtireo.test')->firstOrFail();
+        $this->assertTrue($user->hasRole('Supervisor'));
+
+        $this->patchJson("/api/employees/{$employee->id}", ['pending_role_id' => null])
+            ->assertOk()
+            ->assertJsonPath('data.user.roles.0.key', 'employee');
+
+        $user->refresh();
+        $this->assertTrue($user->hasRole('Employee'));
+        $this->assertFalse($user->hasRole('Supervisor'));
+    }
+
+    public function test_resetting_role_to_default_is_still_blocked_by_the_lockout_guard(): void
+    {
+        $this->seed();
+
+        // admin@valtireo.test is a console-only Organization Admin account
+        // with no Employee record, so it can't itself be the target of an
+        // employee-role reset. Instead: create a second admin-capable
+        // employee, demote the original admin directly (bypassing this
+        // endpoint, which has nothing to key off for a user with no
+        // Employee row), then have the new admin attempt to reset their
+        // own role — now the organization's only admin-capable user.
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-ROLE-010',
+            'work_email' => 'role-lockout@valtireo.test',
+            'pending_role_id' => $this->roleId('organization_admin'),
+        ]))->assertCreated();
+
+        $newAdminEmployee = Employee::query()->where('employee_number', 'EMP-ROLE-010')->firstOrFail();
+        $newAdminUser = User::query()->where('email', 'role-lockout@valtireo.test')->firstOrFail();
+        $this->assertTrue($newAdminUser->hasRole('Organization Admin'));
+
+        $this->setPermissionsTeamId($admin->organization_id);
+        $admin->syncRoles([
+            Role::query()->where('organization_id', $admin->organization_id)->where('key', 'employee')->firstOrFail(),
+        ]);
+
+        Sanctum::actingAs($newAdminUser);
+        $this->patchJson("/api/employees/{$newAdminEmployee->id}", ['pending_role_id' => null])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['pending_role_id']);
+    }
+
+    public function test_resetting_role_for_a_not_yet_invited_employee_clears_the_staged_selection(): void
+    {
+        $this->seed();
+
+        $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($hrDirector);
+
+        $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-ROLE-009',
+            'work_email' => 'role-reset-pending@valtireo.test',
+            'send_invitation' => false,
+            'pending_role_id' => $this->roleId('supervisor'),
+        ]))->assertCreated();
+
+        $employee = Employee::query()->where('employee_number', 'EMP-ROLE-009')->firstOrFail();
+        $this->assertSame($this->roleId('supervisor'), $employee->pending_role_id);
+
+        $this->patchJson("/api/employees/{$employee->id}", ['pending_role_id' => null])
+            ->assertOk()
+            ->assertJsonPath('data.pending_role_id', null);
+
+        $this->assertDatabaseHas('employees', ['id' => $employee->id, 'pending_role_id' => null]);
+    }
+
     public function test_hr_officer_cannot_change_an_employees_pending_role(): void
     {
         $this->seed();

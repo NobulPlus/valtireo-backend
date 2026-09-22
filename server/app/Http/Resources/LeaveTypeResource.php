@@ -20,6 +20,7 @@ class LeaveTypeResource extends JsonResource
             'auto_grant_on_activation' => $this->auto_grant_on_activation,
             'is_paid' => $this->is_paid,
             'requires_attachment' => $this->requires_attachment,
+            'restricted_to_gender' => $this->restricted_to_gender,
             'minimum_notice_days' => $this->minimum_notice_days,
             'maximum_days_per_request' => $this->maximum_days_per_request,
             'is_active' => $this->is_active,

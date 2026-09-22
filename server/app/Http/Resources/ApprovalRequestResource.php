@@ -53,10 +53,22 @@ class ApprovalRequestResource extends JsonResource
             ] : null),
             'leave_request' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof LeaveRequest ? [
                 'id' => $this->approvable->id,
+                'handover_to_employee_id' => $this->approvable->handover_to_employee_id,
+                'handover_note' => $this->approvable->handover_note,
+                'handover_to' => $this->approvable->loadMissing('handoverTo')->handoverTo ? [
+                    'id' => $this->approvable->handoverTo->id,
+                    'employee_number' => $this->approvable->handoverTo->employee_number,
+                    'full_name' => trim($this->approvable->handoverTo->first_name.' '.$this->approvable->handoverTo->last_name),
+                    'work_email' => $this->approvable->handoverTo->work_email,
+                ] : null,
                 'evidence_file_name' => $this->approvable->evidence_file_name,
                 'evidence_mime_type' => $this->approvable->evidence_mime_type,
                 'evidence_file_size' => $this->approvable->evidence_file_size,
                 'evidence_download_url' => $this->approvable->evidence_file_path ? url("/api/leave/requests/{$this->approvable->id}/evidence/download") : null,
+                'handover_file_name' => $this->approvable->handover_file_name,
+                'handover_mime_type' => $this->approvable->handover_mime_type,
+                'handover_file_size' => $this->approvable->handover_file_size,
+                'handover_download_url' => $this->approvable->handover_file_path ? url("/api/leave/requests/{$this->approvable->id}/handover-document/download") : null,
             ] : null),
             'ticket' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof Ticket ? [
                 'id' => $this->approvable->id,

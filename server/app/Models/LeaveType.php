@@ -19,6 +19,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'auto_grant_on_activation',
     'is_paid',
     'requires_attachment',
+    'restricted_to_gender',
     'minimum_notice_days',
     'maximum_days_per_request',
     'is_active',

@@ -160,6 +160,69 @@ class ServiceDeskModuleTest extends TestCase
         $this->assertDatabaseHas('tickets', ['id' => $ticketId, 'status' => 'changes_requested']);
     }
 
+    public function test_declining_submitted_ticket_syncs_pending_approval_and_ticket_status(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+
+        Sanctum::actingAs($employeeUser);
+        $ticketId = $this->postJson('/api/tickets', [
+            'ticket_category_id' => $this->categoryId($employeeUser->organization_id, 'IT'),
+            'subject' => 'Needs correction',
+            'description' => 'Wrong or incomplete information.',
+        ])->assertCreated()->json('ticket.id');
+
+        $approval = ApprovalRequest::query()->where('approvable_id', $ticketId)->where('module', 'service_desk')->firstOrFail();
+
+        Sanctum::actingAs($ictAdmin);
+        $this->patchJson("/api/tickets/{$ticketId}/decline", ['reason' => 'Please add the device serial number.'])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'changes_requested');
+
+        $this->assertDatabaseHas('approval_requests', [
+            'id' => $approval->id,
+            'status' => 'changes_requested',
+        ]);
+        $this->assertDatabaseHas('ticket_comments', [
+            'ticket_id' => $ticketId,
+            'comment' => 'Please add the device serial number.',
+        ]);
+    }
+
+    public function test_employee_can_resubmit_ticket_after_requested_changes(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+
+        Sanctum::actingAs($employeeUser);
+        $ticketId = $this->postJson('/api/tickets', [
+            'ticket_category_id' => $this->categoryId($employeeUser->organization_id, 'IT'),
+            'subject' => 'Resubmit me',
+            'description' => 'Initial description.',
+        ])->assertCreated()->json('ticket.id');
+
+        Sanctum::actingAs($ictAdmin);
+        $this->patchJson("/api/tickets/{$ticketId}/decline", ['reason' => 'Add more detail.'])->assertOk();
+
+        Sanctum::actingAs($employeeUser);
+        $this->patchJson("/api/tickets/{$ticketId}/resubmit", [
+            'description' => 'Updated description with more detail.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'submitted')
+            ->assertJsonPath('ticket.description', 'Updated description with more detail.')
+            ->assertJsonPath('ticket.approval_requests.1.status', 'pending');
+
+        $this->assertSame(
+            2,
+            ApprovalRequest::query()->where('approvable_id', $ticketId)->where('module', 'service_desk')->count()
+        );
+    }
+
     public function test_employee_can_cancel_own_submitted_ticket(): void
     {
         $this->seed();
@@ -180,7 +243,7 @@ class ServiceDeskModuleTest extends TestCase
         $this->assertDatabaseHas('tickets', ['id' => $ticketId, 'status' => 'cancelled']);
     }
 
-    public function test_cannot_cancel_approved_ticket(): void
+    public function test_can_cancel_approved_ticket_but_not_once_work_has_started(): void
     {
         $this->seed();
 
@@ -191,7 +254,7 @@ class ServiceDeskModuleTest extends TestCase
         $ticketId = $this->postJson('/api/tickets', [
             'ticket_category_id' => $this->categoryId($employeeUser->organization_id, 'IT'),
             'subject' => 'Approve then try cancel',
-            'description' => 'Testing cancel after approval.',
+            'description' => 'Testing cancel before and after work starts.',
         ])->assertCreated()->json('ticket.id');
 
         $approval = ApprovalRequest::query()->where('approvable_id', $ticketId)->firstOrFail();
@@ -199,12 +262,33 @@ class ServiceDeskModuleTest extends TestCase
         Sanctum::actingAs($ictAdmin);
         $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
 
+        // Approved but not yet started — the employee can still back out.
         Sanctum::actingAs($employeeUser);
         $this->patchJson("/api/tickets/{$ticketId}/cancel")
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'cancelled');
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticketId, 'status' => 'cancelled']);
+
+        // Once a resolver has actually started work, cancelling is no longer allowed.
+        $secondTicketId = $this->postJson('/api/tickets', [
+            'ticket_category_id' => $this->categoryId($employeeUser->organization_id, 'IT'),
+            'subject' => 'Approve, start, then try cancel',
+            'description' => 'Testing cancel after work has started.',
+        ])->assertCreated()->json('ticket.id');
+
+        $secondApproval = ApprovalRequest::query()->where('approvable_id', $secondTicketId)->latest('id')->firstOrFail();
+
+        Sanctum::actingAs($ictAdmin);
+        $this->postJson("/api/approvals/{$secondApproval->id}/actions", ['action' => 'approve'])->assertOk();
+        $this->patchJson("/api/tickets/{$secondTicketId}/start", [])->assertOk();
+
+        Sanctum::actingAs($employeeUser);
+        $this->patchJson("/api/tickets/{$secondTicketId}/cancel")
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['status']);
 
-        $this->assertDatabaseHas('tickets', ['id' => $ticketId, 'status' => 'approved']);
+        $this->assertDatabaseHas('tickets', ['id' => $secondTicketId, 'status' => 'in_progress']);
     }
 
     public function test_employee_only_sees_their_own_tickets(): void

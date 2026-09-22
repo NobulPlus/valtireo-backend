@@ -18,6 +18,7 @@ import { formatDateWithPattern, formatTimeWithPattern, type DateFormatPattern, t
 import type { WorkspaceSettings } from '@/types/api';
 import { cn } from '@/lib/cn';
 import { isValidEmail } from '@/lib/validation';
+import { assetUrl } from '@/lib/assetUrl';
 import { useAuth } from '@/context/AuthContext';
 
 function setupControlRoute(actionUrl?: string): string | null {
@@ -504,6 +505,7 @@ function OrgLogoField({ logoUrl }: { logoUrl: string | null }) {
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageFailed, setImageFailed] = useState(false);
+  const displayLogoUrl = assetUrl(logoUrl);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -528,7 +530,7 @@ function OrgLogoField({ logoUrl }: { logoUrl: string | null }) {
     }
   }
 
-  const showImage = Boolean(logoUrl) && !imageFailed;
+  const showImage = Boolean(displayLogoUrl) && !imageFailed;
 
   return (
     <Field label="Organization logo" className="sm:col-span-2" hint="PNG, JPG, or WEBP, up to 2MB. Shown in your sidebar after login.">
@@ -536,7 +538,7 @@ function OrgLogoField({ logoUrl }: { logoUrl: string | null }) {
         <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-surface-soft">
           {showImage ? (
             <img
-              src={logoUrl ?? undefined}
+              src={displayLogoUrl ?? undefined}
               alt="Organization logo"
               className="h-full w-full object-cover"
               onError={() => setImageFailed(true)}

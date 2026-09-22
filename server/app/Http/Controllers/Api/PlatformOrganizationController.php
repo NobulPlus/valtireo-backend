@@ -12,6 +12,7 @@ use App\Http\Resources\UserResource;
 use App\Models\Organization;
 use App\Models\PlatformModule;
 use App\Services\OrganizationProvisioningService;
+use App\Services\OrganizationVerificationService;
 use App\Services\PlatformAdminService;
 use App\Services\WorkspaceSettingsService;
 use Illuminate\Http\JsonResponse;
@@ -54,12 +55,17 @@ class PlatformOrganizationController extends Controller
     public function updateStatus(
         UpdateOrganizationStatusRequest $request,
         Organization $organization,
-        PlatformAdminService $platform
+        PlatformAdminService $platform,
+        OrganizationVerificationService $verification
     ): JsonResponse {
         if ($organization->is($request->user()->organization)) {
             return response()->json([
                 'message' => 'You cannot suspend or reactivate your own platform organization.',
             ], 422);
+        }
+
+        if ($request->validated('status') === 'active' && $organization->status !== 'suspended') {
+            $verification->assertReadyForActivation($organization);
         }
 
         $previousStatus = $organization->status;
@@ -75,14 +81,23 @@ class PlatformOrganizationController extends Controller
             'reason' => $request->validated('reason'),
         ]);
 
-        if ($request->validated('status') === 'suspended') {
+        if (in_array($request->validated('status'), ['suspended', 'rejected'], true)) {
             $organization->users()->each(fn ($user) => $user->tokens()->delete());
         }
 
+        $message = match ($request->validated('status')) {
+            'active' => $previousStatus === 'suspended'
+                ? 'Organization reactivated successfully.'
+                : 'Organization activated successfully.',
+            'suspended' => 'Organization suspended successfully.',
+            'rejected' => 'Organization rejected successfully.',
+            'pending_approval' => 'Organization marked as pending approval.',
+            'setup_in_progress' => 'Organization moved back to setup in progress.',
+            default => 'Organization status updated successfully.',
+        };
+
         return response()->json([
-            'message' => $request->validated('status') === 'suspended'
-                ? 'Organization suspended successfully.'
-                : 'Organization reactivated successfully.',
+            'message' => $message,
             ...$platform->organization($organization->refresh()),
         ]);
     }

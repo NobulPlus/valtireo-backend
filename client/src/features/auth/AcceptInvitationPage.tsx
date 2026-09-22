@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,8 +28,9 @@ interface AcceptInvitationResponse {
   token: string;
 }
 
-export function AcceptInvitationPage() {
+export function AcceptInvitationPage({ mode = 'employee' }: { mode?: 'employee' | 'organization-admin' }) {
   const { token } = useParams<{ token: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
   const { refresh, defaultRoute } = useAuth();
@@ -50,7 +51,12 @@ export function AcceptInvitationPage() {
     if (!token) return;
 
     try {
-      const result = await api.post<AcceptInvitationResponse>(`/employee-invitations/${token}/accept`, {
+      const email = new URLSearchParams(location.search).get('email') ?? '';
+      const endpoint = mode === 'organization-admin'
+        ? `/organization-admin-invitations/${token}/accept`
+        : `/employee-invitations/${token}/accept`;
+      const result = await api.post<AcceptInvitationResponse>(endpoint, {
+        ...(mode === 'organization-admin' ? { email } : {}),
         password: values.password,
         password_confirmation: values.confirmPassword,
       });
@@ -97,7 +103,9 @@ export function AcceptInvitationPage() {
               <h2 className="font-display text-xl font-semibold tracking-normal text-strong">This invitation isn't valid</h2>
               <p className="mt-2 text-sm leading-6 text-muted">{invalidTokenMessage}</p>
               <p className="mt-4 text-sm leading-6 text-muted">
-                Ask your organization admin to send a new invitation, or sign in if you already have a password.
+                {mode === 'organization-admin'
+                  ? 'Ask Valtireo to send a new organization admin invitation, or sign in if you already have a password.'
+                  : 'Ask your organization admin to send a new invitation, or sign in if you already have a password.'}
               </p>
               <Button type="button" variant="secondary" className="mt-5 w-full" onClick={() => navigate('/login')}>
                 Go to sign in
@@ -111,7 +119,9 @@ export function AcceptInvitationPage() {
                 </div>
                 <h2 className="font-display text-2xl font-semibold tracking-normal text-strong">Set your password</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Choose a password to activate your Valtireo account and sign in.
+                  {mode === 'organization-admin'
+                    ? 'Choose a password to activate your organization workspace and sign in.'
+                    : 'Choose a password to activate your Valtireo account and sign in.'}
                 </p>
               </div>
 

@@ -53,17 +53,12 @@ class ValtireoNotification extends Notification
     private function organizationAdminInvitedMail(MailMessage $message, object $notifiable): MailMessage
     {
         $organizationCode = $this->data['metadata']['organization_code'] ?? null;
-        $temporaryPassword = $this->data['metadata']['temporary_password'] ?? null;
 
         $message
             ->greeting("Welcome, {$notifiable->name}!")
             ->line($this->data['message'] ?? 'You have been invited to Valtireo.')
-            ->line('Here are your sign-in details:')
+            ->line('Use the setup link below to choose your password and activate your organization workspace.')
             ->line("Email: **{$notifiable->email}**");
-
-        if ($temporaryPassword) {
-            $message->line("Temporary password: `{$temporaryPassword}`");
-        }
 
         if (! empty($this->data['action_url']) && ! empty($this->data['action_label'])) {
             $message->action($this->data['action_label'], $this->absoluteUrl($this->data['action_url']));
@@ -107,10 +102,6 @@ class ValtireoNotification extends Notification
 
         if (! empty($this->data['action_url']) && ! empty($this->data['action_label'])) {
             $message->action($this->data['action_label'], $this->absoluteUrl($this->data['action_url']));
-        }
-
-        if (! empty($this->data['metadata']['temporary_password'])) {
-            $message->line('Temporary password: `'.$this->data['metadata']['temporary_password'].'`');
         }
 
         return $message->line('Thank you for using Valtireo.');

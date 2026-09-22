@@ -46,7 +46,7 @@ class ModuleEntitlementService
     {
         $subscription = $subscriptions->get($module->id);
         $subscriptionStatus = $subscription?->status ?? 'locked';
-        $isSubscribed = in_array($subscriptionStatus, ['active', 'trial'], true);
+        $isSubscribed = $subscription ? $this->subscriptionIsActive($subscription) : false;
         $isAdmin = $user->is_platform_admin || $user->can('organizations.administer');
         $canAccess = $this->userCanAccessModule($user, $module, $isSubscribed, $isAdmin);
 
@@ -85,6 +85,41 @@ class ModuleEntitlementService
         }
 
         return $user->can($module->required_permission);
+    }
+
+    public function organizationHasActiveSubscription(Organization $organization, string $moduleKey): bool
+    {
+        $module = PlatformModule::query()
+            ->where('key', $moduleKey)
+            ->where('is_active', true)
+            ->first();
+
+        if (! $module) {
+            return false;
+        }
+
+        $subscription = $organization->moduleSubscriptions()
+            ->where('platform_module_id', $module->id)
+            ->first();
+
+        return $subscription ? $this->subscriptionIsActive($subscription) : false;
+    }
+
+    private function subscriptionIsActive(mixed $subscription): bool
+    {
+        if (! in_array($subscription->status, ['active', 'trial'], true)) {
+            return false;
+        }
+
+        if ($subscription->starts_at && $subscription->starts_at->isFuture()) {
+            return false;
+        }
+
+        if ($subscription->expires_at && $subscription->expires_at->isPast()) {
+            return false;
+        }
+
+        return true;
     }
 
     private function accessLevel(User $user, PlatformModule $module, bool $isSubscribed, bool $isAdmin): string

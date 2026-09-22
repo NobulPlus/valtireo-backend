@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Asset;
+use App\Models\AssetAssignmentHistory;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeDocument;
@@ -17,13 +19,17 @@ use Illuminate\Support\Facades\DB;
 
 class ReportService
 {
+    public function __construct(private readonly ModuleEntitlementService $modules)
+    {
+    }
+
     /**
      * @return Collection<int, array<string, mixed>>
      */
     public function availableFor(User $user): Collection
     {
         return collect($this->definitions())
-            ->filter(fn (array $report) => $user->can('reports.view') && $user->can($report['permission']))
+            ->filter(fn (array $report) => $this->canUseReport($user, $report))
             ->values();
     }
 
@@ -35,7 +41,7 @@ class ReportService
         $report = collect($this->definitions())->firstWhere('key', $key);
 
         abort_unless($report, 404);
-        abort_unless($user->can('reports.view') && $user->can($report['permission']), 403);
+        abort_unless($this->canUseReport($user, $report), 403);
 
         return $report;
     }
@@ -101,8 +107,8 @@ class ReportService
                 'module' => 'employees',
                 'description' => 'Employees by structure, status, profile completion, and reporting line.',
                 'permission' => 'employees.view',
-                'filters' => ['search', 'status', 'confirmation_status', 'department_id', 'unit_id', 'designation_id', 'grade_level_id', 'employment_type_id', 'organization_location_id', 'reporting_manager_id', 'profile_status', 'date_column', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
-                'csv_headers' => ['Employee Number', 'Full Name', 'Work Email', 'Status', 'Confirmation Status', 'Department', 'Unit', 'Designation', 'Grade Level', 'Employment Type', 'Location', 'Reporting Manager', 'Profile Status', 'Start Date', 'Created At'],
+                'filters' => ['search', 'status', 'confirmation_status', 'department_id', 'unit_id', 'cluster_id', 'designation_id', 'grade_level_id', 'employment_type_id', 'organization_location_id', 'reporting_manager_id', 'profile_status', 'date_column', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
+                'csv_headers' => ['Employee Number', 'Full Name', 'Work Email', 'Status', 'Confirmation Status', 'Department', 'Unit', 'Cluster', 'Designation', 'Grade Level', 'Employment Type', 'Location', 'Reporting Manager', 'Profile Status', 'Start Date', 'Created At'],
             ],
             [
                 'key' => 'document_compliance',
@@ -128,8 +134,8 @@ class ReportService
                 'module' => 'leave',
                 'description' => 'Leave requests by employee, leave type, status, and date range.',
                 'permission' => 'leave_requests.view',
-                'filters' => ['search', 'employee_id', 'department_id', 'leave_type_id', 'leave_period_id', 'status', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
-                'csv_headers' => ['Employee Number', 'Full Name', 'Leave Type', 'Leave Period', 'Status', 'Starts On', 'Ends On', 'Total Days', 'Reason', 'Submitted At', 'Reviewed At'],
+                'filters' => ['search', 'employee_id', 'handover_to_employee_id', 'department_id', 'leave_type_id', 'leave_period_id', 'status', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
+                'csv_headers' => ['Employee Number', 'Full Name', 'Leave Type', 'Leave Period', 'Status', 'Starts On', 'Ends On', 'Total Days', 'Handover To', 'Handover Note', 'Reason', 'Submitted At', 'Reviewed At'],
             ],
             [
                 'key' => 'attendance_summary',
@@ -158,6 +164,24 @@ class ReportService
                 'filters' => ['search', 'status', 'priority', 'ticket_category_id', 'assigned_to_user_id', 'employee_id', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Category', 'Priority', 'Status', 'Assigned To', 'Subject', 'Submitted At', 'Resolved At', 'SLA Due At'],
             ],
+            [
+                'key' => 'asset_inventory',
+                'name' => 'Asset Inventory',
+                'module' => 'assets',
+                'description' => 'Assets by category, status, condition, assignee, location, purchase date, and warranty expiry.',
+                'permission' => 'assets.view',
+                'filters' => ['search', 'status', 'condition', 'asset_category_id', 'organization_location_id', 'assigned_to_employee_id', 'purchase_from', 'purchase_to', 'warranty_from', 'warranty_to', 'sort_by', 'sort_direction'],
+                'csv_headers' => ['Asset Tag', 'Name', 'Serial Number', 'Category', 'Status', 'Condition', 'Assigned To', 'Location', 'Purchase Date', 'Warranty Expires At', 'Notes'],
+            ],
+            [
+                'key' => 'asset_assignments',
+                'name' => 'Asset Assignments',
+                'module' => 'assets',
+                'description' => 'Asset issue and return history by employee, condition, actor, and lifecycle timestamps.',
+                'permission' => 'assets.view',
+                'filters' => ['search', 'asset_id', 'employee_id', 'assigned_from', 'assigned_to', 'returned_from', 'returned_to', 'sort_by', 'sort_direction'],
+                'csv_headers' => ['Asset Tag', 'Asset Name', 'Employee Number', 'Employee Name', 'Assigned By', 'Returned By', 'Assigned At', 'Returned At', 'Issue Condition', 'Return Condition', 'Issue Note', 'Return Note'],
+            ],
         ];
     }
 
@@ -171,6 +195,8 @@ class ReportService
             'attendance_summary' => $this->attendanceSummaryQuery($user, $request),
             'attendance_exceptions' => $this->attendanceExceptionsQuery($user, $request),
             'ticket_log' => $this->ticketLogQuery($user, $request),
+            'asset_inventory' => $this->assetInventoryQuery($user, $request),
+            'asset_assignments' => $this->assetAssignmentsQuery($user, $request),
             default => abort(404),
         };
     }
@@ -181,13 +207,14 @@ class ReportService
         $dateColumn = $this->allowed($request->string('date_column', 'created_at')->toString(), ['created_at', 'updated_at', 'start_date', 'invited_at', 'activated_at'], 'created_at');
 
         return Employee::query()
-            ->with(['department', 'unit', 'designation', 'gradeLevel', 'employmentType', 'location', 'reportingManager', 'profile'])
+            ->with(['department', 'unit', 'cluster', 'designation', 'gradeLevel', 'employmentType', 'location', 'reportingManager', 'profile'])
             ->where('organization_id', $user->organization_id)
             ->when($request->string('search')->toString(), fn (Builder $query, string $search) => $this->employeeSearch($query, $search))
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($request->string('confirmation_status')->toString(), fn (Builder $query, string $status) => $query->where('confirmation_status', $status))
             ->when($request->integer('department_id'), fn (Builder $query, int $id) => $query->where('department_id', $id))
             ->when($request->integer('unit_id'), fn (Builder $query, int $id) => $query->where('unit_id', $id))
+            ->when($request->integer('cluster_id'), fn (Builder $query, int $id) => $query->where('cluster_id', $id))
             ->when($request->integer('designation_id'), fn (Builder $query, int $id) => $query->where('designation_id', $id))
             ->when($request->integer('grade_level_id'), fn (Builder $query, int $id) => $query->where('grade_level_id', $id))
             ->when($request->integer('employment_type_id'), fn (Builder $query, int $id) => $query->where('employment_type_id', $id))
@@ -239,10 +266,11 @@ class ReportService
         $sortBy = $this->allowed($request->string('sort_by', 'starts_on')->toString(), ['id', 'starts_on', 'ends_on', 'total_days', 'submitted_at', 'reviewed_at'], 'starts_on');
 
         return LeaveRequest::query()
-            ->with(['employee.department', 'leaveType', 'leavePeriod'])
+            ->with(['employee.department', 'handoverTo', 'leaveType', 'leavePeriod'])
             ->where('organization_id', $user->organization_id)
             ->when($request->string('search')->toString(), fn (Builder $query, string $search) => $query->whereHas('employee', fn (Builder $query) => $this->employeeSearch($query, $search)))
             ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employee_id', $id))
+            ->when($request->integer('handover_to_employee_id'), fn (Builder $query, int $id) => $query->where('handover_to_employee_id', $id))
             ->when($request->integer('department_id'), fn (Builder $query, int $id) => $query->whereHas('employee', fn (Builder $query) => $query->where('department_id', $id)))
             ->when($request->integer('leave_type_id'), fn (Builder $query, int $id) => $query->where('leave_type_id', $id))
             ->when($request->integer('leave_period_id'), fn (Builder $query, int $id) => $query->where('leave_period_id', $id))
@@ -328,6 +356,59 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
+    private function assetInventoryQuery(User $user, Request $request): Builder
+    {
+        $sortBy = $this->allowed($request->string('sort_by', 'created_at')->toString(), ['id', 'asset_tag', 'name', 'status', 'condition', 'assigned_at', 'purchase_date', 'warranty_expires_at', 'created_at'], 'created_at');
+
+        return Asset::query()
+            ->with(['category', 'assignedTo', 'location'])
+            ->where('organization_id', $user->organization_id)
+            ->when($request->string('search')->toString(), function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query
+                        ->where('asset_tag', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%")
+                        ->orWhere('serial_number', 'like', "%{$search}%");
+                });
+            })
+            ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($request->string('condition')->toString(), fn (Builder $query, string $condition) => $query->where('condition', $condition))
+            ->when($request->integer('asset_category_id'), fn (Builder $query, int $id) => $query->where('asset_category_id', $id))
+            ->when($request->integer('organization_location_id'), fn (Builder $query, int $id) => $query->where('organization_location_id', $id))
+            ->when($request->integer('assigned_to_employee_id'), fn (Builder $query, int $id) => $query->where('assigned_to_employee_id', $id))
+            ->when($request->date('purchase_from'), fn (Builder $query, $date) => $query->whereDate('purchase_date', '>=', $date->toDateString()))
+            ->when($request->date('purchase_to'), fn (Builder $query, $date) => $query->whereDate('purchase_date', '<=', $date->toDateString()))
+            ->when($request->date('warranty_from'), fn (Builder $query, $date) => $query->whereDate('warranty_expires_at', '>=', $date->toDateString()))
+            ->when($request->date('warranty_to'), fn (Builder $query, $date) => $query->whereDate('warranty_expires_at', '<=', $date->toDateString()))
+            ->orderBy($sortBy, $this->direction($request));
+    }
+
+    private function assetAssignmentsQuery(User $user, Request $request): Builder
+    {
+        $sortBy = $this->allowed($request->string('sort_by', 'assigned_at')->toString(), ['id', 'asset_id', 'employee_id', 'assigned_at', 'returned_at'], 'assigned_at');
+
+        return AssetAssignmentHistory::query()
+            ->with(['asset.category', 'employee.department', 'assignedBy', 'returnedBy'])
+            ->where('organization_id', $user->organization_id)
+            ->when($request->string('search')->toString(), function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query
+                        ->whereHas('asset', fn (Builder $query) => $query
+                            ->where('asset_tag', 'like', "%{$search}%")
+                            ->orWhere('name', 'like', "%{$search}%")
+                            ->orWhere('serial_number', 'like', "%{$search}%"))
+                        ->orWhereHas('employee', fn (Builder $query) => $this->employeeSearch($query, $search));
+                });
+            })
+            ->when($request->integer('asset_id'), fn (Builder $query, int $id) => $query->where('asset_id', $id))
+            ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employee_id', $id))
+            ->when($request->date('assigned_from'), fn (Builder $query, $date) => $query->whereDate('assigned_at', '>=', $date->toDateString()))
+            ->when($request->date('assigned_to'), fn (Builder $query, $date) => $query->whereDate('assigned_at', '<=', $date->toDateString()))
+            ->when($request->date('returned_from'), fn (Builder $query, $date) => $query->whereDate('returned_at', '>=', $date->toDateString()))
+            ->when($request->date('returned_to'), fn (Builder $query, $date) => $query->whereDate('returned_at', '<=', $date->toDateString()))
+            ->orderBy($sortBy, $this->direction($request));
+    }
+
     private function row(string $key, mixed $row): array
     {
         return match ($key) {
@@ -340,6 +421,7 @@ class ReportService
                 'confirmation_status' => $row->confirmation_status,
                 'department' => $row->department?->name,
                 'unit' => $row->unit?->name,
+                'cluster' => $row->cluster?->name,
                 'designation' => $row->designation?->name,
                 'grade_level' => $row->gradeLevel?->name,
                 'employment_type' => $row->employmentType?->name,
@@ -384,6 +466,8 @@ class ReportService
                 'starts_on' => $row->starts_on?->toDateString(),
                 'ends_on' => $row->ends_on?->toDateString(),
                 'total_days' => (float) $row->total_days,
+                'handover_to' => $this->employeeName($row->handoverTo),
+                'handover_note' => $row->handover_note,
                 'reason' => $row->reason,
                 'submitted_at' => $row->submitted_at?->toDateTimeString(),
                 'reviewed_at' => $row->reviewed_at?->toDateTimeString(),
@@ -426,6 +510,35 @@ class ReportService
                 'resolved_at' => $row->resolved_at?->toDateTimeString(),
                 'sla_due_at' => $row->sla_due_at?->toDateTimeString(),
             ],
+            'asset_inventory' => [
+                'id' => $row->id,
+                'asset_tag' => $row->asset_tag,
+                'name' => $row->name,
+                'serial_number' => $row->serial_number,
+                'category' => $row->category?->name,
+                'status' => $row->status,
+                'condition' => $row->condition,
+                'assigned_to' => $this->employeeName($row->assignedTo),
+                'location' => $row->location?->name,
+                'purchase_date' => $row->purchase_date?->toDateString(),
+                'warranty_expires_at' => $row->warranty_expires_at?->toDateString(),
+                'notes' => $row->notes,
+            ],
+            'asset_assignments' => [
+                'id' => $row->id,
+                'asset_tag' => $row->asset?->asset_tag,
+                'asset_name' => $row->asset?->name,
+                'employee_number' => $row->employee?->employee_number,
+                'employee_name' => $this->employeeName($row->employee),
+                'assigned_by' => $row->assignedBy?->name,
+                'returned_by' => $row->returnedBy?->name,
+                'assigned_at' => $row->assigned_at?->toDateTimeString(),
+                'returned_at' => $row->returned_at?->toDateTimeString(),
+                'issue_condition' => $row->issue_condition,
+                'return_condition' => $row->return_condition,
+                'issue_note' => $row->issue_note,
+                'return_note' => $row->return_note,
+            ],
             default => [],
         };
     }
@@ -435,13 +548,15 @@ class ReportService
         $data = $this->row($key, $row);
 
         return match ($key) {
-            'employee_directory' => [$data['employee_number'], $data['full_name'], $data['work_email'], $data['status'], $data['confirmation_status'], $data['department'], $data['unit'], $data['designation'], $data['grade_level'], $data['employment_type'], $data['location'], $data['reporting_manager'], $data['profile_status'], $data['start_date'], $data['created_at']],
+            'employee_directory' => [$data['employee_number'], $data['full_name'], $data['work_email'], $data['status'], $data['confirmation_status'], $data['department'], $data['unit'], $data['cluster'], $data['designation'], $data['grade_level'], $data['employment_type'], $data['location'], $data['reporting_manager'], $data['profile_status'], $data['start_date'], $data['created_at']],
             'document_compliance' => [$data['employee_number'], $data['full_name'], $data['document_type'], $data['requirement'], $data['title'], $data['status'], $data['issued_at'], $data['expires_at'], $data['submitted_at'], $data['reviewed_at']],
             'leave_balances' => [$data['employee_number'], $data['full_name'], $data['leave_type'], $data['leave_period'], $data['days_allocated'], $data['days_used'], $data['days_pending'], $data['days_available'], $data['notes']],
-            'leave_requests' => [$data['employee_number'], $data['full_name'], $data['leave_type'], $data['leave_period'], $data['status'], $data['starts_on'], $data['ends_on'], $data['total_days'], $data['reason'], $data['submitted_at'], $data['reviewed_at']],
+            'leave_requests' => [$data['employee_number'], $data['full_name'], $data['leave_type'], $data['leave_period'], $data['status'], $data['starts_on'], $data['ends_on'], $data['total_days'], $data['handover_to'], $data['handover_note'], $data['reason'], $data['submitted_at'], $data['reviewed_at']],
             'attendance_summary' => [$data['employee_number'], $data['full_name'], $data['total_records'], $data['present_count'], $data['late_count'], $data['absent_count'], $data['half_day_count'], $data['corrected_count'], $data['worked_minutes']],
             'attendance_exceptions' => [$data['employee_number'], $data['full_name'], $data['attendance_date'], $data['status'], $data['check_in_at'], $data['check_out_at'], $data['duration_minutes'], $data['source'], $data['work_shift'], $data['notes']],
             'ticket_log' => [$data['employee_number'], $data['full_name'], $data['category'], $data['priority'], $data['status'], $data['assigned_to'], $data['subject'], $data['submitted_at'], $data['resolved_at'], $data['sla_due_at']],
+            'asset_inventory' => [$data['asset_tag'], $data['name'], $data['serial_number'], $data['category'], $data['status'], $data['condition'], $data['assigned_to'], $data['location'], $data['purchase_date'], $data['warranty_expires_at'], $data['notes']],
+            'asset_assignments' => [$data['asset_tag'], $data['asset_name'], $data['employee_number'], $data['employee_name'], $data['assigned_by'], $data['returned_by'], $data['assigned_at'], $data['returned_at'], $data['issue_condition'], $data['return_condition'], $data['issue_note'], $data['return_note']],
             default => [],
         };
     }
@@ -470,6 +585,19 @@ class ReportService
     private function employeeName(?Employee $employee): ?string
     {
         return $employee ? trim($employee->first_name.' '.$employee->last_name) : null;
+    }
+
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function canUseReport(User $user, array $report): bool
+    {
+        return $user->can('reports.view')
+            && $user->can($report['permission'])
+            && (
+                $user->is_platform_admin
+                || ($user->organization && $this->modules->organizationHasActiveSubscription($user->organization, $report['module']))
+            );
     }
 
     /**

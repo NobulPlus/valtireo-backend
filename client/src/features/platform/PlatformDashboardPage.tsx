@@ -5,9 +5,9 @@ import {
   Building2,
   ChevronRight,
   Download,
-  FileClock,
   Layers3,
   Plus,
+  Radar,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -30,13 +30,17 @@ import { downloadPlatformOrganizationsCsv, usePlatformDashboard, usePlatformOrga
 import { useDateFormatter } from '@/lib/dateFormat';
 import type { PlatformDashboard, PlatformOrganizationSummary } from '@/types/api';
 
-const STATUS_OPTIONS = ['', 'active', 'invited', 'setup_in_progress', 'suspended'];
-type AttentionKey = 'setup_incomplete' | 'without_modules' | 'without_admins';
+const STATUS_OPTIONS = ['', 'active', 'invited', 'setup_in_progress', 'pending_approval', 'suspended', 'rejected'];
+type AttentionKey = 'setup_incomplete' | 'pending_verification' | 'without_modules' | 'without_admins';
 
 const ATTENTION_COPY: Record<AttentionKey, { label: string; description: string }> = {
   setup_incomplete: {
     label: 'Setup incomplete',
     description: 'Organizations still in invitation or setup stages.',
+  },
+  pending_verification: {
+    label: 'Verification review',
+    description: 'Organizations waiting for Valtireo to review submitted verification documents.',
   },
   without_modules: {
     label: 'No active modules',
@@ -53,7 +57,9 @@ const STATUS_COLORS: Record<string, string> = {
   invited: '#2563EB',
   setup_in_progress: '#D97706',
   setup: '#D97706',
+  pending_approval: '#7C3AED',
   suspended: '#DC2626',
+  rejected: '#991B1B',
 };
 
 function statusLabel(status: string): string {
@@ -192,6 +198,7 @@ function PlatformDashboardContent({
   const topModules = sortedModules.slice(0, 6);
   const moduleScale = sortedModules[0]?.value ?? 0;
   const attentionItems: Array<{ key: AttentionKey; value: number }> = [
+    { key: 'pending_verification', value: data.attention.pending_verification },
     { key: 'setup_incomplete', value: data.attention.setup_incomplete },
     { key: 'without_modules', value: data.attention.without_modules },
     { key: 'without_admins', value: data.attention.without_admins },
@@ -244,8 +251,8 @@ function PlatformDashboardContent({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Organizations" value={summary.organizations_total} icon={Building2} />
         <StatTile label="Active workspaces" value={summary.organizations_active} icon={ShieldCheck} tone="success" />
+        <StatTile label="Verification queue" value={summary.organizations_pending_approval} icon={Radar} tone="warning" />
         <StatTile label="Total users" value={summary.users_total} icon={Users} />
-        <StatTile label="Pending documents" value={summary.pending_documents} icon={FileClock} tone="warning" />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">

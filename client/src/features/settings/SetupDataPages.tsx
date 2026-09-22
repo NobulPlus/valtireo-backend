@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
+  Boxes,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -602,12 +603,14 @@ function AreaShell({
   title,
   subtitle,
   permission,
+  moduleKey,
   actions,
   children,
 }: {
   title: string;
   subtitle: string;
   permission: string;
+  moduleKey?: string;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -622,7 +625,9 @@ function AreaShell({
         ]}
         actions={actions}
       />
-      <RequirePermission permission={permission}>{children}</RequirePermission>
+      <RequirePermission permission={permission} moduleKey={moduleKey}>
+        {children}
+      </RequirePermission>
     </div>
   );
 }
@@ -745,21 +750,43 @@ function ClusterFormModal({
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [managerEmployeeId, setManagerEmployeeId] = useState('');
+  const [supervisorEmployeeId, setSupervisorEmployeeId] = useState('');
   const [description, setDescription] = useState('');
   const [locationIds, setLocationIds] = useState<number[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const leadersQuery = useEmployees(
+    {
+      department_id: departmentId ? Number(departmentId) : undefined,
+      per_page: 100,
+      sort_by: 'first_name',
+      sort_direction: 'asc',
+    },
+    cluster !== null && departmentId !== '',
+  );
+  const leaderOptions = [
+    { value: '', label: 'Unassigned' },
+    ...(leadersQuery.data?.data ?? []).map((employee) => ({
+      value: String(employee.id),
+      label: `${employee.full_name} · ${employee.employee_number}`,
+    })),
+  ];
 
   useEffect(() => {
     if (cluster && cluster !== 'new') {
       setName(cluster.name);
       setCode(cluster.code ?? '');
       setDepartmentId(String(cluster.department_id));
+      setManagerEmployeeId(cluster.manager_employee_id ? String(cluster.manager_employee_id) : '');
+      setSupervisorEmployeeId(cluster.supervisor_employee_id ? String(cluster.supervisor_employee_id) : '');
       setDescription(cluster.description ?? '');
       setLocationIds((cluster.locations ?? []).map((location) => location.id));
     } else if (cluster === 'new') {
       setName('');
       setCode('');
       setDepartmentId('');
+      setManagerEmployeeId('');
+      setSupervisorEmployeeId('');
       setDescription('');
       setLocationIds([]);
     }
@@ -776,6 +803,8 @@ function ClusterFormModal({
         name,
         code,
         department_id: departmentId ? Number(departmentId) : null,
+        manager_employee_id: managerEmployeeId ? Number(managerEmployeeId) : null,
+        supervisor_employee_id: supervisorEmployeeId ? Number(supervisorEmployeeId) : null,
         description: description || null,
         location_ids: locationIds,
       };
@@ -816,8 +845,34 @@ function ClusterFormModal({
           <Input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} placeholder="e.g. LAG-CLU" />
         </Field>
         <Field label="Department" hint="The cluster's approvals and reporting roll up to this department.">
-          <SelectMenu value={departmentId} onChange={setDepartmentId} options={departmentOptions} />
+          <SelectMenu
+            value={departmentId}
+            onChange={(value) => {
+              setDepartmentId(value);
+              setManagerEmployeeId('');
+              setSupervisorEmployeeId('');
+            }}
+            options={departmentOptions}
+          />
         </Field>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Cluster manager">
+            <SelectMenu
+              value={managerEmployeeId}
+              onChange={setManagerEmployeeId}
+              options={leaderOptions}
+              disabled={!departmentId || leadersQuery.isLoading}
+            />
+          </Field>
+          <Field label="Cluster supervisor">
+            <SelectMenu
+              value={supervisorEmployeeId}
+              onChange={setSupervisorEmployeeId}
+              options={leaderOptions}
+              disabled={!departmentId || leadersQuery.isLoading}
+            />
+          </Field>
+        </div>
         <Field label="Description">
           <Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Optional" />
         </Field>
@@ -907,6 +962,8 @@ function ClustersPanel({
                 <tr className="border-b border-border text-xs uppercase text-muted">
                   <th className="whitespace-nowrap px-3 py-2 font-semibold">Name</th>
                   <th className="whitespace-nowrap px-3 py-2 font-semibold">Department</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">Leads</th>
+                  <th className="whitespace-nowrap px-3 py-2 font-semibold">Members</th>
                   <th className="whitespace-nowrap px-3 py-2 font-semibold">Locations</th>
                   <th className="whitespace-nowrap px-3 py-2 font-semibold" />
                 </tr>
@@ -916,6 +973,13 @@ function ClustersPanel({
                   <tr key={cluster.id} className="border-b border-border/70 last:border-0">
                     <td className="px-3 py-2 text-strong">{cluster.name}</td>
                     <td className="px-3 py-2 text-muted">{cluster.department?.name ?? '—'}</td>
+                    <td className="px-3 py-2 text-muted">
+                      <div className="space-y-0.5">
+                        <p>{cluster.manager ? `Manager: ${cluster.manager.full_name}` : 'Manager unassigned'}</p>
+                        <p>{cluster.supervisor ? `Supervisor: ${cluster.supervisor.full_name}` : 'Supervisor unassigned'}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-muted">{cluster.members_count ?? 0}</td>
                     <td className="px-3 py-2 text-muted">
                       {cluster.locations && cluster.locations.length > 0
                         ? cluster.locations.map((location) => location.name).join(', ')
@@ -976,6 +1040,7 @@ export function StructureSettingsPage() {
       title="Organization structure"
       subtitle="Control the company-owned building blocks used by employees, dashboards, leave, attendance, and reports."
       permission="workspace_settings.view"
+      moduleKey="organization_structure"
     >
       {lookupsQuery.isLoading && <LoadingState label="Loading organization structure..." fill />}
       {lookupsQuery.isError && <ErrorState error={lookupsQuery.error} onRetry={() => lookupsQuery.refetch()} />}
@@ -1502,6 +1567,7 @@ export function DocumentsControlPage() {
       title="Documents and compliance"
       subtitle="Monitor document readiness, submissions, expiry risks, and compliance evidence."
       permission="employee_documents.view"
+      moduleKey="documents"
       actions={
         <Button type="button" size="icon" onClick={() => setSettingsOpen(true)} title="Document settings" aria-label="Document settings">
           <Settings className="h-4 w-4" />
@@ -2328,6 +2394,56 @@ function ApprovalWorkflowsPanel() {
   );
 }
 
+export function AssetCategoriesPanel() {
+  return (
+    <DataPanel
+      config={{
+        title: 'Asset categories',
+        description: 'The categories used to classify company equipment and assets.',
+        endpoint: '/assets/categories',
+        columns: [
+          { key: 'name', label: 'Name' },
+          { key: 'code', label: 'Code' },
+          { key: 'is_active', label: 'Active' },
+        ],
+        action: {
+          label: 'Add category',
+          endpoint: '/assets/categories',
+          successMessage: 'Asset category created',
+          invalidateKeys: [['control-panel', '/assets/categories'], ['assets', 'categories']],
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'code', label: 'Code', required: true },
+            { name: 'description', label: 'Description', type: 'textarea' },
+            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
+          ],
+        },
+        edit: {
+          label: 'Edit category',
+          endpoint: (row) => `/assets/categories/${row.id}`,
+          method: 'patch',
+          successMessage: 'Asset category updated',
+          invalidateKeys: [['control-panel', '/assets/categories'], ['assets', 'categories']],
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'code', label: 'Code', required: true },
+            { name: 'description', label: 'Description' },
+            { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true, help: 'Inactive categories are hidden from new assets without deleting history.' },
+          ],
+        },
+        deactivate: {
+          label: 'Deactivate category',
+          endpoint: (row) => `/assets/categories/${row.id}`,
+          method: 'patch',
+          successMessage: 'Asset category deactivated',
+          invalidateKeys: [['control-panel', '/assets/categories'], ['assets', 'categories']],
+          fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
+        },
+      }}
+    />
+  );
+}
+
 export function TicketCategoriesPanel() {
   return (
     <DataPanel
@@ -2368,6 +2484,14 @@ export function TicketCategoriesPanel() {
             { name: 'resolution_sla_hours', label: 'Resolution SLA (hours)', type: 'number', help: 'Optional — leave blank for no resolution SLA.' },
             { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true, help: 'Inactive categories are hidden from new ticket submissions without deleting history.' },
           ],
+        },
+        deactivate: {
+          label: 'Deactivate category',
+          endpoint: (row) => `/tickets/categories/${row.id}`,
+          method: 'patch',
+          successMessage: 'Ticket category deactivated',
+          invalidateKeys: [['control-panel', '/tickets/categories'], ['tickets', 'categories']],
+          fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
         },
       }}
     />
@@ -2435,6 +2559,12 @@ export function ApprovalsControlPage() {
     </AreaShell>
   );
 }
+
+const GENDER_RESTRICTION_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'No restriction' },
+  { value: 'female', label: 'Female only' },
+  { value: 'male', label: 'Male only' },
+];
 
 function BulkGrantEntitlementButton({
   leaveTypeOptions,
@@ -2606,6 +2736,13 @@ function LeaveSettingsPanels() {
               { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
               { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
               { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
+              {
+                name: 'restricted_to_gender',
+                label: 'Restricted to gender',
+                type: 'select',
+                options: GENDER_RESTRICTION_OPTIONS,
+                help: 'Only employees whose profile gender matches can select this leave type — e.g. Maternity to female, Paternity to male. Leave as No restriction for everyone.',
+              },
               { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
             ],
           },
@@ -2635,6 +2772,13 @@ function LeaveSettingsPanels() {
               { name: 'maximum_days_per_request', label: 'Max days per request', type: 'number' },
               { name: 'is_paid', label: 'Paid', type: 'checkbox', defaultValue: true },
               { name: 'requires_attachment', label: 'Requires attachment', type: 'checkbox' },
+              {
+                name: 'restricted_to_gender',
+                label: 'Restricted to gender',
+                type: 'select',
+                options: GENDER_RESTRICTION_OPTIONS,
+                help: 'Only employees whose profile gender matches can select this leave type. Leave as No restriction for everyone.',
+              },
               { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true },
             ],
           },
@@ -2903,6 +3047,7 @@ export function LeaveControlPage() {
       title="Leave"
       subtitle="Track leave requests and the upcoming calendar, and control leave types, periods, and holidays."
       permission="leave_requests.view"
+      moduleKey="leave"
       actions={
         <>
           {canManageEntitlements && (
@@ -3121,6 +3266,7 @@ export function AttendanceControlPage() {
       title="Attendance"
       subtitle="Monitor today's attendance and correction requests, and control policy and work shifts."
       permission="attendance.view"
+      moduleKey="attendance"
       actions={
         <Button type="button" size="icon" onClick={() => setSettingsOpen(true)} title="Attendance settings" aria-label="Attendance settings">
           <Settings className="h-4 w-4" />
@@ -3210,6 +3356,7 @@ const REPORT_MODULE_ICONS: Record<string, LucideIcon> = {
   documents: FileCheck2,
   leave: CalendarDays,
   attendance: Clock3,
+  assets: Boxes,
 };
 
 const REPORT_MODULE_LABELS: Record<string, string> = {
@@ -3217,6 +3364,7 @@ const REPORT_MODULE_LABELS: Record<string, string> = {
   documents: 'Documents',
   leave: 'Leave',
   attendance: 'Attendance',
+  assets: 'Assets',
 };
 
 export function ReportsControlPage() {
@@ -3261,6 +3409,7 @@ export function ReportsControlPage() {
       title="Reports"
       subtitle="Export ready-made reports across employees, documents, leave, and attendance."
       permission="reports.view"
+      moduleKey="reports"
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Available reports" value={reportRows.length} icon={BarChart3} />

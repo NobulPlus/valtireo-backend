@@ -17,15 +17,21 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'leave_type_id',
     'leave_period_id',
     'requested_by_id',
+    'handover_to_employee_id',
     'starts_on',
     'ends_on',
     'total_days',
     'status',
     'reason',
+    'handover_note',
     'evidence_file_name',
     'evidence_file_path',
     'evidence_mime_type',
     'evidence_file_size',
+    'handover_file_name',
+    'handover_file_path',
+    'handover_mime_type',
+    'handover_file_size',
     'submitted_at',
     'reviewed_at',
 ])]
@@ -56,6 +62,11 @@ class LeaveRequest extends Model implements AuditableContract
     public function requestedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by_id');
+    }
+
+    public function handoverTo(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'handover_to_employee_id');
     }
 
     public function comments(): HasMany

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 export interface SelectMenuOption {
@@ -20,6 +20,10 @@ interface SelectMenuProps {
   className?: string;
   invalid?: boolean;
   disabled?: boolean;
+  searchable?: boolean;
+  createLabel?: string;
+  onCreateOption?: (query: string) => string | void | Promise<string | void>;
+  isCreatingOption?: boolean;
 }
 
 interface MenuPosition {
@@ -67,6 +71,10 @@ export function SelectMenu({
   className,
   invalid,
   disabled,
+  searchable: searchableProp,
+  createLabel = 'Create',
+  onCreateOption,
+  isCreatingOption,
 }: SelectMenuProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
@@ -74,14 +82,15 @@ export function SelectMenu({
   const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => options.find((option) => option.value === value), [options, value]);
-  const searchable = options.length >= SEARCH_THRESHOLD;
+  const searchable = searchableProp ?? options.length >= SEARCH_THRESHOLD;
 
   const filteredOptions = useMemo(() => {
     if (!searchable) return options;
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((option) => option.label.toLowerCase().includes(q));
+    return options.filter((option) => option.label.toLowerCase().includes(q) || option.description?.toLowerCase().includes(q));
   }, [options, query, searchable]);
+  const canCreateOption = Boolean(onCreateOption && query.trim() && !filteredOptions.some((option) => option.label.toLowerCase() === query.trim().toLowerCase()));
 
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) {
@@ -142,6 +151,16 @@ export function SelectMenu({
     setOpen(false);
   }
 
+  async function createOption() {
+    const name = query.trim();
+    if (!name || !onCreateOption) return;
+    const createdValue = await onCreateOption(name);
+    if (createdValue) {
+      onChange(createdValue);
+      setOpen(false);
+    }
+  }
+
   return (
     <div ref={triggerRef} className={cn('relative', className)}>
       <button
@@ -178,44 +197,62 @@ export function SelectMenu({
           >
             {searchable && (
               <div className="sticky top-0 z-10 mb-1.5 bg-surface pb-1.5">
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search..."
-                  className="h-8 w-full rounded-md border border-border px-2 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
-                />
+                <div className="flex h-8 items-center gap-2 rounded-md border border-border bg-surface px-2 focus-within:border-teal focus-within:ring-2 focus-within:ring-teal/20">
+                  <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search..."
+                    className="h-full min-w-0 flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-muted"
+                  />
+                </div>
               </div>
             )}
-            {filteredOptions.length === 0 ? (
+            {filteredOptions.length === 0 && !canCreateOption ? (
               <p className="px-2.5 py-3 text-xs text-muted">No matches.</p>
             ) : (
-              filteredOptions.map((option, index) => {
-                const active = option.value === value;
+              <>
+                {filteredOptions.map((option, index) => {
+                  const active = option.value === value;
 
-                return (
-                  <button
-                    key={`${option.value || '__empty'}-${index}`}
-                    type="button"
-                    disabled={option.disabled}
-                    onClick={() => select(option.value)}
-                    className={cn(
-                      'flex w-full items-start justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
-                      active ? 'bg-teal/10 text-strong' : 'text-strong hover:bg-surface-soft',
-                      option.disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
-                    )}
-                  >
-                    <span className="flex min-w-0 items-start gap-2">
-                      {option.icon && <span className="mt-0.5 flex-shrink-0">{option.icon}</span>}
-                      <span className="min-w-0">
-                        <span className="block truncate">{option.label}</span>
-                        {option.description && <span className="block truncate text-xs text-muted">{option.description}</span>}
+                  return (
+                    <button
+                      key={`${option.value || '__empty'}-${index}`}
+                      type="button"
+                      disabled={option.disabled}
+                      onClick={() => select(option.value)}
+                      className={cn(
+                        'flex w-full items-start justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
+                        active ? 'bg-teal/10 text-strong' : 'text-strong hover:bg-surface-soft',
+                        option.disabled && 'cursor-not-allowed opacity-50 hover:bg-transparent',
+                      )}
+                    >
+                      <span className="flex min-w-0 items-start gap-2">
+                        {option.icon && <span className="mt-0.5 flex-shrink-0">{option.icon}</span>}
+                        <span className="min-w-0">
+                          <span className="block truncate">{option.label}</span>
+                          {option.description && <span className="block truncate text-xs text-muted">{option.description}</span>}
+                        </span>
                       </span>
+                      {active && <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal" />}
+                    </button>
+                  );
+                })}
+                {canCreateOption && (
+                  <button
+                    type="button"
+                    disabled={isCreatingOption}
+                    onClick={() => void createOption()}
+                    className="mt-1 flex w-full items-center gap-2 rounded-md border border-dashed border-teal/40 bg-teal/5 px-2.5 py-2 text-left text-sm font-medium text-teal transition-colors hover:bg-teal/10 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Plus className="h-4 w-4 flex-shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {isCreatingOption ? 'Creating...' : `${createLabel} "${query.trim()}"`}
                     </span>
-                    {active && <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal" />}
                   </button>
-                );
-              })
+                )}
+              </>
             )}
           </div>,
           document.body,

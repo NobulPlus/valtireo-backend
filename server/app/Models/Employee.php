@@ -168,6 +168,11 @@ class Employee extends Model implements AuditableContract
         return $this->hasMany(Asset::class, 'assigned_to_employee_id');
     }
 
+    public function assetAssignmentHistories(): HasMany
+    {
+        return $this->hasMany(AssetAssignmentHistory::class)->latest('id');
+    }
+
     public function tickets(): HasMany
     {
         return $this->hasMany(Ticket::class);
@@ -176,6 +181,21 @@ class Employee extends Model implements AuditableContract
     public function attendanceCorrectionRequests(): HasMany
     {
         return $this->hasMany(AttendanceCorrectionRequest::class);
+    }
+
+    public function compensations(): HasMany
+    {
+        return $this->hasMany(EmployeeCompensation::class);
+    }
+
+    public function bankAccounts(): HasMany
+    {
+        return $this->hasMany(EmployeeBankAccount::class);
+    }
+
+    public function payrollRunItems(): HasMany
+    {
+        return $this->hasMany(PayrollRunItem::class);
     }
 
     /**

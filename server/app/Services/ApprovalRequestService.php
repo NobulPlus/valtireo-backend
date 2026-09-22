@@ -10,6 +10,7 @@ use App\Models\Employee;
 use App\Models\EmployeeDocument;
 use App\Models\LeaveEntitlement;
 use App\Models\LeaveRequest;
+use App\Models\PayrollRun;
 use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -99,7 +100,7 @@ class ApprovalRequestService
         }
 
         return DB::transaction(function () use ($actor, $approvalRequest, $action, $note): ApprovalRequest {
-            $approvalRequest->loadMissing(['workflow.steps', 'subjectEmployee']);
+            $approvalRequest->loadMissing(['workflow.steps', 'subjectEmployee.department']);
             $step = $this->currentStep($approvalRequest);
 
             if ($action === 'cancel') {
@@ -192,7 +193,7 @@ class ApprovalRequestService
             'permission' => $step->approver_permission && $actor->can($step->approver_permission),
             'role' => $step->approverRole && $actor->hasRole($step->approverRole),
             'direct_manager' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->reporting_manager_id,
-            'department_head' => $subjectEmployee && $actor->can('employees.view_department') && $actor->employee?->department_id === $subjectEmployee->department_id,
+            'department_head' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->department?->head_employee_id,
             default => false,
         };
 
@@ -247,6 +248,12 @@ class ApprovalRequestService
             return;
         }
 
+        if ($approvable instanceof PayrollRun) {
+            $this->syncPayrollRunStatus($approvalRequest, $approvable);
+
+            return;
+        }
+
         if (! $approvable instanceof EmployeeDocument) {
             return;
         }
@@ -271,6 +278,24 @@ class ApprovalRequestService
             'previous_status' => $previousStatus,
             'next_status' => $nextStatus,
             'note' => $note,
+        ]);
+    }
+
+    private function syncPayrollRunStatus(ApprovalRequest $approvalRequest, PayrollRun $payrollRun): void
+    {
+        if (! in_array($approvalRequest->status, ['approved', 'rejected', 'changes_requested', 'cancelled'], true)) {
+            return;
+        }
+
+        $status = match ($approvalRequest->status) {
+            'approved' => 'approved',
+            'rejected' => 'rejected',
+            'changes_requested', 'cancelled' => 'calculated',
+        };
+
+        $payrollRun->update([
+            'status' => $status,
+            'approved_at' => $status === 'approved' ? now() : null,
         ]);
     }
 
@@ -306,6 +331,10 @@ class ApprovalRequestService
             'status' => $nextStatus,
             'reviewed_at' => now(),
         ]);
+
+        if ($leaveRequest->handover_to_employee_id) {
+            $this->notifications->leaveHandoverStatusChanged($leaveRequest->refresh());
+        }
     }
 
     private function syncTicketStatus(ApprovalRequest $approvalRequest, Ticket $ticket): void

@@ -6,6 +6,10 @@ use Illuminate\Support\Collection;
 
 class TemplateRegistryService
 {
+    public function __construct(private readonly ModuleEntitlementService $modules)
+    {
+    }
+
     /**
      * @return Collection<int, array<string, mixed>>
      */
@@ -64,8 +68,8 @@ class TemplateRegistryService
                 'description' => 'Bulk create employee records using organization structure codes.',
                 'permission' => 'employees.create',
                 'filename' => 'employee-import-template.csv',
-                'columns' => ['employee_number', 'first_name', 'middle_name', 'last_name', 'work_email', 'phone', 'department_code', 'unit_code', 'designation_code', 'grade_level_code', 'employment_type_code', 'location_code', 'reporting_manager_number', 'start_date', 'send_invitation'],
-                'sample' => ['EMP-1001', 'Ada', '', 'Lovelace', 'ada@example.test', '08012345678', 'FIN', 'FIN-PAY', 'OFF', 'GL05', 'PERM', 'HQ', 'EMP-HR-001', '2026-08-20', 'true'],
+                'columns' => ['employee_number', 'first_name', 'middle_name', 'last_name', 'work_email', 'phone', 'department_code', 'unit_code', 'cluster_code', 'designation_code', 'grade_level_code', 'employment_type_code', 'location_code', 'reporting_manager_number', 'start_date', 'send_invitation'],
+                'sample' => ['EMP-1001', 'Ada', '', 'Lovelace', 'ada@example.test', '08012345678', 'FIN', 'FIN-PAY', 'FIN-LAG', 'OFF', 'GL05', 'PERM', 'HQ', 'EMP-HR-001', '2026-08-20', 'true'],
             ],
             [
                 'key' => 'leave_entitlement_import',
@@ -95,6 +99,10 @@ class TemplateRegistryService
      */
     private function canUse(mixed $user, array $template): bool
     {
-        return $user?->can($template['permission']) === true;
+        return $user?->can($template['permission']) === true
+            && (
+                $user->is_platform_admin
+                || ($user->organization && $this->modules->organizationHasActiveSubscription($user->organization, $template['module']))
+            );
     }
 }

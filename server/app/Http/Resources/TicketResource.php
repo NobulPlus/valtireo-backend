@@ -44,6 +44,7 @@ class TicketResource extends JsonResource
             'submitted_at' => $this->submitted_at,
             'reviewed_at' => $this->reviewed_at,
             'first_responded_at' => $this->first_responded_at,
+            'response_sla_due_at' => $this->response_sla_due_at,
             'resolved_at' => $this->resolved_at,
             'on_hold_at' => $this->on_hold_at,
             'hold_reason' => $this->hold_reason,

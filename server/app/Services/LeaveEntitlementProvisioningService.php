@@ -33,11 +33,14 @@ class LeaveEntitlementProvisioningService
             return [];
         }
 
+        $gender = strtolower(trim((string) $employee->profile?->gender));
+
         $leaveTypes = LeaveType::query()
             ->where('organization_id', $employee->organization_id)
             ->where('is_active', true)
             ->where('auto_grant_on_activation', true)
             ->whereNotNull('default_days_per_year')
+            ->where(fn ($query) => $query->whereNull('restricted_to_gender')->orWhere('restricted_to_gender', $gender))
             ->get();
 
         if ($leaveTypes->isEmpty()) {

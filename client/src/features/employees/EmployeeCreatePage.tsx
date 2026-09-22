@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
@@ -29,6 +30,7 @@ import { Modal } from '@/components/ui/Modal';
 import { SelectMenu, type SelectMenuOption } from '@/components/ui/SelectMenu';
 import { useToast } from '@/components/ui/Toast';
 import { RequirePermission } from '@/components/shell/RequirePermission';
+import { useAuth } from '@/context/AuthContext';
 import { useSetupLookups } from '@/features/workspace/api';
 import {
   downloadEmployeeImportTemplate,
@@ -38,7 +40,9 @@ import {
   type TemplateImportResult,
 } from '@/features/employees/api';
 import { ApiError } from '@/lib/apiClient';
+import { api } from '@/lib/apiClient';
 import { cn } from '@/lib/cn';
+import type { DepartmentLookup, DesignationLookup, EmploymentTypeLookup, LocationLookup } from '@/types/api';
 
 const schema = z.object({
   employee_number: z.string().min(1, 'Employee number is required'),
@@ -68,6 +72,49 @@ function lookupOptions<T extends { id: number; name: string }>(items: T[] | unde
   ];
 }
 
+type CreatableLookupKind = 'department' | 'designation' | 'employment_type' | 'location';
+
+const CREATABLE_LOOKUPS: Record<
+  CreatableLookupKind,
+  {
+    endpoint: string;
+    responseKey: string;
+    label: string;
+  }
+> = {
+  department: {
+    endpoint: '/setup/departments',
+    responseKey: 'department',
+    label: 'Create department',
+  },
+  designation: {
+    endpoint: '/setup/designations',
+    responseKey: 'designation',
+    label: 'Create designation',
+  },
+  employment_type: {
+    endpoint: '/setup/employment-types',
+    responseKey: 'employment_type',
+    label: 'Create employment type',
+  },
+  location: {
+    endpoint: '/setup/locations',
+    responseKey: 'location',
+    label: 'Create location',
+  },
+};
+
+function codeFromName(name: string): string {
+  const code = name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50);
+
+  return code || 'LOOKUP';
+}
+
 /** Small square icon chip used to give each form section a scannable identity. */
 function SectionIcon({ icon: Icon }: { icon: typeof UserRound }) {
   return (
@@ -79,6 +126,8 @@ function SectionIcon({ icon: Icon }: { icon: typeof UserRound }) {
 
 function EmployeeCreateContent() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const lookupsQuery = useSetupLookups();
   const createMutation = useCreateEmployee();
   const importMutation = useImportEmployees();
@@ -87,6 +136,8 @@ function EmployeeCreateContent() {
   const [importResult, setImportResult] = useState<TemplateImportResult | null>(null);
   const [invitationLink, setInvitationLink] = useState<{ url: string; employeeId: number } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [creatingLookup, setCreatingLookup] = useState<CreatableLookupKind | null>(null);
+  const canCreateLookup = hasPermission('workspace_settings.update');
 
   const {
     register,
@@ -189,6 +240,39 @@ function EmployeeCreateContent() {
       } else {
         toast.error('Could not create employee', 'Something went wrong. Please try again.');
       }
+    }
+  }
+
+  async function createLookupOption(kind: CreatableLookupKind, name: string): Promise<string | void> {
+    const config = CREATABLE_LOOKUPS[kind];
+    setCreatingLookup(kind);
+
+    try {
+      const payload =
+        kind === 'location'
+          ? {
+              name,
+              code: codeFromName(name),
+              type: 'branch',
+            }
+          : {
+              name,
+              code: codeFromName(name),
+            };
+      const response = await api.post<Record<string, DepartmentLookup | DesignationLookup | EmploymentTypeLookup | LocationLookup>>(
+        config.endpoint,
+        payload,
+      );
+      const created = response[config.responseKey];
+
+      await queryClient.invalidateQueries({ queryKey: ['setup', 'lookups'] });
+      toast.success(`${config.label.replace('Create ', '')} created`, `${created.name} is now available in this workspace.`);
+
+      return String(created.id);
+    } catch (error) {
+      toast.error('Could not create option', error instanceof ApiError ? error.message : 'Please check the name and try again.');
+    } finally {
+      setCreatingLookup(null);
     }
   }
 
@@ -363,6 +447,10 @@ function EmployeeCreateContent() {
                 }}
                 options={lookupOptions(lookupsQuery.data?.departments, 'Select department')}
                 invalid={Boolean(errors.department_id)}
+                searchable
+                createLabel={CREATABLE_LOOKUPS.department.label}
+                onCreateOption={canCreateLookup ? (name) => createLookupOption('department', name) : undefined}
+                isCreatingOption={creatingLookup === 'department'}
               />
             </Field>
             <Field label="Unit" htmlFor="unit_id" error={errors.unit_id?.message}>
@@ -370,6 +458,7 @@ function EmployeeCreateContent() {
                 value={selectedUnitId}
                 onChange={(value) => setValue('unit_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(units, 'Select unit')}
+                searchable
               />
             </Field>
             <Field label="Cluster" htmlFor="cluster_id" error={errors.cluster_id?.message}>
@@ -377,6 +466,7 @@ function EmployeeCreateContent() {
                 value={selectedClusterId}
                 onChange={(value) => setValue('cluster_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(clusters, 'Select cluster')}
+                searchable
               />
             </Field>
             <Field label="Designation" htmlFor="designation_id" error={errors.designation_id?.message} required>
@@ -385,6 +475,10 @@ function EmployeeCreateContent() {
                 onChange={(value) => setValue('designation_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(lookupsQuery.data?.designations, 'Select designation')}
                 invalid={Boolean(errors.designation_id)}
+                searchable
+                createLabel={CREATABLE_LOOKUPS.designation.label}
+                onCreateOption={canCreateLookup ? (name) => createLookupOption('designation', name) : undefined}
+                isCreatingOption={creatingLookup === 'designation'}
               />
             </Field>
             <Field label="Grade level" htmlFor="grade_level_id" error={errors.grade_level_id?.message}>
@@ -392,6 +486,7 @@ function EmployeeCreateContent() {
                 value={selectedGradeLevelId}
                 onChange={(value) => setValue('grade_level_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(lookupsQuery.data?.grade_levels, 'Select grade level')}
+                searchable
               />
             </Field>
             <Field
@@ -405,6 +500,10 @@ function EmployeeCreateContent() {
                 onChange={(value) => setValue('employment_type_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(lookupsQuery.data?.employment_types, 'Select employment type')}
                 invalid={Boolean(errors.employment_type_id)}
+                searchable
+                createLabel={CREATABLE_LOOKUPS.employment_type.label}
+                onCreateOption={canCreateLookup ? (name) => createLookupOption('employment_type', name) : undefined}
+                isCreatingOption={creatingLookup === 'employment_type'}
               />
             </Field>
             <Field
@@ -418,6 +517,10 @@ function EmployeeCreateContent() {
                 onChange={(value) => setValue('organization_location_id', value, { shouldDirty: true, shouldValidate: true })}
                 options={lookupOptions(lookupsQuery.data?.locations, 'Select location')}
                 invalid={Boolean(errors.organization_location_id)}
+                searchable
+                createLabel={CREATABLE_LOOKUPS.location.label}
+                onCreateOption={canCreateLookup ? (name) => createLookupOption('location', name) : undefined}
+                isCreatingOption={creatingLookup === 'location'}
               />
             </Field>
             <Field label="Reporting manager" htmlFor="reporting_manager_id">
@@ -576,7 +679,7 @@ function EmployeeCreateContent() {
 
 export function EmployeeCreatePage() {
   return (
-    <RequirePermission permission="employees.create">
+    <RequirePermission permission="employees.create" moduleKey="employees">
       <EmployeeCreateContent />
     </RequirePermission>
   );

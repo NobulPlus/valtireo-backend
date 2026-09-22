@@ -3,12 +3,13 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { NAV_GROUPS } from '@/components/shell/navConfig';
 import { Logomark } from '@/components/ui/Logomark';
+import { assetUrl } from '@/lib/assetUrl';
 import { cn } from '@/lib/cn';
 
 export function Sidebar() {
   const { hasPermission, moduleByKey, session, workspaceMode } = useAuth();
   const [orgLogoFailed, setOrgLogoFailed] = useState(false);
-  const orgLogoUrl = session?.workspace?.identity?.logo_url;
+  const orgLogoUrl = assetUrl(session?.workspace?.identity?.logo_url);
 
   return (
     <aside className="hidden w-60 flex-shrink-0 flex-col border-r border-border bg-[var(--workspace-sidebar,var(--color-pine))] text-[rgb(var(--workspace-sidebar-fg,255_255_255))] lg:flex">

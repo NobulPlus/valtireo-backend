@@ -84,6 +84,7 @@ class DatabaseSeeder extends Seeder
         $this->call(OrganizationStructureSeeder::class);
         $this->call(PlatformModuleSeeder::class);
         $this->call(TicketCategorySeeder::class);
+        $this->call(AssetCategorySeeder::class);
 
         // Roles are organization-owned — seed this org's starter role set
         // (and point Spatie's team context at it) before any assignRole()

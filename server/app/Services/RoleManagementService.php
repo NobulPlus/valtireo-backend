@@ -105,6 +105,12 @@ class RoleManagementService
     {
         $this->assertTenant($actor, $role);
 
+        if ($role->key === 'employee') {
+            throw ValidationException::withMessages([
+                'role' => ['This is the organization\'s default role for new hires — rename or re-permission it instead of deleting it.'],
+            ]);
+        }
+
         $userCount = $role->users()->count();
 
         if ($userCount > 0) {

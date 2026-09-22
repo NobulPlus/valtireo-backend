@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\ApprovalRequest;
+use App\Models\Asset;
+use App\Models\Cluster;
 use App\Models\Department;
 use App\Models\Designation;
 use App\Models\Employee;
@@ -60,11 +62,13 @@ class DashboardService
             'modules' => $this->moduleMetrics($organization),
             'approvals' => $this->approvalsSummary($organization),
             'service_desk' => $this->serviceDeskSummary($organization),
+            'assets' => $this->assetsSummary($organization),
             'leave' => $this->leaveSummary($organization),
             'attendance' => $this->attendanceSummary($organization),
             'documents' => $this->documentsSummary($user),
             'breakdowns' => [
                 'by_department' => $this->breakdown($organization, $filters, Department::class, 'department_id'),
+                'by_cluster' => $this->clusterBreakdown($organization, $filters),
                 'by_location' => $this->breakdown($organization, $filters, OrganizationLocation::class, 'organization_location_id', ['is_primary']),
                 'by_employment_type' => $this->breakdown($organization, $filters, EmploymentType::class, 'employment_type_id'),
                 'by_designation' => $this->breakdown($organization, $filters, Designation::class, 'designation_id'),
@@ -88,7 +92,7 @@ class DashboardService
     {
         $organization = $user->organization;
         $employee = $user->employee()
-            ->with(['department', 'unit', 'designation', 'location'])
+            ->with(['department', 'unit', 'cluster', 'designation', 'location'])
             ->first();
         $filters = $this->filters($request);
         $scope = $this->managerScope($user, $employee, $request);
@@ -97,6 +101,10 @@ class DashboardService
 
         if ($scope['type'] === 'department') {
             $employeeQuery->where('department_id', $scope['department']['id']);
+        }
+
+        if ($scope['type'] === 'cluster') {
+            $employeeQuery->where('cluster_id', $scope['cluster']['id']);
         }
 
         if ($scope['type'] === 'direct_reports') {
@@ -233,6 +241,7 @@ class DashboardService
             'date_column' => in_array($dateColumn, $this->dateColumns(), true) ? $dateColumn : 'created_at',
             'department_id' => $request->integer('department_id') ?: null,
             'unit_id' => $request->integer('unit_id') ?: null,
+            'cluster_id' => $request->integer('cluster_id') ?: null,
             'designation_id' => $request->integer('designation_id') ?: null,
             'grade_level_id' => $request->integer('grade_level_id') ?: null,
             'employment_type_id' => $request->integer('employment_type_id') ?: null,
@@ -256,6 +265,7 @@ class DashboardService
             ->where('organization_id', $organization->id)
             ->when($filters['department_id'], fn (Builder $query, int $id) => $query->where('department_id', $id))
             ->when($filters['unit_id'], fn (Builder $query, int $id) => $query->where('unit_id', $id))
+            ->when($filters['cluster_id'], fn (Builder $query, int $id) => $query->where('cluster_id', $id))
             ->when($filters['designation_id'], fn (Builder $query, int $id) => $query->where('designation_id', $id))
             ->when($filters['grade_level_id'], fn (Builder $query, int $id) => $query->where('grade_level_id', $id))
             ->when($filters['employment_type_id'], fn (Builder $query, int $id) => $query->where('employment_type_id', $id))
@@ -407,6 +417,10 @@ class DashboardService
         return [
             'departments' => Department::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
             'units' => Unit::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'clusters' => Cluster::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'clusters_with_manager' => Cluster::query()->where('organization_id', $organization->id)->where('is_active', true)->whereNotNull('manager_employee_id')->count(),
+            'clusters_with_supervisor' => Cluster::query()->where('organization_id', $organization->id)->where('is_active', true)->whereNotNull('supervisor_employee_id')->count(),
+            'employees_without_cluster' => Employee::query()->where('organization_id', $organization->id)->whereNull('cluster_id')->count(),
             'locations' => OrganizationLocation::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
             'designations' => Designation::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
             'grade_levels' => GradeLevel::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
@@ -441,6 +455,20 @@ class DashboardService
                 ->whereNull('assigned_to_user_id')
                 ->count(),
             'sla_breached' => $this->ticketReporting->breachedTicketsQuery($organization->id)->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function assetsSummary(Organization $organization): array
+    {
+        $query = Asset::query()->where('organization_id', $organization->id);
+
+        return [
+            'available' => (clone $query)->where('status', 'available')->count(),
+            'assigned' => (clone $query)->where('status', 'assigned')->count(),
+            'maintenance' => (clone $query)->where('status', 'maintenance')->count(),
         ];
     }
 
@@ -558,6 +586,42 @@ class DashboardService
     }
 
     /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function clusterBreakdown(Organization $organization, array $filters): array
+    {
+        $counts = $this->employeeQuery($organization, $filters)
+            ->selectRaw('cluster_id, count(*) as total')
+            ->whereNotNull('cluster_id')
+            ->groupBy('cluster_id')
+            ->pluck('total', 'cluster_id');
+
+        return Cluster::query()
+            ->with([
+                'department:id,code,name',
+                'manager:id,employee_number,first_name,last_name,work_email',
+                'supervisor:id,employee_number,first_name,last_name,work_email',
+            ])
+            ->where('organization_id', $organization->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'department_id', 'manager_employee_id', 'supervisor_employee_id', 'code', 'name'])
+            ->map(fn (Cluster $cluster) => [
+                'id' => $cluster->id,
+                'code' => $cluster->code,
+                'name' => $cluster->name,
+                'department' => $this->lookupPayload($cluster->department),
+                'manager' => $cluster->manager ? $this->employeeSummary($cluster->manager) : null,
+                'supervisor' => $cluster->supervisor ? $this->employeeSummary($cluster->supervisor) : null,
+                'total' => (int) $counts->get($cluster->id, 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param class-string $model
      *
      * @return array<int, array<string, mixed>>
@@ -640,15 +704,48 @@ class DashboardService
             ];
         }
 
+        if ($user->can('reports.view') && $request->integer('cluster_id')) {
+            $cluster = Cluster::query()
+                ->where('organization_id', $user->organization_id)
+                ->where('id', $request->integer('cluster_id'))
+                ->firstOrFail();
+
+            return [
+                'type' => 'cluster',
+                'cluster' => $this->lookupPayload($cluster),
+                'source' => 'requested_cluster',
+            ];
+        }
+
         if (! $this->hasManagerScope($user, $employee)) {
             throw new HttpException(403, 'You do not have a department or team dashboard scope.');
         }
 
-        if ($user->can('employees.view_department') && $employee->department) {
+        if (
+            $user->can('employees.view_department')
+            && $employee->department
+            && $employee->department->head_employee_id === $employee->id
+        ) {
             return [
                 'type' => 'department',
                 'department' => $this->lookupPayload($employee->department),
                 'source' => 'department_head_assignment',
+            ];
+        }
+
+        $cluster = Cluster::query()
+            ->where('organization_id', $user->organization_id)
+            ->where('is_active', true)
+            ->where(fn (Builder $query) => $query
+                ->where('manager_employee_id', $employee->id)
+                ->orWhere('supervisor_employee_id', $employee->id))
+            ->first(['id', 'code', 'name']);
+
+        if ($cluster) {
+            return [
+                'type' => 'cluster',
+                'cluster' => $this->lookupPayload($cluster),
+                'source' => 'cluster_leadership_assignment',
             ];
         }
 
@@ -771,6 +868,17 @@ class DashboardService
             ];
         }
 
+        if (LeaveRequest::query()
+            ->where('handover_to_employee_id', $employee->id)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->whereDate('ends_on', '>=', now()->toDateString())
+            ->exists()) {
+            $actions[] = [
+                'key' => 'leave_handover_cover',
+                'label' => 'You have a leave handover cover assignment.',
+            ];
+        }
+
         if ($employee->tickets()->whereIn('status', ['submitted', 'changes_requested'])->exists()) {
             $actions[] = [
                 'key' => 'ticket_pending',
@@ -806,6 +914,28 @@ class DashboardService
         return [
             'pending_requests' => $employee->leaveRequests()->where('status', 'submitted')->count(),
             'approved_requests' => $employee->leaveRequests()->where('status', 'approved')->count(),
+            'handover_assignments' => LeaveRequest::query()
+                ->with(['employee.department:id,code,name', 'employee.location:id,code,name', 'leaveType:id,name,code'])
+                ->where('handover_to_employee_id', $employee->id)
+                ->whereIn('status', ['submitted', 'approved'])
+                ->whereDate('ends_on', '>=', now()->toDateString())
+                ->orderBy('starts_on')
+                ->limit(5)
+                ->get()
+                ->map(fn (LeaveRequest $request) => [
+                    'id' => $request->id,
+                    'status' => $request->status,
+                    'starts_on' => $request->starts_on?->toDateString(),
+                    'ends_on' => $request->ends_on?->toDateString(),
+                    'total_days' => (float) $request->total_days,
+                    'handover_note' => $request->handover_note,
+                    'handover_file_name' => $request->handover_file_name,
+                    'handover_download_url' => $request->handover_file_path ? url("/api/leave/requests/{$request->id}/handover-document/download") : null,
+                    'employee' => $this->employeeSummary($request->employee),
+                    'leave_type' => $this->lookupPayload($request->leaveType),
+                ])
+                ->values()
+                ->all(),
             'balances' => LeaveEntitlement::query()
                 ->with('leaveType:id,name,code')
                 ->where('employee_id', $employee->id)

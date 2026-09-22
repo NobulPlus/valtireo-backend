@@ -60,7 +60,7 @@ class WorkspaceSettingsService
                 'support_email' => null,
             ],
             'theme' => [
-                'mode' => 'light',
+                'mode' => 'system',
                 'primary_color' => '#155EEF',
                 'accent_color' => '#12B76A',
                 'sidebar_color' => '#101828',

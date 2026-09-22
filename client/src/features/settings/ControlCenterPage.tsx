@@ -10,6 +10,7 @@ import {
   FileStack,
   ListChecks,
   PanelTop,
+  Package,
   Settings,
   ShieldPlus,
   UsersRound,
@@ -112,6 +113,16 @@ const DOMAINS = [
     tone: 'teal',
   },
   {
+    key: 'assets',
+    name: 'Assets',
+    line: 'Equipment assignment and recovery',
+    detail: 'Track issued items, returns, maintenance, and lifecycle evidence.',
+    to: '/settings/assets',
+    cta: 'Control assets',
+    icon: Package,
+    tone: 'teal',
+  },
+  {
     key: 'reports',
     name: 'Reports',
     line: 'Exports and operating evidence',
@@ -127,7 +138,6 @@ const FUTURE_SPACES = [
   { name: 'Connect', line: 'Employee communication, announcements, and shared channels' },
   { name: 'Community', line: 'Company culture, recognition, circles, and internal belonging' },
   { name: 'Learning', line: 'Training paths, policy acknowledgements, and role readiness' },
-  { name: 'Assets', line: 'Equipment assignment, recovery, and lifecycle evidence' },
 ];
 
 const toneClasses = {

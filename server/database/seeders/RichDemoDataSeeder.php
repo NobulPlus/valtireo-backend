@@ -37,6 +37,7 @@ class RichDemoDataSeeder extends Seeder
         $this->seedUnits($organization);
         $this->seedEmployees($organization);
         $this->seedLifecycleHistory($organization);
+        $this->seedDepartmentHeads($organization);
         $this->seedProfileExtensions($organization);
         $this->seedDocumentCompliance($organization);
     }
@@ -481,6 +482,18 @@ class RichDemoDataSeeder extends Seeder
             ->whereBelongsTo($organization)
             ->where('employee_number', 'EMP-OPS-002')
             ->firstOrFail();
+        $financeEmployee = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-FIN-001')
+            ->firstOrFail();
+        $ictEmployee = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-ICT-001')
+            ->firstOrFail();
+        $complianceEmployee = Employee::query()
+            ->whereBelongsTo($organization)
+            ->where('employee_number', 'EMP-CMP-001')
+            ->firstOrFail();
 
         foreach (Employee::query()->whereBelongsTo($organization)->get() as $employee) {
             EmployeeStatusHistory::query()->firstOrCreate(
@@ -501,7 +514,11 @@ class RichDemoDataSeeder extends Seeder
 
         foreach ([
             [$hrOfficer, $hrDirector],
+            [$financeEmployee, $hrDirector],
             [$opsEmployee, $opsSupervisor],
+            [$opsSupervisor, $hrDirector],
+            [$ictEmployee, $hrDirector],
+            [$complianceEmployee, $hrDirector],
         ] as [$employee, $manager]) {
             EmployeeReportingHistory::query()->firstOrCreate(
                 [
@@ -519,6 +536,32 @@ class RichDemoDataSeeder extends Seeder
             );
 
             $employee->update(['reporting_manager_id' => $manager->id]);
+        }
+    }
+
+    private function seedDepartmentHeads(Organization $organization): void
+    {
+        $heads = [
+            'HR' => 'EMP-HR-001',
+            'FIN' => 'EMP-FIN-001',
+            'OPS' => 'EMP-OPS-001',
+            'ICT' => 'EMP-ICT-001',
+            'CMP' => 'EMP-CMP-001',
+        ];
+
+        foreach ($heads as $departmentCode => $employeeNumber) {
+            $department = Department::query()
+                ->whereBelongsTo($organization)
+                ->where('code', $departmentCode)
+                ->first();
+            $employee = Employee::query()
+                ->whereBelongsTo($organization)
+                ->where('employee_number', $employeeNumber)
+                ->first();
+
+            if ($department && $employee) {
+                $department->update(['head_employee_id' => $employee->id]);
+            }
         }
     }
 

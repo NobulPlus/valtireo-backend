@@ -8,6 +8,8 @@ use App\Models\ApprovalWorkflowStep;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
 use App\Models\Employee;
+use App\Models\LeaveRequest;
+use App\Models\LeaveType;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Contracts\Notifications\Dispatcher;
@@ -518,5 +520,122 @@ class ApprovalWorkflowTest extends TestCase
         $this->assertTrue($workflow->is_active);
         $this->assertSame('permission', $workflow->steps->first()->approver_type);
         $this->assertSame('employee_documents.update', $workflow->steps->first()->approver_permission);
+    }
+
+    public function test_default_leave_workflow_uses_manager_department_head_and_hr(): void
+    {
+        $this->seed();
+
+        $workflow = ApprovalWorkflow::query()
+            ->where('module', 'leave')
+            ->where('action', 'submit')
+            ->with('steps.approverRole')
+            ->firstOrFail();
+
+        $steps = $workflow->steps->sortBy('step_order')->values();
+
+        $this->assertSame('direct_manager', $steps[0]->approver_type);
+        $this->assertSame('department_head', $steps[1]->approver_type);
+        $this->assertSame('role', $steps[2]->approver_type);
+        $this->assertSame('hr_director', $steps[2]->approverRole?->key);
+    }
+
+    public function test_leave_approval_routes_through_reporting_manager_named_department_head_and_hr(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $employee = $employeeUser->employee()->firstOrFail();
+        $manager = User::query()->where('email', 'kelechi.nwosu@valtireo.test')->firstOrFail();
+        $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
+        $departmentHead = $this->createFinanceDepartmentHead($employee, 'finance.head@valtireo.test', 'EMP-FIN-910');
+        $sameDepartmentPermissionHolder = $this->createFinanceDepartmentHead($employee, 'finance.permission-holder@valtireo.test', 'EMP-FIN-911');
+        $annual = LeaveType::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('code', 'ANNUAL')
+            ->firstOrFail();
+
+        $employee->update(['reporting_manager_id' => $manager->employee?->id]);
+        $employee->department()->update(['head_employee_id' => $departmentHead->employee?->id]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $leaveRequestId = $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => '2026-12-07',
+            'ends_on' => '2026-12-09',
+            'reason' => 'Family travel.',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('leave_request.approval_requests.0.current_step_order', 1)
+            ->json('leave_request.id');
+
+        $approval = ApprovalRequest::query()
+            ->where('approvable_type', LeaveRequest::class)
+            ->where('approvable_id', $leaveRequestId)
+            ->firstOrFail();
+
+        Sanctum::actingAs($manager);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+            ->assertOk()
+            ->assertJsonPath('approval_request.status', 'pending')
+            ->assertJsonPath('approval_request.current_step_order', 2);
+
+        Sanctum::actingAs($sameDepartmentPermissionHolder);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+            ->assertForbidden();
+
+        Sanctum::actingAs($departmentHead);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+            ->assertOk()
+            ->assertJsonPath('approval_request.status', 'pending')
+            ->assertJsonPath('approval_request.current_step_order', 3);
+
+        Sanctum::actingAs($hrDirector);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+            ->assertOk()
+            ->assertJsonPath('approval_request.status', 'approved');
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequestId,
+            'status' => 'approved',
+        ]);
+    }
+
+    private function createFinanceDepartmentHead(Employee $template, string $email, string $employeeNumber): User
+    {
+        $user = User::query()->create([
+            'organization_id' => $template->organization_id,
+            'name' => str($email)->before('@')->replace('.', ' ')->title()->toString(),
+            'email' => $email,
+            'password' => 'Password1!',
+        ]);
+
+        $employee = Employee::query()->create([
+            'organization_id' => $template->organization_id,
+            'user_id' => $user->id,
+            'employee_number' => $employeeNumber,
+            'first_name' => str($user->name)->before(' ')->toString(),
+            'last_name' => str($user->name)->after(' ')->toString() ?: 'Lead',
+            'work_email' => $email,
+            'department_id' => $template->department_id,
+            'unit_id' => $template->unit_id,
+            'designation_id' => $template->designation_id,
+            'grade_level_id' => $template->grade_level_id,
+            'employment_type_id' => $template->employment_type_id,
+            'organization_location_id' => $template->organization_location_id,
+            'start_date' => '2024-01-01',
+            'status' => 'active',
+            'activated_at' => now(),
+        ]);
+
+        $role = Role::query()
+            ->where('organization_id', $template->organization_id)
+            ->where('key', 'department_head')
+            ->firstOrFail();
+
+        $user->syncRoles([$role]);
+
+        return $user->setRelation('employee', $employee);
     }
 }

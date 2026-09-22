@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Asset;
 use App\Models\Employee;
 use App\Models\EmployeeReportingHistory;
 use App\Models\EmployeeStatusHistory;
@@ -60,6 +61,10 @@ class EmployeeLifecycleService
 
             if ($newStatus === 'active' && $previousStatus !== 'active') {
                 $this->activationReadiness->ensureReady($employee);
+            }
+
+            if ($newStatus === 'exited' && $previousStatus !== 'exited') {
+                $this->ensureAssetsAreCleared($employee);
             }
 
             $history = $employee->statusHistories()->create([
@@ -170,5 +175,33 @@ class EmployeeLifecycleService
         if ($employee->organization_id !== $actor->organization_id) {
             abort(404);
         }
+    }
+
+    private function ensureAssetsAreCleared(Employee $employee): void
+    {
+        $assets = Asset::query()
+            ->where('organization_id', $employee->organization_id)
+            ->where('assigned_to_employee_id', $employee->id)
+            ->orderBy('name')
+            ->limit(4)
+            ->get(['name', 'asset_tag']);
+
+        if ($assets->isEmpty()) {
+            return;
+        }
+
+        if ($assets->count() <= 3) {
+            $assetList = $assets
+                ->map(fn (Asset $asset) => "{$asset->name} ({$asset->asset_tag})")
+                ->implode(', ');
+
+            throw ValidationException::withMessages([
+                'new_status' => ["Cannot exit employee. Outstanding assets: {$assetList}. Return or clear these assets first."],
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            'new_status' => ['Cannot exit employee. This employee still has outstanding assets. Return or clear assigned assets before exit.'],
+        ]);
     }
 }

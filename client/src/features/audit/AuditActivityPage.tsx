@@ -262,7 +262,7 @@ export function AuditActivityPage() {
         title="Audit & activity"
         subtitle="Every change and workflow event recorded across this organization."
       />
-      <RequirePermission permission="audit_logs.view">
+      <RequirePermission permission="audit_logs.view" moduleKey="audit_logs">
         <AuditActivityContent />
       </RequirePermission>
     </div>

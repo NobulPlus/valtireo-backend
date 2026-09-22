@@ -557,7 +557,7 @@ function EmployeeKanbanCard({
 
 export function EmployeeListPage() {
   return (
-    <RequirePermission permission="employees.view">
+    <RequirePermission permission="employees.view" moduleKey="employees">
       <EmployeeListContent />
     </RequirePermission>
   );

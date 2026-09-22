@@ -66,19 +66,24 @@ class TicketLifecycleTest extends TestCase
         $this->assertDatabaseHas('tickets', ['id' => $ticketId, 'assigned_to_user_id' => null]);
     }
 
-    public function test_cannot_assign_a_ticket_to_a_user_without_service_desk_view(): void
+    public function test_can_assign_a_ticket_to_an_active_employee_without_service_desk_view(): void
     {
         $this->seed();
 
         $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
         $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+        $directAssignee = User::query()->where('email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($directAssignee->organization_id);
+        $this->assertFalse($directAssignee->can('service_desk.view'));
 
         $ticketId = $this->submitTicket($employeeUser);
 
         Sanctum::actingAs($ictAdmin);
-        $this->patchJson("/api/tickets/{$ticketId}/assign", ['assigned_to_user_id' => $employeeUser->id])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['assigned_to_user_id']);
+        $this->patchJson("/api/tickets/{$ticketId}/assign", ['assigned_to_user_id' => $directAssignee->id])
+            ->assertOk()
+            ->assertJsonPath('ticket.assigned_to.id', $directAssignee->id);
+
+        $this->assertDatabaseHas('tickets', ['id' => $ticketId, 'assigned_to_user_id' => $directAssignee->id]);
     }
 
     public function test_cannot_assign_a_ticket_to_a_user_in_another_organization(): void
@@ -160,6 +165,34 @@ class TicketLifecycleTest extends TestCase
             ->assertJsonPath('ticket.status', 'resolved');
     }
 
+    public function test_direct_employee_assignee_can_work_only_their_assigned_ticket(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+        $directAssignee = User::query()->where('email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+
+        $ticketId = $this->submitTicket($employeeUser);
+        $this->approveTicket($ticketId, $ictAdmin);
+
+        Sanctum::actingAs($ictAdmin);
+        $this->patchJson("/api/tickets/{$ticketId}/assign", ['assigned_to_user_id' => $directAssignee->id])->assertOk();
+
+        Sanctum::actingAs($directAssignee);
+        $this->getJson('/api/tickets')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $ticketId);
+
+        $this->patchJson("/api/tickets/{$ticketId}/start", ['note' => 'I am checking this now.'])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'in_progress');
+
+        $this->patchJson("/api/tickets/{$ticketId}/resolve", ['note' => 'Handled from my side.'])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'resolved');
+    }
+
     public function test_plain_employee_cannot_resolve_a_ticket(): void
     {
         $this->seed();
@@ -171,6 +204,33 @@ class TicketLifecycleTest extends TestCase
 
         Sanctum::actingAs($employeeUser);
         $this->patchJson("/api/tickets/{$ticketId}/resolve")->assertForbidden();
+    }
+
+    public function test_service_desk_view_holder_cannot_work_ticket_outside_their_routing_scope(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+        $hrOfficer = User::query()->where('email', 'kelechi.nwosu@valtireo.test')->firstOrFail();
+        $ticketId = $this->submitTicket($employeeUser, 'IT');
+        $this->approveTicket($ticketId, $ictAdmin);
+
+        $this->setPermissionsTeamId($hrOfficer->organization_id);
+        $this->assertTrue($hrOfficer->can('service_desk.view'));
+        $this->assertFalse($hrOfficer->hasRole('ICT Admin'));
+
+        Sanctum::actingAs($hrOfficer);
+        $this->patchJson("/api/tickets/{$ticketId}/start", ['note' => 'Picking this up from HR.'])
+            ->assertForbidden();
+
+        Sanctum::actingAs($ictAdmin);
+        $this->patchJson("/api/tickets/{$ticketId}/assign", ['assigned_to_user_id' => $hrOfficer->id])->assertOk();
+
+        Sanctum::actingAs($hrOfficer);
+        $this->patchJson("/api/tickets/{$ticketId}/start", ['note' => 'Assigned directly, picking it up now.'])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'in_progress');
     }
 
     public function test_ticket_can_only_be_reopened_once_resolved(): void
@@ -247,6 +307,54 @@ class TicketLifecycleTest extends TestCase
         $this->assertDatabaseHas('ticket_activities', ['ticket_id' => $ticketId, 'event' => 'ticket_on_hold']);
         $this->assertDatabaseHas('ticket_activities', ['ticket_id' => $ticketId, 'event' => 'ticket_escalated']);
         $this->assertDatabaseHas('ticket_activities', ['ticket_id' => $ticketId, 'event' => 'ticket_closed']);
+    }
+
+    public function test_resolver_cannot_close_or_rate_a_resolved_ticket_for_the_requester(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+        $ticketId = $this->submitTicket($employeeUser);
+        $this->approveTicket($ticketId, $ictAdmin);
+
+        Sanctum::actingAs($ictAdmin);
+        $this->patchJson("/api/tickets/{$ticketId}/resolve")->assertOk();
+        $this->patchJson("/api/tickets/{$ticketId}/close", [
+            'satisfaction_rating' => 5,
+            'satisfaction_comment' => 'Closing as resolver.',
+        ])->assertForbidden();
+
+        Sanctum::actingAs($employeeUser);
+        $this->patchJson("/api/tickets/{$ticketId}/close", [
+            'satisfaction_rating' => 4,
+            'satisfaction_comment' => 'Confirmed by requester.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('ticket.status', 'closed')
+            ->assertJsonPath('ticket.satisfaction_rating', 4);
+    }
+
+    public function test_resolved_ticket_only_allows_close_or_reopen(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+        $ticketId = $this->submitTicket($employeeUser);
+        $this->approveTicket($ticketId, $ictAdmin);
+
+        Sanctum::actingAs($ictAdmin);
+        $this->patchJson("/api/tickets/{$ticketId}/resolve")->assertOk();
+        $this->patchJson("/api/tickets/{$ticketId}/assign", ['assigned_to_user_id' => $ictAdmin->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+        $this->patchJson("/api/tickets/{$ticketId}/priority", ['priority' => 'urgent'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+        $this->patchJson("/api/tickets/{$ticketId}/escalate", ['priority' => 'urgent'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
     }
 
     public function test_cannot_assign_resolve_or_reopen_another_organizations_ticket(): void

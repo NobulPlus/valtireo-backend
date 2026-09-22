@@ -18,7 +18,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PlatformAdminService
 {
-    public function __construct(private readonly WorkspaceSettingsService $workspaceSettings)
+    public function __construct(
+        private readonly WorkspaceSettingsService $workspaceSettings,
+        private readonly OrganizationVerificationService $verification,
+    )
     {
     }
 
@@ -38,6 +41,7 @@ class PlatformAdminService
                 'organizations_active' => (clone $organizations)->where('status', 'active')->count(),
                 'organizations_invited' => (clone $organizations)->where('status', 'invited')->count(),
                 'organizations_setup' => (clone $organizations)->whereIn('status', ['setup', 'setup_in_progress'])->count(),
+                'organizations_pending_approval' => (clone $organizations)->where('status', 'pending_approval')->count(),
                 'organizations_suspended' => (clone $organizations)->where('status', 'suspended')->count(),
                 'users_total' => User::query()->whereIn('organization_id', $organizationIds)->count(),
                 'employees_total' => Employee::query()->whereIn('organization_id', $organizationIds)->count(),
@@ -56,6 +60,7 @@ class PlatformAdminService
                 ->values(),
             'attention' => [
                 'setup_incomplete' => $this->dashboardOrganizationQuery($filters)->whereIn('status', ['invited', 'setup', 'setup_in_progress'])->count(),
+                'pending_verification' => $this->dashboardOrganizationQuery($filters)->where('status', 'pending_approval')->count(),
                 'without_modules' => $this->dashboardOrganizationQuery($filters)
                     ->whereDoesntHave('moduleSubscriptions', fn (Builder $query) => $query->whereIn('status', ['active', 'trial']))
                     ->count(),
@@ -66,6 +71,9 @@ class PlatformAdminService
             'attention_details' => [
                 'setup_incomplete' => $this->attentionOrganizations(
                     $this->dashboardOrganizationQuery($filters)->whereIn('status', ['invited', 'setup', 'setup_in_progress'])
+                ),
+                'pending_verification' => $this->attentionOrganizations(
+                    $this->dashboardOrganizationQuery($filters)->where('status', 'pending_approval')
                 ),
                 'without_modules' => $this->attentionOrganizations(
                     $this->dashboardOrganizationQuery($filters)
@@ -247,6 +255,7 @@ class PlatformAdminService
                 'updated_at' => $organization->updated_at,
             ],
             'workspace' => $this->workspaceSettings->forOrganization($organization),
+            'verification' => $this->verification->summary($organization),
             'metrics' => [
                 'users' => $organization->users()->count(),
                 'employees' => $organization->employees()->count(),

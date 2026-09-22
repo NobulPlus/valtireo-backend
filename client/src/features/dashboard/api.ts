@@ -8,6 +8,7 @@ export interface OrganizationDashboardFilters {
   date_to?: string;
   date_column?: string;
   department_id?: number;
+  cluster_id?: number;
   employment_type_id?: number;
   organization_location_id?: number;
   status?: string;
@@ -32,6 +33,7 @@ export function useOrganizationDashboard(filters: OrganizationDashboardFilters =
 
 export interface ManagerDashboardFilters {
   department_id?: number;
+  cluster_id?: number;
 }
 
 export function useManagerDashboard(filters: ManagerDashboardFilters = {}, enabled = true) {

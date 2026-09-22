@@ -103,8 +103,8 @@ function ProvisionSuccess({ result, onCreateAnother }: { result: ProvisionOrgani
       </CardHeader>
       <CardBody className="space-y-4">
         <Alert tone="warning">
-          This temporary password is shown once and is not emailed. Share it securely with{' '}
-          {result.admin.name} now &mdash; it cannot be retrieved again from the console.
+          This setup link is shown once. Share it securely with {result.admin.name} so they can choose a password and
+          activate the workspace.
         </Alert>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -121,8 +121,8 @@ function ProvisionSuccess({ result, onCreateAnother }: { result: ProvisionOrgani
         </div>
 
         <div>
-          <p className="mb-1.5 text-xs font-medium text-muted">Temporary password</p>
-          <CopyableSecret value={result.invitation.temporary_password} label="Copy password" />
+          <p className="mb-1.5 text-xs font-medium text-muted">Setup link</p>
+          <CopyableSecret value={result.invitation.setup_url} label="Copy link" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -357,8 +357,8 @@ function PlatformOrganizationCreateForm() {
             <Input id="adminEmail" type="email" invalid={Boolean(errors.adminEmail)} {...register('adminEmail')} />
           </Field>
           <p className="text-xs text-muted sm:col-span-2">
-            This person is created as the organization's first Organization Admin. A temporary password is shown once, right
-            after provisioning &mdash; if mail delivery is enabled, the invite can also be sent through the configured SMTP provider.
+            This person is created as the organization's first Organization Admin. A one-time setup link is shown after
+            provisioning and can also be delivered through the configured mail provider.
           </p>
         </CardBody>
       </Card>

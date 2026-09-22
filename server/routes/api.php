@@ -2,12 +2,14 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ApprovalRequestController;
+use App\Http\Controllers\Api\AssetCategoryController;
 use App\Http\Controllers\Api\AssetController;
 use App\Http\Controllers\Api\ApprovalWorkflowController;
 use App\Http\Controllers\Api\AttendanceCorrectionRequestController;
 use App\Http\Controllers\Api\AttendanceRecordController;
 use App\Http\Controllers\Api\AttendanceSettingController;
 use App\Http\Controllers\Api\AuditVisibilityController;
+use App\Http\Controllers\Api\CompanyEventController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DocumentRequirementController;
 use App\Http\Controllers\Api\DocumentTypeController;
@@ -20,17 +22,23 @@ use App\Http\Controllers\Api\EmployeeEmergencyContactController;
 use App\Http\Controllers\Api\EmployeeLifecycleController;
 use App\Http\Controllers\Api\EmployeeProfileActivityController;
 use App\Http\Controllers\Api\EmployeeProfileOverviewController;
+use App\Http\Controllers\Api\EmployeePayrollController;
 use App\Http\Controllers\Api\LeaveEntitlementController;
 use App\Http\Controllers\Api\LeaveHolidayController;
 use App\Http\Controllers\Api\LeavePeriodController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\LeaveTypeController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrganizationVerificationController;
 use App\Http\Controllers\Api\PlatformModuleController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
+use App\Http\Controllers\Api\PayrollConfigurationController;
+use App\Http\Controllers\Api\PayrollRunController;
+use App\Http\Controllers\Api\PayrollOperationsController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SetupChecklistController;
 use App\Http\Controllers\Api\SetupLookupController;
+use App\Http\Controllers\Api\SystemErrorLogController;
 use App\Http\Controllers\Api\TemplateController;
 use App\Http\Controllers\Api\TicketCategoryController;
 use App\Http\Controllers\Api\TicketCommentController;
@@ -40,6 +48,7 @@ use App\Http\Controllers\Api\WorkShiftController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Middleware\EnsureOrganizationIsActive;
+use App\Http\Middleware\EnsureModuleIsSubscribed;
 use App\Http\Middleware\SetPermissionsTeamId;
 use Illuminate\Support\Facades\Route;
 
@@ -69,9 +78,21 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/organizations', [PlatformOrganizationController::class, 'store']);
         Route::get('/organizations/{organization}', [PlatformOrganizationController::class, 'show']);
         Route::patch('/organizations/{organization}/status', [PlatformOrganizationController::class, 'updateStatus']);
+        Route::get('/organizations/{organization}/verification-documents', [OrganizationVerificationController::class, 'platformIndex']);
+        Route::patch('/organizations/{organization}/verification-documents/{document}', [OrganizationVerificationController::class, 'platformReview']);
         Route::patch('/organizations/{organization}/modules/{platformModule}', [PlatformOrganizationController::class, 'updateModule']);
         Route::patch('/organizations/{organization}/workspace', [PlatformOrganizationController::class, 'updateWorkspace']);
         Route::patch('/permissions/{permission}', [PermissionController::class, 'update']);
+        Route::get('/error-logs/summary', [SystemErrorLogController::class, 'summary']);
+        Route::get('/error-logs', [SystemErrorLogController::class, 'index']);
+        Route::patch('/error-logs/{systemErrorLog}/resolve', [SystemErrorLogController::class, 'resolve']);
+    });
+
+    Route::prefix('organization-verification')->group(function () {
+        Route::get('/', [OrganizationVerificationController::class, 'show']);
+        Route::post('/documents', [OrganizationVerificationController::class, 'store']);
+        Route::post('/submit', [OrganizationVerificationController::class, 'submit']);
+        Route::get('/documents/{document}/download', [OrganizationVerificationController::class, 'download']);
     });
 
     Route::get('/workspace', [WorkspaceController::class, 'show']);
@@ -91,17 +112,21 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     Route::post('/templates/{key}/import', [TemplateController::class, 'import']);
     Route::post('/templates/{key}/failed-rows', [TemplateController::class, 'failedRows']);
 
-    Route::get('/reports', [ReportController::class, 'index']);
-    Route::get('/reports/{key}', [ReportController::class, 'show']);
-    Route::get('/reports/{key}/export', [ReportController::class, 'export']);
+    Route::middleware(EnsureModuleIsSubscribed::class.':reports')->group(function () {
+        Route::get('/reports', [ReportController::class, 'index']);
+        Route::get('/reports/{key}', [ReportController::class, 'show']);
+        Route::get('/reports/{key}/export', [ReportController::class, 'export']);
+    });
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
 
-    Route::get('/audit-logs', [AuditVisibilityController::class, 'auditLogs']);
-    Route::get('/activity-feed', [AuditVisibilityController::class, 'activityFeed']);
+    Route::middleware(EnsureModuleIsSubscribed::class.':audit_logs')->group(function () {
+        Route::get('/audit-logs', [AuditVisibilityController::class, 'auditLogs']);
+        Route::get('/activity-feed', [AuditVisibilityController::class, 'activityFeed']);
+    });
 
     Route::prefix('approval-workflows')->group(function () {
         Route::get('/', [ApprovalWorkflowController::class, 'index']);
@@ -144,6 +169,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     });
 
     Route::prefix('roles')->group(function () {
+        Route::get('/activities', [RoleController::class, 'activities']);
         Route::get('/', [RoleController::class, 'index']);
         Route::post('/', [RoleController::class, 'store']);
         Route::patch('/{role}', [RoleController::class, 'update']);
@@ -152,7 +178,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
 
     Route::get('/permissions', [PermissionController::class, 'index']);
 
-    Route::prefix('documents')->group(function () {
+    Route::prefix('documents')->middleware(EnsureModuleIsSubscribed::class.':documents')->group(function () {
         Route::get('/types', [DocumentTypeController::class, 'index']);
         Route::post('/types', [DocumentTypeController::class, 'store']);
         Route::get('/types/{documentType}', [DocumentTypeController::class, 'show']);
@@ -174,7 +200,14 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/{employeeDocument}/signed-copy', [EmployeeDocumentController::class, 'signedCopy']);
     });
 
-    Route::prefix('leave')->group(function () {
+    Route::prefix('company-events')->group(function () {
+        Route::get('/', [CompanyEventController::class, 'index']);
+        Route::post('/', [CompanyEventController::class, 'store']);
+        Route::patch('/{companyEvent}', [CompanyEventController::class, 'update']);
+        Route::delete('/{companyEvent}', [CompanyEventController::class, 'destroy']);
+    });
+
+    Route::prefix('leave')->middleware(EnsureModuleIsSubscribed::class.':leave')->group(function () {
         Route::get('/types', [LeaveTypeController::class, 'index']);
         Route::post('/types', [LeaveTypeController::class, 'store']);
         Route::patch('/types/{leaveType}', [LeaveTypeController::class, 'update']);
@@ -192,10 +225,11 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/requests', [LeaveRequestController::class, 'store']);
         Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
         Route::get('/requests/{leaveRequest}/evidence/download', [LeaveRequestController::class, 'downloadEvidence']);
+        Route::get('/requests/{leaveRequest}/handover-document/download', [LeaveRequestController::class, 'downloadHandoverDocument']);
         Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
     });
 
-    Route::prefix('tickets')->group(function () {
+    Route::prefix('tickets')->middleware(EnsureModuleIsSubscribed::class.':service_desk')->group(function () {
         Route::get('/categories', [TicketCategoryController::class, 'index']);
         Route::post('/categories', [TicketCategoryController::class, 'store']);
         Route::get('/categories/{ticketCategory}', [TicketCategoryController::class, 'show']);
@@ -207,8 +241,10 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/{ticket}', [TicketController::class, 'show']);
         Route::get('/{ticket}/attachment/download', [TicketController::class, 'downloadAttachment']);
         Route::patch('/{ticket}/cancel', [TicketController::class, 'cancel']);
+        Route::patch('/{ticket}/resubmit', [TicketController::class, 'resubmit']);
         Route::patch('/{ticket}/assign', [TicketController::class, 'assign']);
         Route::patch('/{ticket}/priority', [TicketController::class, 'updatePriority']);
+        Route::patch('/{ticket}/decline', [TicketController::class, 'decline']);
         Route::patch('/{ticket}/start', [TicketController::class, 'start']);
         Route::patch('/{ticket}/hold', [TicketController::class, 'hold']);
         Route::patch('/{ticket}/resume', [TicketController::class, 'resume']);
@@ -222,14 +258,22 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/{ticket}/comments/{ticketComment}/attachment/download', [TicketCommentController::class, 'downloadAttachment']);
     });
 
-    Route::prefix('assets')->group(function () {
+    Route::prefix('assets')->middleware(EnsureModuleIsSubscribed::class.':assets')->group(function () {
         Route::get('/', [AssetController::class, 'index']);
         Route::post('/', [AssetController::class, 'store']);
+        Route::get('/categories', [AssetCategoryController::class, 'index']);
+        Route::post('/categories', [AssetCategoryController::class, 'store']);
+        Route::patch('/categories/{assetCategory}', [AssetCategoryController::class, 'update']);
+        Route::get('/reporting', [AssetController::class, 'reporting']);
         Route::get('/{asset}', [AssetController::class, 'show']);
         Route::patch('/{asset}', [AssetController::class, 'update']);
+        Route::patch('/{asset}/assign', [AssetController::class, 'assign']);
+        Route::patch('/{asset}/return', [AssetController::class, 'returnAsset']);
+        Route::patch('/{asset}/report-fault', [AssetController::class, 'reportFault']);
+        Route::patch('/{asset}/return-to-service', [AssetController::class, 'returnToService']);
     });
 
-    Route::prefix('attendance')->group(function () {
+    Route::prefix('attendance')->middleware(EnsureModuleIsSubscribed::class.':attendance')->group(function () {
         Route::get('/settings', [AttendanceSettingController::class, 'show']);
         Route::patch('/settings', [AttendanceSettingController::class, 'update']);
         Route::get('/shifts', [WorkShiftController::class, 'index']);
@@ -243,27 +287,69 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/corrections/{attendanceCorrection}', [AttendanceCorrectionRequestController::class, 'show']);
     });
 
-    Route::get('/employees', [EmployeeController::class, 'index']);
-    Route::get('/employees/export', [EmployeeController::class, 'export']);
-    Route::get('/employees/org-chart', [EmployeeController::class, 'orgChart']);
-    Route::get('/employees/directory', [EmployeeController::class, 'directory']);
-    Route::post('/employees', [EmployeeController::class, 'store']);
-    Route::get('/employees/{employee}/export', [EmployeeController::class, 'exportOne']);
-    Route::post('/employees/{employee}/correction-requests', [EmployeeController::class, 'requestCorrection']);
-    Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
-    Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
-    Route::get('/employees/{employee}/profile-overview', [EmployeeProfileOverviewController::class, 'show']);
-    Route::get('/employees/{employee}/profile-activities', [EmployeeProfileActivityController::class, 'index']);
-    Route::get('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'index']);
-    Route::put('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'upsert']);
-    Route::get('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'statusHistory']);
-    Route::post('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'storeStatusHistory']);
-    Route::get('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'reportingHistory']);
-    Route::post('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'storeReportingHistory']);
-    Route::patch('/employees/{employee}/approve-onboarding', [EmployeeController::class, 'approveOnboarding']);
-    Route::patch('/me/employee-profile', [EmployeeController::class, 'updateMyProfile']);
+    Route::prefix('payroll')->middleware(EnsureModuleIsSubscribed::class.':payroll')->group(function () {
+        Route::get('/settings', [PayrollConfigurationController::class, 'settings']);
+        Route::patch('/settings', [PayrollConfigurationController::class, 'updateSettings']);
+        Route::get('/pay-groups', [PayrollConfigurationController::class, 'payGroups']);
+        Route::post('/pay-groups', [PayrollConfigurationController::class, 'storePayGroup']);
+        Route::patch('/pay-groups/{payGroup}', [PayrollConfigurationController::class, 'updatePayGroup']);
+        Route::get('/components', [PayrollConfigurationController::class, 'components']);
+        Route::post('/components', [PayrollConfigurationController::class, 'storeComponent']);
+        Route::patch('/components/{component}', [PayrollConfigurationController::class, 'updateComponent']);
+        Route::get('/employees/{employee}', [EmployeePayrollController::class, 'show']);
+        Route::post('/employees/{employee}/compensations', [EmployeePayrollController::class, 'storeCompensation']);
+        Route::post('/employees/{employee}/bank-accounts', [EmployeePayrollController::class, 'storeBankAccount']);
+        Route::get('/me/payslips', [EmployeePayrollController::class, 'myPayslips']);
+        Route::get('/me/payslips/{payrollRunItem}', [EmployeePayrollController::class, 'myPayslip']);
+        Route::get('/runs', [PayrollRunController::class, 'index']);
+        Route::post('/runs', [PayrollRunController::class, 'store']);
+        Route::get('/runs/{payrollRun}', [PayrollRunController::class, 'show']);
+        Route::post('/runs/{payrollRun}/calculate', [PayrollRunController::class, 'calculate']);
+        Route::post('/runs/{payrollRun}/submit', [PayrollRunController::class, 'submit']);
+        Route::post('/runs/{payrollRun}/finalize', [PayrollRunController::class, 'finalize']);
+        Route::post('/runs/{payrollRun}/publish', [PayrollRunController::class, 'publish']);
+        Route::post('/runs/{payrollRun}/void', [PayrollRunController::class, 'void']);
+        Route::get('/inputs', [PayrollOperationsController::class, 'inputs']);
+        Route::post('/inputs', [PayrollOperationsController::class, 'storeInput']);
+        Route::get('/employees/{employee}/statutory-profile', [PayrollOperationsController::class, 'statutoryProfile']);
+        Route::put('/employees/{employee}/statutory-profile', [PayrollOperationsController::class, 'updateStatutoryProfile']);
+        Route::get('/loans', [PayrollOperationsController::class, 'loans']);
+        Route::post('/loans', [PayrollOperationsController::class, 'storeLoan']);
+        Route::post('/runs/{payrollRun}/payment-export', [PayrollOperationsController::class, 'paymentExport']);
+        Route::get('/payment-batches/{paymentBatch}/download', [PayrollOperationsController::class, 'downloadPayment']);
+        Route::post('/runs/{payrollRun}/journal', [PayrollOperationsController::class, 'journal']);
+        Route::post('/run-items/{payrollRunItem}/payslip', [PayrollOperationsController::class, 'payslip']);
+        Route::get('/run-items/{payrollRunItem}/payslip/download', [PayrollOperationsController::class, 'downloadPayslip']);
+        Route::get('/reports/summary', [PayrollOperationsController::class, 'report']);
+        Route::get('/reports/statutory', [PayrollOperationsController::class, 'statutoryReport']);
+        Route::get('/reports/register/export', [PayrollOperationsController::class, 'exportRegister']);
+    });
 
-    Route::prefix('employee-profile')->group(function () {
+    Route::middleware(EnsureModuleIsSubscribed::class.':employees')->group(function () {
+        Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::get('/employees/export', [EmployeeController::class, 'export']);
+        Route::get('/employees/org-chart', [EmployeeController::class, 'orgChart']);
+        Route::get('/employees/directory', [EmployeeController::class, 'directory']);
+        Route::post('/employees', [EmployeeController::class, 'store']);
+        Route::get('/employees/{employee}/export', [EmployeeController::class, 'exportOne']);
+        Route::post('/employees/{employee}/correction-requests', [EmployeeController::class, 'requestCorrection']);
+        Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+        Route::get('/employees/{employee}/profile-overview', [EmployeeProfileOverviewController::class, 'show']);
+        Route::get('/employees/{employee}/profile-activities', [EmployeeProfileActivityController::class, 'index']);
+        Route::get('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'index']);
+        Route::put('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'upsert']);
+        Route::get('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'statusHistory']);
+        Route::post('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'storeStatusHistory']);
+        Route::get('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'reportingHistory']);
+        Route::post('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'storeReportingHistory']);
+        Route::patch('/employees/{employee}/approve-onboarding', [EmployeeController::class, 'approveOnboarding']);
+    });
+
+    Route::patch('/me/employee-profile', [EmployeeController::class, 'updateMyProfile'])
+        ->middleware(EnsureModuleIsSubscribed::class.':employee_self_service');
+
+    Route::prefix('employee-profile')->middleware(EnsureModuleIsSubscribed::class.':employee_self_service')->group(function () {
         Route::get('/overview', [EmployeeProfileOverviewController::class, 'me']);
         Route::get('/activities', [EmployeeProfileActivityController::class, 'myIndex']);
 
@@ -288,3 +374,4 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
 });
 
 Route::post('/employee-invitations/{token}/accept', [EmployeeController::class, 'acceptInvitation']);
+Route::post('/organization-admin-invitations/{token}/accept', [AuthController::class, 'acceptOrganizationAdminInvitation']);

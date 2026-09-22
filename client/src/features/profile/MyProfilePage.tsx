@@ -764,13 +764,20 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
           <ProfileField label="Document type">
             <SelectMenu
               value={documentForm.document_type_id}
-              onChange={(value) => setDocumentForm((current) => ({ ...current, document_type_id: value }))}
+              onChange={(value) => {
+                const selectedType = documentTypesQuery.data?.data.find((type) => String(type.id) === value);
+                setDocumentForm((current) => ({
+                  ...current,
+                  document_type_id: value,
+                  title: selectedType?.name ?? '',
+                }));
+              }}
               options={(documentTypesQuery.data?.data ?? []).map((type) => ({ value: String(type.id), label: type.name }))}
               placeholder="Select document type"
             />
           </ProfileField>
           <ProfileField label="Title">
-            <Input value={documentForm.title} onChange={(event) => setDocumentForm((current) => ({ ...current, title: event.target.value }))} />
+            <Input value={documentForm.title} disabled readOnly className="cursor-not-allowed bg-surface-soft text-muted" />
           </ProfileField>
           <ProfileField label="File">
             <input

@@ -14,6 +14,7 @@ use App\Services\EmployeeRoleAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SetupLookupController extends Controller
 {
@@ -44,10 +45,11 @@ class SetupLookupController extends Controller
     {
         return response()->json([
             'data' => Department::query()
+                ->with('head:id,employee_number,first_name,last_name,work_email,department_id')
                 ->where('organization_id', $request->user()->organization_id)
                 ->where('is_active', true)
                 ->orderBy('name')
-                ->get(['id', 'parent_id', 'code', 'name', 'description']),
+                ->get(['id', 'parent_id', 'head_employee_id', 'code', 'name', 'description']),
         ]);
     }
 
@@ -68,21 +70,31 @@ class SetupLookupController extends Controller
     {
         return response()->json([
             'data' => Cluster::query()
-                ->with(['department:id,code,name', 'locations:id,code,name'])
+                ->with([
+                    'department:id,code,name',
+                    'locations:id,code,name',
+                    'manager:id,employee_number,first_name,last_name,work_email,department_id,cluster_id',
+                    'supervisor:id,employee_number,first_name,last_name,work_email,department_id,cluster_id',
+                ])
                 ->where('organization_id', $request->user()->organization_id)
                 ->where('is_active', true)
                 ->when($request->integer('department_id'), fn ($query, int $departmentId) => $query->where('department_id', $departmentId))
                 ->orderBy('name')
-                ->get(['id', 'organization_id', 'department_id', 'code', 'name', 'description'])
+                ->get(['id', 'organization_id', 'department_id', 'manager_employee_id', 'supervisor_employee_id', 'code', 'name', 'description'])
                 ->map(fn (Cluster $cluster) => [
                     'id' => $cluster->id,
                     'organization_id' => $cluster->organization_id,
                     'department_id' => $cluster->department_id,
+                    'manager_employee_id' => $cluster->manager_employee_id,
+                    'supervisor_employee_id' => $cluster->supervisor_employee_id,
                     'code' => $cluster->code,
                     'name' => $cluster->name,
                     'description' => $cluster->description,
                     'department' => $cluster->department,
                     'locations' => $cluster->locations,
+                    'manager' => $cluster->manager,
+                    'supervisor' => $cluster->supervisor,
+                    'members_count' => $cluster->employees()->count(),
                 ]),
         ]);
     }
@@ -143,7 +155,7 @@ class SetupLookupController extends Controller
             ...$data,
         ]);
 
-        return response()->json(['department' => $department], 201);
+        return response()->json(['department' => $department->load('head:id,employee_number,first_name,last_name,work_email,department_id')], 201);
     }
 
     public function updateDepartment(Request $request, Department $department): JsonResponse
@@ -151,9 +163,12 @@ class SetupLookupController extends Controller
         abort_unless($request->user()->can('workspace_settings.update'), 403);
         abort_unless($department->organization_id === $request->user()->organization_id, 404);
 
-        $department->update($request->validate($this->departmentRules($request, $department->id)));
+        $data = $request->validate($this->departmentRules($request, $department->id));
+        $this->ensureDepartmentHeadBelongsToDepartment($data, $department);
 
-        return response()->json(['department' => $department->refresh()]);
+        $department->update($data);
+
+        return response()->json(['department' => $department->refresh()->load('head:id,employee_number,first_name,last_name,work_email,department_id')]);
     }
 
     public function storeUnit(Request $request): JsonResponse
@@ -183,6 +198,7 @@ class SetupLookupController extends Controller
         abort_unless($request->user()->can('workspace_settings.update'), 403);
 
         $data = $request->validate($this->clusterRules($request));
+        $this->ensureClusterLeadersMatchScope($data, $request->user()->organization_id);
         $locationIds = $data['location_ids'] ?? [];
         unset($data['location_ids']);
 
@@ -191,8 +207,14 @@ class SetupLookupController extends Controller
             ...$data,
         ]);
         $cluster->locations()->sync($locationIds);
+        $this->syncClusterLeaders($cluster, $data);
 
-        return response()->json(['cluster' => $cluster->load(['department:id,code,name', 'locations:id,code,name'])], 201);
+        return response()->json(['cluster' => $cluster->load([
+            'department:id,code,name',
+            'locations:id,code,name',
+            'manager:id,employee_number,first_name,last_name,work_email,department_id,cluster_id',
+            'supervisor:id,employee_number,first_name,last_name,work_email,department_id,cluster_id',
+        ])], 201);
     }
 
     public function updateCluster(Request $request, Cluster $cluster): JsonResponse
@@ -201,6 +223,7 @@ class SetupLookupController extends Controller
         abort_unless($cluster->organization_id === $request->user()->organization_id, 404);
 
         $data = $request->validate($this->clusterRules($request, $cluster->id));
+        $this->ensureClusterLeadersMatchScope($data, $request->user()->organization_id, $cluster);
 
         if (array_key_exists('location_ids', $data)) {
             $cluster->locations()->sync($data['location_ids']);
@@ -208,8 +231,14 @@ class SetupLookupController extends Controller
         }
 
         $cluster->update($data);
+        $this->syncClusterLeaders($cluster, $data);
 
-        return response()->json(['cluster' => $cluster->refresh()->load(['department:id,code,name', 'locations:id,code,name'])]);
+        return response()->json(['cluster' => $cluster->refresh()->load([
+            'department:id,code,name',
+            'locations:id,code,name',
+            'manager:id,employee_number,first_name,last_name,work_email,department_id,cluster_id',
+            'supervisor:id,employee_number,first_name,last_name,work_email,department_id,cluster_id',
+        ])]);
     }
 
     public function storeDesignation(Request $request): JsonResponse
@@ -354,7 +383,36 @@ class SetupLookupController extends Controller
         return [
             ...$this->simpleSetupRules($request, 'departments', $ignoreId),
             'parent_id' => ['nullable', Rule::exists('departments', 'id')->where('organization_id', $request->user()?->organization_id)],
+            'head_employee_id' => $ignoreId === null
+                ? ['prohibited']
+                : [
+                    'nullable',
+                    Rule::exists('employees', 'id')
+                        ->where('organization_id', $request->user()?->organization_id),
+                ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function ensureDepartmentHeadBelongsToDepartment(array $data, Department $department): void
+    {
+        if (! array_key_exists('head_employee_id', $data) || blank($data['head_employee_id'])) {
+            return;
+        }
+
+        $belongsToDepartment = \App\Models\Employee::query()
+            ->whereKey($data['head_employee_id'])
+            ->where('organization_id', $department->organization_id)
+            ->where('department_id', $department->id)
+            ->exists();
+
+        if (! $belongsToDepartment) {
+            throw ValidationException::withMessages([
+                'head_employee_id' => ['The department head must be an employee in this department.'],
+            ]);
+        }
     }
 
     /**
@@ -382,9 +440,79 @@ class SetupLookupController extends Controller
                 $ignoreId === null ? 'required' : 'sometimes',
                 Rule::exists('departments', 'id')->where('organization_id', $request->user()?->organization_id),
             ],
+            'manager_employee_id' => [
+                'nullable',
+                Rule::exists('employees', 'id')->where('organization_id', $request->user()?->organization_id),
+            ],
+            'supervisor_employee_id' => [
+                'nullable',
+                Rule::exists('employees', 'id')->where('organization_id', $request->user()?->organization_id),
+            ],
             'location_ids' => ['sometimes', 'array'],
             'location_ids.*' => [Rule::exists('organization_locations', 'id')->where('organization_id', $request->user()?->organization_id)],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function ensureClusterLeadersMatchScope(array $data, int $organizationId, ?Cluster $cluster = null): void
+    {
+        $departmentId = $data['department_id'] ?? $cluster?->department_id;
+        $clusterId = $cluster?->id;
+        $errors = [];
+
+        foreach (['manager_employee_id' => 'manager', 'supervisor_employee_id' => 'supervisor'] as $field => $label) {
+            if (! array_key_exists($field, $data) || blank($data[$field])) {
+                continue;
+            }
+
+            $employee = \App\Models\Employee::query()
+                ->whereKey($data[$field])
+                ->where('organization_id', $organizationId)
+                ->first(['id', 'department_id', 'cluster_id']);
+
+            if (! $employee || $employee->department_id !== (int) $departmentId) {
+                $errors[$field][] = "The selected cluster {$label} must belong to this cluster's department.";
+
+                continue;
+            }
+
+            if ($employee->cluster_id && $employee->cluster_id !== $clusterId) {
+                $errors[$field][] = "The selected cluster {$label} is already assigned to another cluster.";
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * Selecting someone as a cluster lead should make the cluster assignment
+     * explicit too; reporting and dashboards then read one consistent shape.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function syncClusterLeaders(Cluster $cluster, array $data): void
+    {
+        $leaderIds = collect([
+            $data['manager_employee_id'] ?? null,
+            $data['supervisor_employee_id'] ?? null,
+        ])
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($leaderIds->isEmpty()) {
+            return;
+        }
+
+        \App\Models\Employee::query()
+            ->where('organization_id', $cluster->organization_id)
+            ->whereIn('id', $leaderIds)
+            ->where(fn ($query) => $query->whereNull('cluster_id')->orWhere('cluster_id', $cluster->id))
+            ->update(['cluster_id' => $cluster->id]);
     }
 
     /**

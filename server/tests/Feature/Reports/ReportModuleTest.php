@@ -24,7 +24,9 @@ class ReportModuleTest extends TestCase
             ->assertJsonFragment(['key' => 'leave_balances'])
             ->assertJsonFragment(['key' => 'leave_requests'])
             ->assertJsonFragment(['key' => 'attendance_summary'])
-            ->assertJsonFragment(['key' => 'attendance_exceptions']);
+            ->assertJsonFragment(['key' => 'attendance_exceptions'])
+            ->assertJsonFragment(['key' => 'asset_inventory'])
+            ->assertJsonFragment(['key' => 'asset_assignments']);
     }
 
     public function test_employee_without_reports_permission_cannot_access_reports(): void

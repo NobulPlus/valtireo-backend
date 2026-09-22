@@ -14,6 +14,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 #[Fillable([
     'organization_id',
     'parent_id',
+    'head_employee_id',
     'name',
     'code',
     'description',
@@ -32,6 +33,11 @@ class Department extends Model implements AuditableContract
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'parent_id');
+    }
+
+    public function head(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'head_employee_id');
     }
 
     public function children(): HasMany

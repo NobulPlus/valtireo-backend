@@ -2,7 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\Asset;
 use App\Models\Department;
+use App\Models\ApprovalRequest;
+use App\Models\ApprovalWorkflowStep;
 use App\Models\Ticket;
 use App\Models\TicketCategory;
 use App\Models\TicketComment;
@@ -14,12 +17,13 @@ use Illuminate\Validation\ValidationException;
 
 class TicketService
 {
-    private const TERMINAL_STATUSES = ['cancelled', 'rejected', 'closed'];
+    private const TERMINAL_STATUSES = ['cancelled', 'rejected', 'resolved', 'closed'];
     private const WORKABLE_STATUSES = ['approved', 'in_progress', 'on_hold'];
 
     public function __construct(
         private readonly ApprovalRequestService $approvals,
         private readonly NotificationDispatchService $notifications,
+        private readonly AssetService $assets,
     ) {
     }
 
@@ -50,6 +54,7 @@ class TicketService
             }
 
             $submittedAt = now();
+            $isDirectlyRouted = $assignee !== null || $department !== null;
 
             try {
                 $ticket = Ticket::query()->create([
@@ -61,7 +66,7 @@ class TicketService
                     'asset_id' => $data['asset_id'] ?? null,
                     'subject' => $data['subject'],
                     'description' => $data['description'],
-                    'status' => 'submitted',
+                    'status' => $isDirectlyRouted ? 'approved' : 'submitted',
                     'priority' => $data['priority'] ?? 'medium',
                     'assigned_to_user_id' => $assignee?->id,
                     'attachment_file_name' => $attachment instanceof UploadedFile ? $attachment->getClientOriginalName() : null,
@@ -69,31 +74,47 @@ class TicketService
                     'attachment_mime_type' => $attachment instanceof UploadedFile ? $attachment->getClientMimeType() : null,
                     'attachment_file_size' => $attachment instanceof UploadedFile ? $attachment->getSize() : null,
                     'submitted_at' => $submittedAt,
+                    'reviewed_at' => $isDirectlyRouted ? $submittedAt : null,
+                    'response_sla_due_at' => $category->response_sla_hours
+                        ? $submittedAt->clone()->addHours($category->response_sla_hours)
+                        : null,
                     'sla_due_at' => $category->resolution_sla_hours
                         ? $submittedAt->clone()->addHours($category->resolution_sla_hours)
                         : null,
                 ]);
 
-                $this->recordActivity($ticket, $actor, 'ticket_submitted', null, 'submitted', null, [
+                $this->recordActivity($ticket, $actor, 'ticket_submitted', null, $ticket->status, null, [
                     'ticket_category_id' => $category->id,
                     'priority' => $ticket->priority,
                     'has_attachment' => $attachmentPath !== null,
+                    'routed_directly' => $isDirectlyRouted,
                 ]);
 
                 $this->ensureWatcher($ticket, $actor);
 
-                $this->approvals->submit(
-                    $actor,
-                    $ticket,
-                    'service_desk',
-                    strtolower($category->code),
-                    "Review {$employee->first_name} {$employee->last_name}'s {$category->name} ticket: {$data['subject']}",
-                    $employee,
-                    [
-                        'ticket_category_id' => $category->id,
-                        'has_attachment' => $attachmentPath !== null,
-                    ]
-                );
+                if ($ticket->asset_id) {
+                    $asset = Asset::query()->find($ticket->asset_id);
+                    if ($asset) {
+                        $this->assets->reportFault($actor, $asset, "Reported via ticket: {$ticket->subject}", $ticket);
+                    }
+                }
+
+                if (! $isDirectlyRouted) {
+                    $this->approvals->submit(
+                        $actor,
+                        $ticket,
+                        'service_desk',
+                        strtolower($category->code),
+                        "Review {$employee->first_name} {$employee->last_name}'s {$category->name} ticket: {$data['subject']}",
+                        $employee,
+                        [
+                            'ticket_category_id' => $category->id,
+                            'assigned_to_user_id' => $assignee?->id,
+                            'department_id' => $department?->id,
+                            'has_attachment' => $attachmentPath !== null,
+                        ]
+                    );
+                }
 
                 if ($assignee) {
                     $this->recordActivity($ticket, $actor, 'ticket_assigned', null, null, null, [
@@ -124,9 +145,9 @@ class TicketService
     {
         $this->assertTicketVisibleTo($actor, $ticket);
 
-        if (! in_array($ticket->status, ['submitted', 'changes_requested'], true)) {
+        if (! in_array($ticket->status, ['submitted', 'changes_requested', 'approved'], true)) {
             throw ValidationException::withMessages([
-                'status' => ['Only a submitted or change-requested ticket can be cancelled.'],
+                'status' => ['Only a ticket that has not yet started work can be cancelled.'],
             ]);
         }
 
@@ -136,6 +157,8 @@ class TicketService
                 'status' => 'cancelled',
                 'reviewed_at' => now(),
             ]);
+
+            $this->cancelPendingApproval($ticket, $actor);
 
             $this->recordActivity($ticket, $actor, 'ticket_cancelled', $previousStatus, 'cancelled');
 
@@ -253,10 +276,18 @@ class TicketService
         }
 
         return DB::transaction(function () use ($actor, $ticket, $note): Ticket {
+            $holdStartedAt = $ticket->on_hold_at;
+            $holdSeconds = $holdStartedAt ? $holdStartedAt->diffInSeconds(now()) : 0;
             $ticket->update([
                 'status' => 'in_progress',
                 'on_hold_at' => null,
                 'hold_reason' => null,
+                'response_sla_due_at' => $ticket->response_sla_due_at && ! $ticket->first_responded_at
+                    ? $ticket->response_sla_due_at->clone()->addSeconds($holdSeconds)
+                    : $ticket->response_sla_due_at,
+                'sla_due_at' => $ticket->sla_due_at
+                    ? $ticket->sla_due_at->clone()->addSeconds($holdSeconds)
+                    : null,
             ]);
 
             $this->recordActivity($ticket, $actor, 'ticket_resumed', 'on_hold', 'in_progress', $note);
@@ -303,6 +334,48 @@ class TicketService
         return $ticket;
     }
 
+    /**
+     * The lightweight replacement for the old approval engine's
+     * reject/request-changes decisions on a ticket: sends it back to the
+     * requester with a reason, without reassigning it (reassigning to
+     * someone else is already covered by assign()/escalate()).
+     */
+    public function decline(User $actor, Ticket $ticket, string $reason): Ticket
+    {
+        $this->assertResolverCanWork($actor, $ticket);
+
+        if (! in_array($ticket->status, ['submitted', 'approved'], true)) {
+            throw ValidationException::withMessages([
+                'status' => ['Only a submitted or approved ticket that has not started work can be declined.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($actor, $ticket, $reason): Ticket {
+            $previousStatus = $ticket->status;
+            $pendingApproval = $this->pendingApproval($ticket);
+
+            if ($pendingApproval) {
+                $this->approvals->act($actor, $pendingApproval, 'request_changes', $reason);
+                $ticket->refresh();
+            }
+
+            if ($ticket->status !== 'changes_requested') {
+                $ticket->update([
+                    'status' => 'changes_requested',
+                    'reviewed_at' => now(),
+                ]);
+            }
+
+            $this->recordActivity($ticket, $actor, 'ticket_declined', $previousStatus, 'changes_requested', $reason);
+            $this->addComment($actor, $ticket->refresh(), [
+                'comment' => $reason,
+                'visibility' => 'public',
+            ]);
+
+            return $ticket->refresh()->load($this->relations());
+        });
+    }
+
     public function resolve(User $actor, Ticket $ticket, ?string $note = null): Ticket
     {
         $this->assertResolverCanWork($actor, $ticket);
@@ -325,6 +398,13 @@ class TicketService
 
             $this->recordActivity($ticket, $actor, 'ticket_resolved', $previousStatus, 'resolved', $note);
 
+            if ($ticket->asset_id) {
+                $asset = Asset::query()->find($ticket->asset_id);
+                if ($asset && $asset->status === 'maintenance') {
+                    $this->assets->returnToService($actor, $asset, "Returned to service — ticket resolved: {$ticket->subject}", $ticket);
+                }
+            }
+
             if (filled($note)) {
                 $this->addComment($actor, $ticket->refresh(), [
                     'comment' => $note,
@@ -339,6 +419,7 @@ class TicketService
     public function close(User $actor, Ticket $ticket, ?int $rating = null, ?string $comment = null): Ticket
     {
         $this->assertTicketVisibleTo($actor, $ticket);
+        $this->assertCanClose($actor, $ticket);
 
         if ($ticket->status !== 'resolved') {
             throw ValidationException::withMessages([
@@ -387,6 +468,117 @@ class TicketService
                 'comment' => "Reopened: {$reason}",
                 'visibility' => 'public',
             ]);
+
+            return $ticket->refresh()->load($this->relations());
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function resubmit(User $actor, Ticket $ticket, array $data): Ticket
+    {
+        $this->assertTicketVisibleTo($actor, $ticket);
+
+        if ($actor->employee?->id !== $ticket->employee_id && ! $actor->can('service_desk.view')) {
+            abort(403);
+        }
+
+        if ($ticket->status !== 'changes_requested') {
+            throw ValidationException::withMessages([
+                'status' => ['Only a ticket with requested changes can be resubmitted.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($actor, $ticket, $data): Ticket {
+            $category = ! empty($data['ticket_category_id'])
+                ? TicketCategory::query()
+                    ->where('organization_id', $ticket->organization_id)
+                    ->where('is_active', true)
+                    ->findOrFail($data['ticket_category_id'])
+                : $ticket->category()->firstOrFail();
+            $assignee = array_key_exists('assigned_to_user_id', $data)
+                ? $this->resolverFor($ticket->organization_id, $data['assigned_to_user_id'])
+                : $ticket->assignedTo;
+            $department = array_key_exists('department_id', $data) && ! empty($data['department_id'])
+                ? Department::query()->where('organization_id', $ticket->organization_id)->findOrFail($data['department_id'])
+                : (array_key_exists('department_id', $data) ? null : $ticket->department);
+            $attachment = $data['attachment'] ?? null;
+            $attachmentPath = null;
+
+            if ($attachment instanceof UploadedFile) {
+                $attachmentPath = $attachment->store(
+                    "organizations/{$ticket->organization_id}/employees/{$ticket->employee_id}/tickets",
+                    'local'
+                );
+            }
+
+            try {
+                $previousStatus = $ticket->status;
+                $submittedAt = now();
+                $isDirectlyRouted = $assignee !== null || $department !== null;
+                $update = [
+                    'ticket_category_id' => $category->id,
+                    'department_id' => $department?->id,
+                    'assigned_to_user_id' => $assignee?->id,
+                    'subject' => $data['subject'] ?? $ticket->subject,
+                    'description' => $data['description'] ?? $ticket->description,
+                    'priority' => $data['priority'] ?? $ticket->priority,
+                    'status' => $isDirectlyRouted ? 'approved' : 'submitted',
+                    'submitted_at' => $submittedAt,
+                    'reviewed_at' => $isDirectlyRouted ? $submittedAt : null,
+                    'first_responded_at' => null,
+                    'response_sla_due_at' => $category->response_sla_hours
+                        ? $submittedAt->clone()->addHours($category->response_sla_hours)
+                        : null,
+                    'sla_due_at' => $category->resolution_sla_hours
+                        ? $submittedAt->clone()->addHours($category->resolution_sla_hours)
+                        : null,
+                ];
+
+                if ($attachment instanceof UploadedFile) {
+                    $update = [
+                        ...$update,
+                        'attachment_file_name' => $attachment->getClientOriginalName(),
+                        'attachment_file_path' => $attachmentPath,
+                        'attachment_mime_type' => $attachment->getClientMimeType(),
+                        'attachment_file_size' => $attachment->getSize(),
+                    ];
+                }
+
+                $ticket->update($update);
+
+                $this->recordActivity($ticket, $actor, 'ticket_resubmitted', $previousStatus, $isDirectlyRouted ? 'approved' : 'submitted', null, [
+                    'ticket_category_id' => $category->id,
+                    'assigned_to_user_id' => $assignee?->id,
+                    'department_id' => $department?->id,
+                    'has_attachment' => $attachmentPath !== null,
+                    'routed_directly' => $isDirectlyRouted,
+                ]);
+
+                if (! $isDirectlyRouted) {
+                    $this->approvals->submit(
+                        $actor,
+                        $ticket->refresh(),
+                        'service_desk',
+                        strtolower($category->code),
+                        "Review resubmitted ticket: {$ticket->subject}",
+                        $ticket->employee,
+                        [
+                            'ticket_category_id' => $category->id,
+                            'assigned_to_user_id' => $assignee?->id,
+                            'department_id' => $department?->id,
+                            'has_attachment' => $attachmentPath !== null,
+                        ]
+                    );
+                }
+            } catch (\Throwable $exception) {
+                if ($attachmentPath) {
+                    Storage::disk('local')->delete($attachmentPath);
+                }
+
+                throw $exception;
+            }
 
             return $ticket->refresh()->load($this->relations());
         });
@@ -512,7 +704,7 @@ class TicketService
             abort(404);
         }
 
-        if (! $actor->can('service_desk.view') && $actor->employee?->id !== $ticket->employee_id) {
+        if (! $actor->can('service_desk.view') && $actor->employee?->id !== $ticket->employee_id && $actor->id !== $ticket->assigned_to_user_id) {
             abort(403);
         }
     }
@@ -523,7 +715,7 @@ class TicketService
             abort(404);
         }
 
-        if (! $actor->is_platform_admin && ! $actor->can('organizations.administer') && ! $actor->can('service_desk.view') && $actor->id !== $ticket->assigned_to_user_id) {
+        if (! $this->canWorkTicket($actor, $ticket)) {
             abort(403);
         }
     }
@@ -545,13 +737,112 @@ class TicketService
 
         $resolver = User::query()->find($userId);
 
-        if (! $resolver || $resolver->organization_id !== $organizationId || ! $resolver->can('service_desk.view')) {
+        if (! $resolver || $resolver->organization_id !== $organizationId || $resolver->employee?->status !== 'active') {
             throw ValidationException::withMessages([
-                'assigned_to_user_id' => ['The selected user must belong to this organization and hold service desk access.'],
+                'assigned_to_user_id' => ['The selected assignee must be an active employee in this organization.'],
             ]);
         }
 
         return $resolver;
+    }
+
+    private function assertCanClose(User $actor, Ticket $ticket): void
+    {
+        if ($actor->is_platform_admin || $actor->can('organizations.administer')) {
+            return;
+        }
+
+        if ($actor->employee?->id === $ticket->employee_id) {
+            return;
+        }
+
+        abort(403);
+    }
+
+    private function canWorkTicket(User $actor, Ticket $ticket): bool
+    {
+        if ($actor->is_platform_admin || $actor->can('organizations.administer')) {
+            return true;
+        }
+
+        if ($actor->id === $ticket->assigned_to_user_id) {
+            return true;
+        }
+
+        if (! $actor->can('service_desk.view')) {
+            return false;
+        }
+
+        if ($ticket->department_id && $actor->employee?->department_id === $ticket->department_id) {
+            return true;
+        }
+
+        return $this->actorMatchesServiceDeskWorkflow($actor, $ticket);
+    }
+
+    private function actorMatchesServiceDeskWorkflow(User $actor, Ticket $ticket): bool
+    {
+        $ticket->loadMissing(['category', 'approvalRequests.workflow.steps.approverRole', 'employee.department']);
+        $workflow = $ticket->approvalRequests
+            ->where('module', 'service_desk')
+            ->sortByDesc('id')
+            ->first()
+            ?->workflow;
+
+        if (! $workflow) {
+            return false;
+        }
+
+        return $workflow->steps
+            ->where('is_active', true)
+            ->contains(fn (ApprovalWorkflowStep $step): bool => $this->actorMatchesStep($actor, $ticket, $step));
+    }
+
+    private function actorMatchesStep(User $actor, Ticket $ticket, ApprovalWorkflowStep $step): bool
+    {
+        $subjectEmployee = $ticket->employee;
+
+        return match ($step->approver_type) {
+            'permission' => $step->approver_permission && $actor->can($step->approver_permission),
+            'role' => $step->approverRole && $actor->hasRole($step->approverRole),
+            'direct_manager' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->reporting_manager_id,
+            'department_head' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->department?->head_employee_id,
+            default => false,
+        };
+    }
+
+    private function pendingApproval(Ticket $ticket): ?ApprovalRequest
+    {
+        return $ticket->approvalRequests()
+            ->where('module', 'service_desk')
+            ->where('status', 'pending')
+            ->latest('id')
+            ->first();
+    }
+
+    private function cancelPendingApproval(Ticket $ticket, User $actor): void
+    {
+        $approval = $this->pendingApproval($ticket);
+
+        if (! $approval) {
+            return;
+        }
+
+        $approval->decisions()->create([
+            'approval_workflow_step_id' => null,
+            'actor_id' => $actor->id,
+            'action' => 'cancel',
+            'previous_status' => $approval->status,
+            'next_status' => 'cancelled',
+            'note' => 'Ticket was cancelled before approval completed.',
+            'metadata' => ['source' => 'ticket_cancel'],
+        ]);
+
+        $approval->update([
+            'status' => 'cancelled',
+            'current_step_order' => null,
+            'completed_at' => now(),
+        ]);
     }
 
     private function ensureWatcher(Ticket $ticket, User $user): void

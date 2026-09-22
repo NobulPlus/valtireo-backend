@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Department;
+use App\Models\Cluster;
 use App\Models\Designation;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
@@ -270,6 +271,13 @@ class TemplateImportService
             $errors['unit_code'] = 'Unit code does not belong to the selected department.';
         }
 
+        $cluster = $this->byCode(Cluster::class, $user, $row['cluster_code'] ?? null);
+        if ($this->filled($row['cluster_code'] ?? null) && ! $cluster) {
+            $errors['cluster_code'] = 'Cluster code was not found in this organization.';
+        } elseif ($cluster && $department && $cluster->department_id !== $department->id) {
+            $errors['cluster_code'] = 'Cluster code does not belong to the selected department.';
+        }
+
         if ($this->filled($row['designation_code'] ?? null) && ! $this->byCode(Designation::class, $user, $row['designation_code'])) {
             $errors['designation_code'] = 'Designation code was not found in this organization.';
         }
@@ -425,6 +433,7 @@ class TemplateImportService
             'phone' => $row['phone'] ?: null,
             'department_id' => $this->byCode(Department::class, $user, $row['department_code'])->id,
             'unit_id' => $this->byCode(Unit::class, $user, $row['unit_code'] ?? null)?->id,
+            'cluster_id' => $this->byCode(Cluster::class, $user, $row['cluster_code'] ?? null)?->id,
             'designation_id' => $this->byCode(Designation::class, $user, $row['designation_code'])->id,
             'grade_level_id' => $this->byCode(GradeLevel::class, $user, $row['grade_level_code'] ?? null)?->id,
             'employment_type_id' => $this->byCode(EmploymentType::class, $user, $row['employment_type_code'])->id,

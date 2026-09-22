@@ -41,11 +41,9 @@ class EmployeeController extends Controller
     }
 
     /**
-     * Flat node list for the org-chart view. `is_department_head` is
-     * resolved server-side (via the same `employees.view_department`
-     * permission check the approval chain uses) rather than left for the
-     * frontend to infer from a role name, since a department head can be
-     * any custom role that happens to carry that permission.
+     * Flat node list for the org-chart view. `is_department_head` is resolved
+     * from the department's assigned head, while permissions still decide who
+     * may open broad people views.
      *
      * An ordinary employee (no `employees.view`) only ever sees their own
      * department's structure — not the rest of the organization. Admins
@@ -70,7 +68,7 @@ class EmployeeController extends Controller
                 ! $canViewAllEmployees,
                 fn (Builder $query) => $query->where('department_id', $request->user()->employee->department_id)
             )
-            ->with(['department:id,code,name', 'designation:id,name', 'user.roles'])
+            ->with(['department:id,code,name,head_employee_id', 'designation:id,name', 'user.roles'])
             ->orderBy('first_name')
             ->get();
 
@@ -88,7 +86,7 @@ class EmployeeController extends Controller
             'reporting_manager_id' => $employee->reporting_manager_id,
             'role_name' => $employee->user?->roles->first()?->name,
             'has_login' => $employee->user_id !== null,
-            'is_department_head' => (bool) $employee->user?->can('employees.view_department'),
+            'is_department_head' => $employee->department?->head_employee_id === $employee->id,
         ]);
 
         return response()->json(['employees' => $nodes->values()]);
@@ -268,6 +266,11 @@ class EmployeeController extends Controller
             'dependents',
             'documents.documentType',
             'documents.requirement',
+            'assets.category',
+            'assets.location',
+            'assetAssignmentHistories.asset.category',
+            'assetAssignmentHistories.assignedBy',
+            'assetAssignmentHistories.returnedBy',
             'customFieldValues.field',
             'customFieldValues.updatedBy',
             'statusHistories.changedBy',
@@ -327,13 +330,17 @@ class EmployeeController extends Controller
 
         $employee->update($data);
 
-        if ($pendingRoleIdRequested && $pendingRoleId !== null) {
+        if ($pendingRoleIdRequested) {
             if ($employee->user) {
                 $roleAssignment->updateAssignedRole($request->user(), $employee, $employee->user, $pendingRoleId);
-            } else {
+            } elseif ($pendingRoleId !== null) {
                 $role = Role::query()->where('organization_id', $organizationId)->findOrFail($pendingRoleId);
                 $roleAssignment->assertCanAssign($request->user(), $role);
                 $employee->update(['pending_role_id' => $pendingRoleId]);
+            } else {
+                // Reset: clear any staged custom selection — the employee
+                // falls back to the org's default role once they're invited.
+                $employee->update(['pending_role_id' => null]);
             }
         }
 
@@ -425,7 +432,7 @@ class EmployeeController extends Controller
     private function loadEmployeeDetail(Employee $employee): Employee
     {
         return $employee->load([
-            'user.roles',
+            'user.roles' => fn ($query) => $query->withCount('permissions'),
             'department',
             'unit',
             'cluster',
@@ -440,6 +447,11 @@ class EmployeeController extends Controller
             'dependents',
             'documents.documentType',
             'documents.requirement',
+            'assets.category',
+            'assets.location',
+            'assetAssignmentHistories.asset.category',
+            'assetAssignmentHistories.assignedBy',
+            'assetAssignmentHistories.returnedBy',
             'customFieldValues.field',
             'customFieldValues.updatedBy',
             'statusHistories.changedBy',
@@ -527,7 +539,7 @@ class EmployeeController extends Controller
 
         return Employee::query()
             ->with([
-                'user.roles',
+                'user.roles' => fn ($query) => $query->withCount('permissions'),
                 'department',
                 'unit',
                 'cluster',

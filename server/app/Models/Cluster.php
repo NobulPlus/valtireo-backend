@@ -15,6 +15,8 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 #[Fillable([
     'organization_id',
     'department_id',
+    'manager_employee_id',
+    'supervisor_employee_id',
     'name',
     'code',
     'description',
@@ -33,6 +35,16 @@ class Cluster extends Model implements AuditableContract
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'manager_employee_id');
+    }
+
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'supervisor_employee_id');
     }
 
     public function locations(): BelongsToMany

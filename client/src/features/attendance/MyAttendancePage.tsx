@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { CalendarClock, Clock3, Plus, Timer } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction, ModalSendAction } from '@/components/ui/ModalActions';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StatTile } from '@/components/ui/StatTile';
 import { useToast } from '@/components/ui/Toast';
 import {
   useLogAttendance,
@@ -27,7 +28,7 @@ function actionError(error: unknown, fallback: string): string {
 function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; onSubmitted: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ requested_check_in_at: '', requested_check_out_at: '', reason: '' });
+  const [form, setForm] = useState({ check_in_date: record.attendance_date?.slice(0, 10) ?? '', check_in_time: '', check_out_date: record.attendance_date?.slice(0, 10) ?? '', check_out_time: '', reason: '' });
   const correctionMutation = useRequestAttendanceCorrection();
 
   async function handleSubmit() {
@@ -35,12 +36,12 @@ function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; o
     try {
       await correctionMutation.mutateAsync({
         attendance_record_id: record.id,
-        requested_check_in_at: form.requested_check_in_at || undefined,
-        requested_check_out_at: form.requested_check_out_at || undefined,
+        requested_check_in_at: form.check_in_date && form.check_in_time ? `${form.check_in_date}T${form.check_in_time}` : undefined,
+        requested_check_out_at: form.check_out_date && form.check_out_time ? `${form.check_out_date}T${form.check_out_time}` : undefined,
         reason: form.reason,
       });
       setOpen(false);
-      setForm({ requested_check_in_at: '', requested_check_out_at: '', reason: '' });
+      setForm({ check_in_date: record.attendance_date?.slice(0, 10) ?? '', check_in_time: '', check_out_date: record.attendance_date?.slice(0, 10) ?? '', check_out_time: '', reason: '' });
       toast.success('Correction requested', 'Your request has been sent for review.');
       onSubmitted();
     } catch (error) {
@@ -65,24 +66,34 @@ function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; o
         }
       >
         <div className="space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted">Corrected check-in</span>
-            <input
-              type="datetime-local"
-              value={form.requested_check_in_at}
-              onChange={(event) => setForm((current) => ({ ...current, requested_check_in_at: event.target.value }))}
-              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted">Corrected check-out</span>
-            <input
-              type="datetime-local"
-              value={form.requested_check_out_at}
-              onChange={(event) => setForm((current) => ({ ...current, requested_check_out_at: event.target.value }))}
-              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
-            />
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-in date</span>
+              <DatePicker value={form.check_in_date} onChange={(value) => setForm((current) => ({ ...current, check_in_date: value }))} />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-in time</span>
+              <input
+                type="time"
+                value={form.check_in_time}
+                onChange={(event) => setForm((current) => ({ ...current, check_in_time: event.target.value }))}
+                className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-out date</span>
+              <DatePicker value={form.check_out_date} onChange={(value) => setForm((current) => ({ ...current, check_out_date: value }))} />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-out time</span>
+              <input
+                type="time"
+                value={form.check_out_time}
+                onChange={(event) => setForm((current) => ({ ...current, check_out_time: event.target.value }))}
+                className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              />
+            </label>
+          </div>
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-muted">Reason</span>
             <Textarea value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} required />
@@ -101,18 +112,18 @@ function MyAttendanceContent() {
   const logMutation = useLogAttendance();
 
   const [logModalOpen, setLogModalOpen] = useState(false);
-  const [logForm, setLogForm] = useState({ attendance_date: '', check_in_at: '', check_out_at: '' });
+  const [logForm, setLogForm] = useState({ attendance_date: '', check_in_time: '', check_out_time: '' });
 
   async function handleLogAttendance() {
     if (!logForm.attendance_date) return;
     try {
       await logMutation.mutateAsync({
         attendance_date: logForm.attendance_date,
-        check_in_at: logForm.check_in_at || undefined,
-        check_out_at: logForm.check_out_at || undefined,
+        check_in_at: logForm.attendance_date && logForm.check_in_time ? `${logForm.attendance_date}T${logForm.check_in_time}` : undefined,
+        check_out_at: logForm.attendance_date && logForm.check_out_time ? `${logForm.attendance_date}T${logForm.check_out_time}` : undefined,
       });
       setLogModalOpen(false);
-      setLogForm({ attendance_date: '', check_in_at: '', check_out_at: '' });
+      setLogForm({ attendance_date: '', check_in_time: '', check_out_time: '' });
       toast.success('Attendance logged');
     } catch (error) {
       toast.error('Could not log attendance', actionError(error, 'Could not log this attendance record.'));
@@ -121,6 +132,12 @@ function MyAttendanceContent() {
 
   const records = recordsQuery.data?.data ?? [];
   const corrections = correctionsQuery.data?.data ?? [];
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayRecord = records.find((record) => record.attendance_date?.slice(0, 10) === todayKey);
+  const presentCount = records.filter((record) => record.status === 'present').length;
+  const lateCount = records.filter((record) => record.status === 'late').length;
+  const absentCount = records.filter((record) => record.status === 'absent').length;
+  const pendingCorrections = corrections.filter((correction) => correction.status === 'submitted').length;
 
   return (
     <div>
@@ -133,6 +150,13 @@ function MyAttendanceContent() {
           </Button>
         }
       />
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Today" value={todayRecord?.status ? todayRecord.status.replaceAll('_', ' ') : 'No record'} icon={Timer} tone={todayRecord?.status === 'absent' ? 'danger' : todayRecord?.status === 'late' ? 'warning' : todayRecord?.status === 'present' ? 'success' : 'default'} />
+        <StatTile label="Present records" value={presentCount} icon={CalendarClock} tone="success" />
+        <StatTile label="Late / absent" value={lateCount + absentCount} icon={Clock3} tone={lateCount + absentCount ? 'warning' : 'default'} />
+        <StatTile label="Pending corrections" value={pendingCorrections} icon={Plus} tone={pendingCorrections ? 'warning' : 'default'} />
+      </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <Card>
@@ -208,18 +232,18 @@ function MyAttendanceContent() {
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-muted">Check-in</span>
             <input
-              type="datetime-local"
-              value={logForm.check_in_at}
-              onChange={(event) => setLogForm((current) => ({ ...current, check_in_at: event.target.value }))}
+              type="time"
+              value={logForm.check_in_time}
+              onChange={(event) => setLogForm((current) => ({ ...current, check_in_time: event.target.value }))}
               className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-muted">Check-out</span>
             <input
-              type="datetime-local"
-              value={logForm.check_out_at}
-              onChange={(event) => setLogForm((current) => ({ ...current, check_out_at: event.target.value }))}
+              type="time"
+              value={logForm.check_out_time}
+              onChange={(event) => setLogForm((current) => ({ ...current, check_out_time: event.target.value }))}
               className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
             />
           </label>

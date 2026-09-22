@@ -36,6 +36,42 @@ export interface ValidationErrorResponse {
   errors: Record<string, string[]>;
 }
 
+export interface SystemErrorLog {
+  id: number;
+  uuid: string;
+  level: string;
+  status_code: number | null;
+  exception_class: string;
+  message: string;
+  file: string | null;
+  line: number | null;
+  method: string | null;
+  url: string | null;
+  route: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  request_id: string | null;
+  fingerprint: string;
+  context: Record<string, unknown> | null;
+  trace_excerpt: Array<Record<string, unknown>> | null;
+  is_resolved: boolean;
+  resolved_at: string | null;
+  resolution_note: string | null;
+  organization?: { id: number; name: string; code: string } | null;
+  user?: { id: number; name: string; email: string } | null;
+  resolved_by?: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SystemErrorSummary {
+  total: number;
+  open: number;
+  resolved: number;
+  today: number;
+  by_level: Array<{ level: string; total: number }>;
+}
+
 export interface LookupRef {
   id: number;
   code: string | null;
@@ -266,6 +302,8 @@ export interface Employee {
   emergency_contacts?: EmergencyContact[];
   dependents?: Dependent[];
   documents?: EmployeeDocument[];
+  assets?: Asset[];
+  asset_assignment_history?: AssetAssignmentHistory[];
   custom_fields?: unknown[];
   status_history?: EmployeeStatusHistoryEntry[];
   reporting_history?: EmployeeReportingHistoryEntry[];
@@ -397,24 +435,63 @@ export interface LeaveType {
   code: string;
   is_paid?: boolean;
   requires_attachment?: boolean;
+  restricted_to_gender?: 'male' | 'female' | null;
+}
+
+export interface LeaveHoliday {
+  id: number;
+  organization_id: number;
+  organization_location_id: number | null;
+  name: string;
+  date: string;
+  is_recurring: boolean;
+  is_active: boolean;
+  location: LookupRef | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyEvent {
+  id: number;
+  organization_id: number;
+  department_id: number | null;
+  title: string;
+  description: string | null;
+  starts_on: string;
+  ends_on: string;
+  is_active: boolean;
+  scope: 'department' | 'organization';
+  can_manage: boolean;
+  department: LookupRef | null;
+  created_by: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface LeaveRequest {
   id: number;
   employee_id: number;
+  handover_to_employee_id: number | null;
   leave_type_id: number;
   starts_on: string;
   ends_on: string;
   total_days: number;
   status: string;
   reason: string | null;
+  handover_note: string | null;
   evidence_file_name: string | null;
   evidence_mime_type: string | null;
   evidence_file_size: number | null;
   evidence_download_url: string | null;
+  handover_file_name: string | null;
+  handover_mime_type: string | null;
+  handover_file_size: number | null;
+  handover_download_url: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   leave_type?: LookupRef | null;
+  employee?: EmployeeSummary | null;
+  handover_to?: EmployeeSummary | null;
   created_at: string;
   updated_at: string;
 }
@@ -432,17 +509,77 @@ export interface TicketCategory {
   updated_at: string;
 }
 
+export interface AssetCategory {
+  id: number;
+  organization_id: number;
+  name: string;
+  code: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetReporting {
+  total: number;
+  by_status: Array<{ status: string; total: number }>;
+  by_category: Array<{ name: string; total: number }>;
+  average_days_in_maintenance: number | null;
+  open_incidents: Array<{
+    asset_id: number;
+    asset_name: string;
+    category: string | null;
+    note: string | null;
+    reported_by: string | null;
+    since: string | null;
+  }>;
+}
+
 export interface Asset {
   id: number;
   organization_id: number;
   name: string;
   asset_tag: string;
-  category: string;
+  serial_number: string | null;
+  category: { id: number; name: string; code: string } | null;
   status: string;
+  condition: string | null;
   assigned_to: { id: number; employee_number: string; full_name: string } | null;
   assigned_at: string | null;
+  location: { id: number; name: string; code: string } | null;
+  purchase_date: string | null;
+  warranty_expires_at: string | null;
   notes: string | null;
+  assignment_history?: AssetAssignmentHistory[];
   tickets?: Array<{ id: number; subject: string; status: string; submitted_at: string | null }>;
+  incidents?: Array<{
+    id: number;
+    event: string;
+    previous_status: string | null;
+    new_status: string | null;
+    note: string | null;
+    ticket_id: number | null;
+    reported_by: { id: number; name: string } | null;
+    created_at: string;
+  }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetAssignmentHistory {
+  id: number;
+  asset_id: number;
+  employee_id: number;
+  asset?: { id: number; name: string; asset_tag: string; status: string } | null;
+  employee?: { id: number; employee_number: string; full_name: string } | null;
+  assigned_by?: { id: number; name: string } | null;
+  returned_by?: { id: number; name: string } | null;
+  assigned_at: string | null;
+  returned_at: string | null;
+  issue_condition: string | null;
+  return_condition: string | null;
+  issue_note: string | null;
+  return_note: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -572,10 +709,17 @@ export interface ApprovalRequest {
   document?: { id: number; title: string; file_name: string; mime_type: string | null; download_url: string; view_url: string } | null;
   leave_request?: {
     id: number;
+    handover_to_employee_id: number | null;
+    handover_note: string | null;
+    handover_to: EmployeeSummary | null;
     evidence_file_name: string | null;
     evidence_mime_type: string | null;
     evidence_file_size: number | null;
     evidence_download_url: string | null;
+    handover_file_name: string | null;
+    handover_mime_type: string | null;
+    handover_file_size: number | null;
+    handover_download_url: string | null;
   } | null;
   ticket?: {
     id: number;
@@ -659,9 +803,11 @@ export interface CreateEmployeeResponse {
 export interface DepartmentLookup {
   id: number;
   parent_id: number | null;
+  head_employee_id: number | null;
   code: string | null;
   name: string;
   description: string | null;
+  head: { id: number; employee_number: string; first_name: string; last_name: string; work_email: string; department_id: number } | null;
 }
 
 export interface UnitLookup {
@@ -716,11 +862,16 @@ export interface ClusterLookup {
   id: number;
   organization_id: number;
   department_id: number;
+  manager_employee_id: number | null;
+  supervisor_employee_id: number | null;
   code: string | null;
   name: string;
   description: string | null;
   department?: { id: number; code: string | null; name: string };
   locations?: Array<{ id: number; code: string | null; name: string }>;
+  manager?: EmployeeSummary | null;
+  supervisor?: EmployeeSummary | null;
+  members_count?: number;
 }
 
 export interface AllSetupLookups {
@@ -919,6 +1070,10 @@ export interface OrganizationDashboard {
   structure: {
     departments: number;
     units: number;
+    clusters: number;
+    clusters_with_manager: number;
+    clusters_with_supervisor: number;
+    employees_without_cluster: number;
     locations: number;
     designations: number;
     grade_levels: number;
@@ -938,6 +1093,11 @@ export interface OrganizationDashboard {
     unassigned: number;
     sla_breached: number;
   };
+  assets: {
+    available: number;
+    assigned: number;
+    maintenance: number;
+  };
   leave: {
     pending: number;
     upcoming: number;
@@ -954,6 +1114,11 @@ export interface OrganizationDashboard {
   };
   breakdowns: {
     by_department: LookupCount[];
+    by_cluster: Array<LookupCount & {
+      department: LookupRef | null;
+      manager: EmployeeSummary | null;
+      supervisor: EmployeeSummary | null;
+    }>;
     by_location: LookupCount[];
     by_employment_type: LookupCount[];
     by_designation: LookupCount[];
@@ -982,8 +1147,9 @@ export interface OrganizationDashboard {
 }
 
 export interface ManagerDashboardScope {
-  type: 'department' | 'direct_reports';
+  type: 'department' | 'cluster' | 'direct_reports';
   department?: LookupRef;
+  cluster?: LookupRef;
   source: string;
 }
 
@@ -1064,6 +1230,18 @@ export interface MyDashboard {
       days_pending: number;
       days_available: number;
     }>;
+    handover_assignments: Array<{
+      id: number;
+      status: string;
+      starts_on: string | null;
+      ends_on: string | null;
+      total_days: number;
+      handover_note: string | null;
+      handover_file_name: string | null;
+      handover_download_url: string | null;
+      employee: EmployeeSummary;
+      leave_type: LookupRef | null;
+    }>;
   } | null;
   attendance: {
     trend: Array<{ label: string; value: number; status: string }>;
@@ -1118,6 +1296,7 @@ export interface PlatformDashboard {
     organizations_active: number;
     organizations_invited: number;
     organizations_setup: number;
+    organizations_pending_approval: number;
     organizations_suspended: number;
     users_total: number;
     employees_total: number;
@@ -1135,11 +1314,13 @@ export interface PlatformDashboard {
   recent_organizations: PlatformOrganizationSummary[];
   attention: {
     setup_incomplete: number;
+    pending_verification: number;
     without_modules: number;
     without_admins: number;
   };
   attention_details: {
     setup_incomplete: PlatformOrganizationSummary[];
+    pending_verification: PlatformOrganizationSummary[];
     without_modules: PlatformOrganizationSummary[];
     without_admins: PlatformOrganizationSummary[];
   };
@@ -1187,7 +1368,7 @@ export interface ProvisionOrganizationResponse {
   workspace: WorkspaceSettings;
   invitation: {
     email: string;
-    temporary_password: string;
+    setup_url: string;
     login_hint: string;
     delivery_status: string;
   };
@@ -1206,6 +1387,7 @@ export interface PlatformOrganizationDetail {
     updated_at: string;
   };
   workspace: WorkspaceSettings;
+  verification: OrganizationVerificationSummary;
   metrics: {
     users: number;
     employees: number;
@@ -1246,4 +1428,316 @@ export interface PlatformOrganizationDetail {
     is_primary: boolean;
     is_active: boolean;
   }>;
+  status_history: Array<{
+    id: number;
+    previous_status: string | null;
+    new_status: string;
+    reason: string | null;
+    changed_by: string | null;
+    created_at: string;
+  }>;
+}
+
+export interface OrganizationVerificationChecklistItem {
+  type: string;
+  label: string;
+  required: boolean;
+  status: string;
+  document_id: number | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  review_note: string | null;
+}
+
+export interface OrganizationVerificationSummary {
+  status: string;
+  required_total: number;
+  required_submitted: number;
+  required_approved: number;
+  is_ready_for_review: boolean;
+  is_verified: boolean;
+  checklist: OrganizationVerificationChecklistItem[];
+}
+
+export interface OrganizationVerificationDocument {
+  id: number;
+  organization_id: number;
+  document_type: string;
+  document_type_label: string;
+  title: string;
+  file_name: string;
+  download_url: string;
+  mime_type: string | null;
+  file_size: number | null;
+  status: string;
+  notes: string | null;
+  review_note: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+  uploaded_by?: { id: number; name: string; email: string } | null;
+  reviewed_by?: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PayFrequency = 'weekly' | 'biweekly' | 'monthly';
+export type PayrollComponentType = 'earning' | 'deduction' | 'employer_contribution';
+export type PayrollRunStatus = 'draft' | 'calculated' | 'pending_approval' | 'approved' | 'rejected' | 'finalized' | 'voided';
+export type PayrollRunItemStatus = 'calculated' | 'exception';
+
+export interface PayrollStatutoryRules {
+  pension: { enabled: boolean; employee_rate: number; employer_rate: number; version: string | null };
+  paye: { enabled: boolean; version: string | null; effective_from: string | null; brackets: Array<{ amount: number | null; rate: number }> };
+  nhf: { enabled: boolean; employee_rate: number; version: string | null };
+  overtime: { enabled: boolean; multiplier: number; standard_monthly_hours: number };
+}
+
+export interface PayrollSettings {
+  id: number;
+  organization_id: number;
+  currency: string;
+  decimal_places: number;
+  default_pay_frequency: PayFrequency;
+  pay_day: number;
+  prorate_joiners: boolean;
+  prorate_leavers: boolean;
+  proration_basis: 'calendar_days' | 'working_days';
+  statutory_rules: PayrollStatutoryRules;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayGroup {
+  id: number;
+  organization_id: number;
+  name: string;
+  code: string;
+  frequency: PayFrequency;
+  pay_day: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayrollComponent {
+  id: number;
+  organization_id: number;
+  name: string;
+  code: string;
+  type: PayrollComponentType;
+  calculation_type: 'fixed' | 'percentage';
+  default_value: string;
+  percentage_of_component_id: number | null;
+  is_taxable: boolean;
+  is_statutory: boolean;
+  is_recurring: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeCompensation {
+  id: number;
+  organization_id: number;
+  employee_id: number;
+  pay_group_id: number | null;
+  base_salary: string;
+  currency: string;
+  pay_frequency: PayFrequency;
+  recurring_components: Array<{ component_id: number; value: number | null }> | null;
+  effective_from: string;
+  effective_to: string | null;
+  status: 'active' | 'superseded';
+  created_by_id: number;
+  pay_group?: PayGroup | null;
+  created_by?: { id: number; name: string; email: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmployeeBankAccount {
+  id: number;
+  bank_name: string;
+  bank_code: string | null;
+  account_name: string;
+  account_number_last_four: string;
+  is_primary: boolean;
+  verification_status: string;
+}
+
+export interface EmployeeStatutoryProfile {
+  id: number;
+  employee_id: number;
+  paye_enabled: boolean;
+  tax_state: string | null;
+  tax_id_last_four: string | null;
+  pension_enabled: boolean;
+  pfa_name: string | null;
+  rsa_pin_last_four: string | null;
+  nhf_enabled: boolean;
+  nhf_number_last_four: string | null;
+  reliefs: Array<{ name: string; annual_amount: number }> | null;
+  exemptions: unknown[] | null;
+}
+
+export interface EmployeePayrollRecord {
+  employee: { id: number; employee_number: string; full_name: string };
+  compensations: EmployeeCompensation[];
+  bank_accounts: EmployeeBankAccount[];
+}
+
+export interface PayrollRunItemLine {
+  id: number;
+  payroll_run_item_id: number;
+  payroll_component_id: number | null;
+  component_code: string;
+  component_name: string;
+  type: PayrollComponentType;
+  quantity: string | null;
+  rate: string | null;
+  amount: string;
+  is_taxable: boolean;
+  is_statutory: boolean;
+}
+
+export interface PayrollRunItem {
+  id: number;
+  organization_id: number;
+  payroll_run_id: number;
+  employee_id: number;
+  employee_number: string;
+  employee_name: string;
+  employment_snapshot: { department: string | null; designation: string | null; grade_level: string | null; employment_type: string | null; location: string | null } | null;
+  bank_snapshot: { bank_name: string; bank_code: string | null; account_name: string; account_number_last_four: string; verification_status: string } | null;
+  period_days: number;
+  payable_days: number;
+  base_pay: string;
+  gross_pay: string;
+  total_deductions: string;
+  net_pay: string;
+  employer_contributions: string;
+  status: PayrollRunItemStatus;
+  exceptions: Array<{ code: string; message: string }> | null;
+  lines?: PayrollRunItemLine[];
+  payroll_run?: Pick<PayrollRun, 'id' | 'name' | 'reference' | 'period_start' | 'period_end' | 'payment_date' | 'currency' | 'published_at'> | null;
+}
+
+export interface PayrollRun {
+  id: number;
+  organization_id: number;
+  pay_group_id: number | null;
+  reference: string;
+  name: string;
+  period_start: string;
+  period_end: string;
+  payment_date: string;
+  currency: string;
+  status: PayrollRunStatus;
+  employee_count: number;
+  total_gross: string;
+  total_deductions: string;
+  total_net: string;
+  total_employer_contributions: string;
+  created_by_id: number;
+  finalized_by_id: number | null;
+  published_by_id: number | null;
+  calculated_at: string | null;
+  submitted_at: string | null;
+  approved_at: string | null;
+  finalized_at: string | null;
+  published_at: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  pay_group?: PayGroup | null;
+  created_by?: { id: number; name: string; email: string } | null;
+  finalized_by?: { id: number; name: string; email: string } | null;
+  items?: PayrollRunItem[];
+}
+
+export type PayrollInputType = 'bonus' | 'allowance' | 'deduction' | 'reimbursement' | 'adjustment';
+
+export interface PayrollInput {
+  id: number;
+  organization_id: number;
+  employee_id: number;
+  payroll_component_id: number | null;
+  type: PayrollInputType;
+  description: string;
+  effective_date: string;
+  quantity: string | null;
+  rate: string | null;
+  amount: string;
+  status: 'approved' | 'consumed';
+  employee?: { id: number; employee_number: string; first_name: string; last_name: string } | null;
+  component?: PayrollComponent | null;
+  created_at: string;
+}
+
+export interface EmployeeLoan {
+  id: number;
+  organization_id: number;
+  employee_id: number;
+  reference: string;
+  name: string;
+  principal: string;
+  interest_amount: string;
+  total_repayable: string;
+  installment_amount: string;
+  outstanding_balance: string;
+  starts_on: string;
+  ends_on: string | null;
+  status: 'active' | 'repaid';
+  employee?: { id: number; employee_number: string; first_name: string; last_name: string } | null;
+  created_at: string;
+}
+
+export interface PayrollPaymentBatch {
+  id: number;
+  organization_id: number;
+  payroll_run_id: number;
+  reference: string;
+  format: string;
+  payment_count: number;
+  total_amount: string;
+  generated_at: string;
+}
+
+export interface PayrollJournalLine {
+  id: number;
+  account_code: string;
+  account_name: string;
+  description: string | null;
+  debit: string;
+  credit: string;
+}
+
+export interface PayrollJournalBatch {
+  id: number;
+  organization_id: number;
+  payroll_run_id: number;
+  reference: string;
+  status: string;
+  journal_date: string;
+  currency: string;
+  total_debit: string;
+  total_credit: string;
+  lines: PayrollJournalLine[];
+}
+
+export interface PayrollReportSummary {
+  run_count: number;
+  employee_payments: number;
+  gross: number;
+  deductions: number;
+  net: number;
+  employer_contributions: number;
+}
+
+export interface PayrollStatutoryReportRow {
+  component_code: string;
+  component_name: string;
+  type: PayrollComponentType;
+  employee_count: number;
+  total_amount: string;
 }

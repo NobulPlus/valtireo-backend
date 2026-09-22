@@ -1059,6 +1059,485 @@
       ]
     },
     {
+      "name": "Service Desk",
+      "item": [
+        {
+          "name": "Ticket Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/tickets/categories"
+          }
+        },
+        {
+          "name": "Create Ticket Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Facilities\",\n  \"code\": \"facilities\",\n  \"description\": \"Office and equipment requests.\",\n  \"response_sla_hours\": 8,\n  \"resolution_sla_hours\": 48,\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Ticket Resolvers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/tickets/resolvers"
+          }
+        },
+        {
+          "name": "Ticket Reporting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/tickets/reporting"
+          }
+        },
+        {
+          "name": "List Tickets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/tickets"
+          }
+        },
+        {
+          "name": "Submit Ticket",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "ticket_category_id",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "subject",
+                  "value": "Laptop will not power on",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Laptop has not powered on since yesterday morning.",
+                  "type": "text"
+                },
+                {
+                  "key": "priority",
+                  "value": "medium",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": "{{base_url}}/tickets"
+          }
+        },
+        {
+          "name": "Show Ticket",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/tickets/1"
+          }
+        },
+        {
+          "name": "Cancel Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{base_url}}/tickets/1/cancel"
+          }
+        },
+        {
+          "name": "Resubmit Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/resubmit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Laptop will not power on (updated)\",\n  \"description\": \"Confirmed the charger is fine — the laptop itself will not turn on.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Assign Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/assign",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigned_to_user_id\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Ticket Priority",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/priority",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"high\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Decline Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/decline",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Please attach a photo of the error.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Start Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/start",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Looking into this now.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Hold Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/hold",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Waiting on a replacement part.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resume Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/resume",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Part has arrived.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Escalate Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/escalate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"urgent\",\n  \"note\": \"No progress after 24 hours.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Resolve Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/resolve",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Replaced the power adapter.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Close Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/close",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"satisfaction_rating\": 5,\n  \"satisfaction_comment\": \"Fixed quickly, thanks.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reopen Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/reopen",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Issue came back.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Watch Ticket",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{base_url}}/tickets/1/watch"
+          }
+        },
+        {
+          "name": "Unwatch Ticket",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{base_url}}/tickets/1/watch"
+          }
+        },
+        {
+          "name": "Add Ticket Comment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/tickets/1/comments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Any update on this?\",\n  \"visibility\": \"public\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assets",
+      "item": [
+        {
+          "name": "List Assets",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/assets"
+          }
+        },
+        {
+          "name": "Create Asset",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dell Latitude 5440\",\n  \"asset_tag\": \"LAP-2001\",\n  \"serial_number\": \"SN-9928374\",\n  \"asset_category_id\": 1,\n  \"condition\": \"new\",\n  \"organization_location_id\": 1,\n  \"purchase_date\": \"2026-01-15\",\n  \"warranty_expires_at\": \"2029-01-15\",\n  \"notes\": \"Standard-issue engineering laptop.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Asset Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/assets/categories"
+          }
+        },
+        {
+          "name": "Create Asset Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Company Vehicle\",\n  \"code\": \"vehicle\",\n  \"description\": \"Cars, vans, and other fleet vehicles.\",\n  \"is_active\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Asset Reporting",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/assets/reporting"
+          }
+        },
+        {
+          "name": "Show Asset",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/assets/1"
+          }
+        },
+        {
+          "name": "Update Asset",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets/1",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Updated after annual audit.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Assign Asset",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets/1/assign",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employee_id\": 1,\n  \"condition\": \"good\",\n  \"note\": \"Issued at onboarding.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Return Asset",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets/1/return",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"condition\": \"good\",\n  \"note\": \"Returned at offboarding.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Report Asset Fault",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets/1/report-fault",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Screen is flickering.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Return Asset To Service",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/assets/1/return-to-service",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Replaced the display panel.\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Templates and Imports",
       "item": [
         {
@@ -1244,6 +1723,22 @@
             "method": "GET",
             "header": [],
             "url": "{{base_url}}/reports/attendance_exceptions?status=late"
+          }
+        },
+        {
+          "name": "Asset Inventory Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/asset_inventory"
+          }
+        },
+        {
+          "name": "Asset Assignments Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/reports/asset_assignments"
           }
         },
         {

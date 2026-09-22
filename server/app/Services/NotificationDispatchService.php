@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\ApprovalRequest;
 use App\Models\ApprovalWorkflowStep;
+use App\Models\CompanyEvent;
 use App\Models\Department;
 use App\Models\EmployeeDocument;
 use App\Models\EmployeeInvitation;
+use App\Models\LeaveRequest;
 use App\Models\Organization;
 use App\Models\Ticket;
 use App\Models\TicketComment;
@@ -54,21 +56,21 @@ class NotificationDispatchService
     public function organizationAdminInvited(
         User $admin,
         Organization $organization,
-        string $temporaryPassword,
+        string $setupUrl,
         User $createdBy
     ): void {
         $this->notify($admin, [
             'category' => 'organization_onboarding',
             'event' => 'organization.admin_invited',
             'title' => "Welcome to {$organization->name} on Valtireo",
-            'message' => "You have been invited as the Organization Admin for {$organization->name}. Use the temporary password below to sign in, then complete your workspace setup.",
-            'action_label' => 'Sign in to Valtireo',
-            'action_url' => '/login',
+            'message' => "You have been invited as the Organization Admin for {$organization->name}. Use the setup link to choose your password and complete workspace setup.",
+            'action_label' => 'Set password',
+            'action_url' => $setupUrl,
             'entity_type' => 'organization',
             'entity_id' => $organization->id,
             'metadata' => [
                 'organization_code' => $organization->code,
-                'temporary_password' => $temporaryPassword,
+                'setup_url' => $setupUrl,
                 'provisioned_by' => $createdBy->email,
             ],
         ]);
@@ -134,7 +136,7 @@ class NotificationDispatchService
 
     public function approvalSubmitted(ApprovalRequest $approvalRequest): void
     {
-        $approvalRequest->loadMissing(['workflow.steps', 'requester', 'subjectEmployee.user']);
+        $approvalRequest->loadMissing(['workflow.steps', 'requester', 'subjectEmployee.user', 'subjectEmployee.department']);
         $step = $this->currentStep($approvalRequest);
 
         foreach ($this->approvalRecipients($approvalRequest, $step) as $recipient) {
@@ -159,7 +161,7 @@ class NotificationDispatchService
 
     public function approvalDecided(ApprovalRequest $approvalRequest, User $actor): void
     {
-        $approvalRequest->loadMissing(['requester', 'subjectEmployee.user', 'workflow.steps']);
+        $approvalRequest->loadMissing(['requester', 'subjectEmployee.user', 'subjectEmployee.department', 'workflow.steps']);
 
         if ($approvalRequest->status === 'pending') {
             $this->approvalSubmitted($approvalRequest);
@@ -249,6 +251,96 @@ class NotificationDispatchService
                 'ticket_category_id' => $ticket->ticket_category_id,
             ],
         ]);
+    }
+
+    public function leaveHandoverAssigned(LeaveRequest $leaveRequest, User $actor): void
+    {
+        $leaveRequest->loadMissing(['employee', 'handoverTo.user', 'leaveType']);
+        $recipient = $leaveRequest->handoverTo?->user;
+
+        if (! $recipient) {
+            return;
+        }
+
+        $employeeName = trim($leaveRequest->employee->first_name.' '.$leaveRequest->employee->last_name);
+
+        $this->notify($recipient, [
+            'category' => 'leave',
+            'event' => 'leave.handover_assigned',
+            'title' => 'Leave handover assigned to you',
+            'message' => "{$employeeName} selected you as handover cover for {$leaveRequest->leaveType?->name} from {$leaveRequest->starts_on?->toDateString()} to {$leaveRequest->ends_on?->toDateString()}.",
+            'action_label' => 'View leave',
+            'action_url' => '/me/leave',
+            'entity_type' => 'leave_request',
+            'entity_id' => $leaveRequest->id,
+            'metadata' => [
+                'employee_id' => $leaveRequest->employee_id,
+                'handover_to_employee_id' => $leaveRequest->handover_to_employee_id,
+                'status' => $leaveRequest->status,
+                'starts_on' => $leaveRequest->starts_on?->toDateString(),
+                'ends_on' => $leaveRequest->ends_on?->toDateString(),
+            ],
+        ]);
+    }
+
+    public function leaveHandoverStatusChanged(LeaveRequest $leaveRequest): void
+    {
+        $leaveRequest->loadMissing(['employee', 'handoverTo.user', 'leaveType']);
+        $recipient = $leaveRequest->handoverTo?->user;
+
+        if (! $recipient) {
+            return;
+        }
+
+        $employeeName = trim($leaveRequest->employee->first_name.' '.$leaveRequest->employee->last_name);
+
+        $this->notify($recipient, [
+            'category' => 'leave',
+            'event' => 'leave.handover_status_changed',
+            'severity' => in_array($leaveRequest->status, ['rejected', 'changes_requested', 'cancelled'], true) ? 'warning' : 'info',
+            'title' => 'Leave handover status updated',
+            'message' => "{$employeeName}'s leave handover is now {$leaveRequest->status}.",
+            'action_label' => 'View leave',
+            'action_url' => '/me/leave',
+            'entity_type' => 'leave_request',
+            'entity_id' => $leaveRequest->id,
+            'metadata' => [
+                'employee_id' => $leaveRequest->employee_id,
+                'handover_to_employee_id' => $leaveRequest->handover_to_employee_id,
+                'status' => $leaveRequest->status,
+                'starts_on' => $leaveRequest->starts_on?->toDateString(),
+                'ends_on' => $leaveRequest->ends_on?->toDateString(),
+            ],
+        ]);
+    }
+
+    /**
+     * @param Collection<int, User> $recipients
+     */
+    public function companyEventPublished(CompanyEvent $event, User $actor, Collection $recipients): void
+    {
+        $event->loadMissing(['department', 'createdBy']);
+        $scope = $event->department ? $event->department->name : 'Everyone';
+
+        foreach ($recipients->reject(fn (User $user) => $user->id === $actor->id) as $recipient) {
+            $this->notify($recipient, [
+                'category' => 'calendar',
+                'event' => 'company_event.published',
+                'title' => $event->title,
+                'message' => "{$event->title} is scheduled from {$event->starts_on?->toDateString()} to {$event->ends_on?->toDateString()} for {$scope}.",
+                'action_label' => 'View calendar',
+                'action_url' => '/calendar',
+                'entity_type' => 'company_event',
+                'entity_id' => $event->id,
+                'metadata' => [
+                    'department_id' => $event->department_id,
+                    'scope' => $event->department_id ? 'department' : 'organization',
+                    'starts_on' => $event->starts_on?->toDateString(),
+                    'ends_on' => $event->ends_on?->toDateString(),
+                    'created_by_user_id' => $actor->id,
+                ],
+            ]);
+        }
     }
 
     /**
@@ -438,7 +530,7 @@ class NotificationDispatchService
                     'permission' => $step->approver_permission && $user->can($step->approver_permission),
                     'role' => $step->approverRole && $user->hasRole($step->approverRole),
                     'direct_manager' => $approvalRequest->subjectEmployee && $user->employee?->id === $approvalRequest->subjectEmployee->reporting_manager_id,
-                    'department_head' => $approvalRequest->subjectEmployee && $user->can('employees.view_department') && $user->employee?->department_id === $approvalRequest->subjectEmployee->department_id,
+                    'department_head' => $approvalRequest->subjectEmployee && $user->employee?->id === $approvalRequest->subjectEmployee->department?->head_employee_id,
                     default => false,
                 };
             })

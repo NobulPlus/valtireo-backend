@@ -26,6 +26,7 @@ export function DashboardPage() {
   ];
 
   const activeTab: Tab = (tab as Tab) && availableTabs.includes(tab as Tab) ? (tab as Tab) : availableTabs[0];
+  const firstName = session?.user?.name?.split(' ')[0] ?? '';
 
   if (!tab || !availableTabs.includes(tab as Tab)) {
     return <Navigate to={`/dashboard/${activeTab}`} replace />;
@@ -35,7 +36,7 @@ export function DashboardPage() {
     <div>
       <PageHeader
         title="Dashboard"
-        subtitle={`Welcome back, ${session?.user.name.split(' ')[0] ?? ''}.`}
+        subtitle={`Welcome back${firstName ? `, ${firstName}` : ''}.`}
       />
 
       {availableTabs.length > 1 && (

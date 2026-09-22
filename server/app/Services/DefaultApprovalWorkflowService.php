@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ApprovalWorkflow;
 use App\Models\Organization;
 use App\Models\Role;
 
@@ -62,16 +63,7 @@ class DefaultApprovalWorkflowService
             ]
         );
 
-        $leaveWorkflow->steps()->firstOrCreate(
-            ['step_order' => 1],
-            [
-                'name' => 'Manager or HR approval',
-                'approver_type' => 'permission',
-                'approver_permission' => 'leave_requests.approve',
-                'note_required' => false,
-                'is_active' => true,
-            ]
-        );
+        $this->seedLeaveWorkflowSteps($organization, $leaveWorkflow);
 
         $attendanceWorkflow = $organization->approvalWorkflows()->firstOrCreate(
             [
@@ -94,6 +86,32 @@ class DefaultApprovalWorkflowService
                 'name' => 'Manager or HR attendance review',
                 'approver_type' => 'permission',
                 'approver_permission' => 'attendance.update',
+                'note_required' => false,
+                'is_active' => true,
+            ]
+        );
+
+        $payrollWorkflow = $organization->approvalWorkflows()->firstOrCreate(
+            [
+                'module' => 'payroll',
+                'action' => 'approve_run',
+                'name' => 'Payroll run approval',
+            ],
+            [
+                'description' => 'Default approval flow for calculated payroll runs.',
+                'is_active' => true,
+                'require_note_on_reject' => true,
+                'require_note_on_request_changes' => true,
+                'auto_approve_when_no_steps' => false,
+            ]
+        );
+
+        $payrollWorkflow->steps()->firstOrCreate(
+            ['step_order' => 1],
+            [
+                'name' => 'Payroll approval',
+                'approver_type' => 'permission',
+                'approver_permission' => 'payroll.runs.approve',
                 'note_required' => false,
                 'is_active' => true,
             ]
@@ -148,5 +166,76 @@ class DefaultApprovalWorkflowService
                     ]
             );
         }
+    }
+
+    private function seedLeaveWorkflowSteps(Organization $organization, ApprovalWorkflow $workflow): void
+    {
+        $steps = $workflow->steps()->orderBy('step_order')->get();
+        $usesOldDefault = $steps->count() === 1
+            && $steps->first()->step_order === 1
+            && $steps->first()->approver_type === 'permission'
+            && $steps->first()->approver_permission === 'leave_requests.approve';
+
+        if ($steps->isNotEmpty() && ! $usesOldDefault) {
+            return;
+        }
+
+        if ($usesOldDefault && $workflow->requests()->where('status', 'pending')->exists()) {
+            return;
+        }
+
+        if ($usesOldDefault) {
+            $workflow->steps()->delete();
+        }
+
+        $hrDirectorRole = Role::query()
+            ->where('organization_id', $organization->id)
+            ->where('key', 'hr_director')
+            ->first();
+
+        $workflow->steps()->updateOrCreate(
+            ['step_order' => 1],
+            [
+                'name' => 'Reporting manager review',
+                'approver_type' => 'direct_manager',
+                'approver_role_id' => null,
+                'approver_permission' => null,
+                'note_required' => false,
+                'is_active' => true,
+            ]
+        );
+
+        $workflow->steps()->updateOrCreate(
+            ['step_order' => 2],
+            [
+                'name' => 'Department head review',
+                'approver_type' => 'department_head',
+                'approver_role_id' => null,
+                'approver_permission' => null,
+                'note_required' => false,
+                'is_active' => true,
+            ]
+        );
+
+        $workflow->steps()->updateOrCreate(
+            ['step_order' => 3],
+            $hrDirectorRole
+                ? [
+                    'name' => 'HR final approval',
+                    'approver_type' => 'role',
+                    'approver_role_id' => $hrDirectorRole->id,
+                    'approver_permission' => null,
+                    'note_required' => false,
+                    'is_active' => true,
+                ]
+                : [
+                    'name' => 'HR final approval',
+                    'approver_type' => 'permission',
+                    'approver_role_id' => null,
+                    'approver_permission' => 'leave_requests.approve',
+                    'note_required' => false,
+                    'is_active' => true,
+                ]
+        );
     }
 }

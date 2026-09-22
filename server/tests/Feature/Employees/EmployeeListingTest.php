@@ -100,7 +100,8 @@ class EmployeeListingTest extends TestCase
 
         foreach ($response->json('data') as $employee) {
             $this->assertSame($manager->department_id, $employee['department']['id']);
-            $this->assertNotEmpty(array_intersect(['Department Head', 'Supervisor'], $employee['user']['roles']));
+            $roleNames = array_column($employee['user']['roles'], 'name');
+            $this->assertNotEmpty(array_intersect(['Department Head', 'Supervisor'], $roleNames));
         }
     }
 

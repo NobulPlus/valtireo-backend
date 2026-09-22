@@ -100,8 +100,8 @@ class TemplateImportTest extends TestCase
 
         $response = $this->postJson('/api/templates/employee_import/import', [
             'file' => $this->csv('employee-import.csv', [
-                ['employee_number', 'first_name', 'middle_name', 'last_name', 'work_email', 'phone', 'department_code', 'unit_code', 'designation_code', 'grade_level_code', 'employment_type_code', 'location_code', 'reporting_manager_number', 'start_date', 'send_invitation'],
-                ['EMP-IMP-001', 'Nora', '', 'Stone', 'nora.stone@example.test', '08011112222', 'FIN', 'FIN-PAY', 'OFF', 'GL05', 'PERM', 'HQ', 'EMP-HR-001', '2026-08-20', 'false'],
+                ['employee_number', 'first_name', 'middle_name', 'last_name', 'work_email', 'phone', 'department_code', 'unit_code', 'cluster_code', 'designation_code', 'grade_level_code', 'employment_type_code', 'location_code', 'reporting_manager_number', 'start_date', 'send_invitation'],
+                ['EMP-IMP-001', 'Nora', '', 'Stone', 'nora.stone@example.test', '08011112222', 'FIN', 'FIN-PAY', '', 'OFF', 'GL05', 'PERM', 'HQ', 'EMP-HR-001', '2026-08-20', 'false'],
             ]),
         ]);
 

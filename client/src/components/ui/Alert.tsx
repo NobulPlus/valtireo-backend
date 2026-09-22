@@ -7,12 +7,16 @@ export function Alert({
   children,
   id,
 }: {
-  tone?: 'danger' | 'warning';
+  tone?: 'danger' | 'warning' | 'info' | 'success';
   children: ReactNode;
   id?: string;
 }) {
-  const toneClasses =
-    tone === 'danger' ? 'bg-danger-bg text-danger' : 'bg-warning-bg text-warning';
+  const toneClasses = {
+    danger: 'bg-danger-bg text-danger',
+    warning: 'bg-warning-bg text-warning',
+    info: 'bg-info-bg text-info',
+    success: 'bg-success-bg text-success',
+  }[tone];
 
   return (
     <div

@@ -112,15 +112,21 @@ class EmployeeRoleAssignmentService
      */
     public function updateAssignedRole(User $actor, Employee $employee, User $targetUser, ?int $roleId): void
     {
-        if ($roleId === null) {
-            return;
-        }
-
         if ($employee->organization_id !== $actor->organization_id) {
             abort(404);
         }
 
-        $role = Role::query()->where('organization_id', $employee->organization_id)->findOrFail($roleId);
+        if ($roleId === null) {
+            $role = $this->defaultRoleFor($employee->organization);
+
+            if ($role === null) {
+                throw ValidationException::withMessages([
+                    'pending_role_id' => ['This organization has no default role configured — choose a role explicitly.'],
+                ]);
+            }
+        } else {
+            $role = Role::query()->where('organization_id', $employee->organization_id)->findOrFail($roleId);
+        }
 
         $this->assertCanAssign($actor, $role);
 
@@ -138,7 +144,8 @@ class EmployeeRoleAssignmentService
 
         $targetUser->syncRoles([$role]);
         $employee->update(['pending_role_id' => null]);
-        $this->activity->record($employee, $actor, 'employee_role_changed', "Role changed to {$role->name}.", subject: $role);
+        $message = $roleId === null ? "Role reset to the default ({$role->name})." : "Role changed to {$role->name}.";
+        $this->activity->record($employee, $actor, 'employee_role_changed', $message, subject: $role);
     }
 
     private function assignDefault(Employee $employee, User $targetUser): void

@@ -38,7 +38,7 @@ function isActiveTicket(ticket: Ticket): boolean {
 }
 
 function isCancellable(ticket: Ticket): boolean {
-  return ticket.status === 'submitted' || ticket.status === 'changes_requested';
+  return ticket.status === 'submitted' || ticket.status === 'changes_requested' || ticket.status === 'approved';
 }
 
 const PRIORITY_OPTIONS = [

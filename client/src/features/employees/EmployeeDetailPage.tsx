@@ -9,6 +9,7 @@ import {
   Mail,
   MapPin,
   MoreHorizontal,
+  Package,
   Phone,
   Plus,
   Trash2,
@@ -52,19 +53,22 @@ import {
 } from '@/features/employees/api';
 import { ApproveOnboardingModal } from '@/features/employees/ApproveOnboardingModal';
 import { ChangeStatusModal } from '@/features/employees/ChangeStatusModal';
+import { EmployeePayrollTab } from '@/features/employees/EmployeePayrollTab';
 import { useSetupLookups } from '@/features/workspace/api';
 import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/apiClient';
 import { useDateFormatter } from '@/lib/dateFormat';
 import type { Dependent, EmergencyContact, Employee } from '@/types/api';
 
-type Tab = 'overview' | 'biodata' | 'contacts' | 'documents' | 'status' | 'reporting' | 'activity';
+type Tab = 'overview' | 'biodata' | 'contacts' | 'documents' | 'assets' | 'payroll' | 'status' | 'reporting' | 'activity';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'biodata', label: 'Biodata' },
   { key: 'contacts', label: 'Contacts' },
   { key: 'documents', label: 'Documents' },
+  { key: 'assets', label: 'Assets' },
+  { key: 'payroll', label: 'Payroll' },
   { key: 'status', label: 'Status history' },
   { key: 'reporting', label: 'Reporting history' },
   { key: 'activity', label: 'Activity' },
@@ -168,7 +172,7 @@ function GenderBadge({ gender }: { gender?: string | null }) {
 }
 
 function EmployeeDetailContent({ employee }: { employee: Employee }) {
-  const { hasPermission } = useAuth();
+  const { hasPermission, moduleByKey } = useAuth();
   const toast = useToast();
   const { formatDate, formatDateTime } = useDateFormatter();
   const lookups = useSetupLookups();
@@ -274,6 +278,10 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const canViewEmployee = hasPermission('employees.view');
   const canUpdateEmployee = hasPermission('employees.update');
   const canUploadDocuments = hasPermission('employee_documents.create');
+  const payrollModule = moduleByKey('payroll');
+  const canViewPayroll =
+    hasPermission('payroll.compensation.view') && Boolean(payrollModule) && payrollModule?.visibility === 'enabled' && payrollModule?.can_access;
+  const visibleTabs = TABS.filter((tabItem) => tabItem.key !== 'payroll' || canViewPayroll);
 
   async function handleUploadDocument() {
     if (!documentFile || !documentForm.document_type_id || !documentForm.title.trim()) return;
@@ -548,6 +556,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                 <DropdownMenuItem icon={FileText} onClick={() => setTab('documents')}>
                   View documents
                 </DropdownMenuItem>
+                <DropdownMenuItem icon={Package} onClick={() => setTab('assets')}>
+                  View assets
+                </DropdownMenuItem>
                 {canUpdateEmployee && (
                   <DropdownMenuItem icon={AlertTriangle} onClick={() => setCorrectionModalOpen(true)}>
                     Request correction
@@ -624,7 +635,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
 
         <div className="lg:col-span-2">
           <div className="mb-4 flex items-center gap-1 border-b border-border">
-            {TABS.map((tabItem) => (
+            {visibleTabs.map((tabItem) => (
               <button
                 key={tabItem.key}
                 onClick={() => setTab(tabItem.key)}
@@ -843,6 +854,73 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
               </CardBody>
             </Card>
           )}
+
+          {tab === 'assets' && (
+            <div className="space-y-5">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Assigned assets</CardTitle>
+                </CardHeader>
+                <CardBody className="p-0">
+                  {employee.assets && employee.assets.length > 0 ? (
+                    <ul className="divide-y divide-border">
+                      {employee.assets.map((asset) => (
+                        <li key={asset.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-strong">{asset.name}</p>
+                            <p className="text-xs text-muted">
+                              {asset.asset_tag}
+                              {asset.serial_number ? ` · ${asset.serial_number}` : ''}
+                              {asset.category?.name ? ` · ${asset.category.name}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex flex-shrink-0 items-center gap-2">
+                            <StatusBadge status={asset.status} />
+                            {asset.condition && <StatusBadge status={asset.condition} />}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <EmptyState title="No assigned assets" description="Assets issued to this employee will appear here." />
+                  )}
+                </CardBody>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Asset history</CardTitle>
+                </CardHeader>
+                <CardBody className="p-0">
+                  {employee.asset_assignment_history && employee.asset_assignment_history.length > 0 ? (
+                    <ul className="divide-y divide-border">
+                      {employee.asset_assignment_history.map((entry) => (
+                        <li key={entry.id} className="px-5 py-3 text-sm">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-strong">{entry.asset?.name ?? 'Asset'}</p>
+                              <p className="text-xs text-muted">{entry.asset?.asset_tag ?? `Asset #${entry.asset_id}`}</p>
+                            </div>
+                            <span className="text-xs text-muted">
+                              {formatDateTime(entry.assigned_at)}
+                              {entry.returned_at ? ` - ${formatDateTime(entry.returned_at)}` : ' - Active'}
+                            </span>
+                          </div>
+                          {(entry.issue_note || entry.return_note) && (
+                            <p className="mt-1 text-xs text-muted">{entry.return_note ?? entry.issue_note}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <EmptyState title="No asset history" description="Issued and returned assets will build a timeline here." />
+                  )}
+                </CardBody>
+              </Card>
+            </div>
+          )}
+
+          {tab === 'payroll' && canViewPayroll && <EmployeePayrollTab employeeId={employee.id} />}
 
           {tab === 'status' && (
             <Card>
@@ -1306,7 +1384,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                   ...current,
                   document_type_id: value,
                   document_requirement_id: '',
-                  title: current.title || selectedType?.name || current.title,
+                  title: selectedType?.name ?? '',
                 }));
               }}
               options={(documentTypesQuery.data?.data ?? []).map((type) => ({ value: String(type.id), label: type.name }))}
@@ -1331,7 +1409,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           <ActionField label="Title">
             <Input
               value={documentForm.title}
-              onChange={(event) => setDocumentForm((current) => ({ ...current, title: event.target.value }))}
+              disabled
+              readOnly
+              className="cursor-not-allowed bg-surface-soft text-muted"
               placeholder="e.g. Employment Contract"
             />
           </ActionField>
@@ -1405,7 +1485,7 @@ function EmployeeDetailShell() {
 
 export function EmployeeDetailPage() {
   return (
-    <RequirePermission permission="employees.view">
+    <RequirePermission permission="employees.view" moduleKey="employees">
       <EmployeeDetailShell />
     </RequirePermission>
   );

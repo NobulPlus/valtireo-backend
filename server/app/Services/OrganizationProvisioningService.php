@@ -6,6 +6,7 @@ use App\Models\Organization;
 use App\Models\PlatformModule;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -63,6 +64,7 @@ class OrganizationProvisioningService
 
             $workspace = app(WorkspaceSettingsService::class)->update($organization, $workspaceSettings);
             app(DefaultTicketCategorySeedingService::class)->seedForOrganization($organization);
+            app(DefaultAssetCategorySeedingService::class)->seedForOrganization($organization);
             // Roles must exist before workflow seeding — the service desk
             // workflows below route certain categories to specific roles
             // (see DefaultApprovalWorkflowService::CATEGORY_ROLE_MAP).
@@ -97,7 +99,19 @@ class OrganizationProvisioningService
             app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
             $admin->assignRole($roles->get('organization_admin'));
 
-            $deliveryStatus = $this->deliverAdminInvitation($admin, $organization, $temporaryPassword, $createdBy);
+            $setupToken = Str::random(64);
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $admin->email],
+                [
+                    'token' => Hash::make($setupToken),
+                    'created_at' => now(),
+                ],
+            );
+            $frontendUrl = config('services.valtireo_notifications.frontend_url') ?: env('FRONTEND_URL', 'http://localhost:5173');
+            $setupUrl = rtrim((string) $frontendUrl, '/')
+                .'/admin-invitations/'.$setupToken.'?email='.urlencode($admin->email);
+
+            $deliveryStatus = $this->deliverAdminInvitation($admin, $organization, $setupUrl, $createdBy);
 
             return [
                 'organization' => $organization->refresh(),
@@ -107,8 +121,8 @@ class OrganizationProvisioningService
                 'workspace' => $workspace,
                 'invitation' => [
                     'email' => $admin->email,
-                    'temporary_password' => $temporaryPassword,
-                    'login_hint' => 'The admin can sign in with this temporary password and should change it after first login.',
+                    'setup_url' => $setupUrl,
+                    'login_hint' => 'The admin should use the setup link to choose their password and activate the workspace.',
                     'delivery_status' => $deliveryStatus,
                 ],
                 'created_by' => [
@@ -123,7 +137,7 @@ class OrganizationProvisioningService
     private function deliverAdminInvitation(
         User $admin,
         Organization $organization,
-        string $temporaryPassword,
+        string $setupUrl,
         User $createdBy
     ): string {
         if (! config('services.valtireo_notifications.mail_enabled')) {
@@ -134,7 +148,7 @@ class OrganizationProvisioningService
             $this->notifications->organizationAdminInvited(
                 $admin,
                 $organization,
-                $temporaryPassword,
+                $setupUrl,
                 $createdBy
             );
 

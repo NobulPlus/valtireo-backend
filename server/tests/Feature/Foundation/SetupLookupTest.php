@@ -5,6 +5,7 @@ namespace Tests\Feature\Foundation;
 use App\Models\Cluster;
 use App\Models\Department;
 use App\Models\Designation;
+use App\Models\Employee;
 use App\Models\EmploymentType;
 use App\Models\GradeLevel;
 use App\Models\OrganizationLocation;
@@ -90,6 +91,7 @@ class SetupLookupTest extends TestCase
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
         $department = Department::query()->where('organization_id', $admin->organization_id)->where('code', 'FIN')->firstOrFail();
+        $manager = Employee::query()->where('organization_id', $admin->organization_id)->where('department_id', $department->id)->firstOrFail();
         $locations = OrganizationLocation::query()->where('organization_id', $admin->organization_id)->take(2)->get();
 
         Sanctum::actingAs($admin);
@@ -98,11 +100,13 @@ class SetupLookupTest extends TestCase
             'name' => 'Lagos Cluster',
             'code' => 'LAG-CLU',
             'department_id' => $department->id,
+            'manager_employee_id' => $manager->id,
             'location_ids' => $locations->pluck('id')->all(),
         ])
             ->assertCreated()
             ->assertJsonPath('cluster.name', 'Lagos Cluster')
             ->assertJsonPath('cluster.department.code', 'FIN')
+            ->assertJsonPath('cluster.manager.id', $manager->id)
             ->assertJsonCount(2, 'cluster.locations')
             ->json('cluster.id');
 
@@ -110,15 +114,38 @@ class SetupLookupTest extends TestCase
             ->assertOk()
             ->assertJsonFragment(['code' => 'LAG-CLU']);
 
+        $this->assertSame($clusterId, $manager->refresh()->cluster_id);
+
         // Re-saving with a narrower location list replaces the pivot rather than appending to it.
         $this->patchJson("/api/setup/clusters/{$clusterId}", [
             'name' => 'Lagos Cluster',
             'code' => 'LAG-CLU',
             'department_id' => $department->id,
+            'manager_employee_id' => $manager->id,
             'location_ids' => [$locations->first()->id],
         ])
             ->assertOk()
             ->assertJsonCount(1, 'cluster.locations');
+    }
+
+    public function test_cluster_leader_must_belong_to_the_cluster_department(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $finance = Department::query()->where('organization_id', $admin->organization_id)->where('code', 'FIN')->firstOrFail();
+        $ictEmployee = Employee::query()->where('organization_id', $admin->organization_id)->whereHas('department', fn ($query) => $query->where('code', 'ICT'))->firstOrFail();
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/setup/clusters', [
+            'name' => 'Finance Cluster',
+            'code' => 'FIN-CLU',
+            'department_id' => $finance->id,
+            'manager_employee_id' => $ictEmployee->id,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['manager_employee_id']);
     }
 
     public function test_cluster_creation_requires_workspace_settings_permission(): void

@@ -4,6 +4,7 @@ namespace Tests\Feature\Dashboard;
 
 use App\Models\ApprovalRequest;
 use App\Models\AttendanceRecord;
+use App\Models\Cluster;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\LeaveRequest;
@@ -31,14 +32,14 @@ class DashboardTest extends TestCase
                 'filters',
                 'employees' => ['total', 'active', 'draft', 'invited', 'onboarding'],
                 'onboarding' => ['pending_profiles', 'submitted_profiles', 'approved_profiles', 'pending_invitations', 'accepted_invitations', 'expired_invitations'],
-                'structure' => ['departments', 'units', 'locations', 'designations', 'grade_levels', 'employment_types'],
+                'structure' => ['departments', 'units', 'clusters', 'clusters_with_manager', 'clusters_with_supervisor', 'employees_without_cluster', 'locations', 'designations', 'grade_levels', 'employment_types'],
                 'modules' => ['available', 'active', 'locked'],
                 'approvals' => ['pending', 'needs_attention'],
                 'service_desk' => ['open', 'unassigned', 'sla_breached'],
                 'leave' => ['pending', 'upcoming'],
                 'attendance' => ['present', 'late', 'absent'],
                 'documents' => ['missing', 'expiring_soon', 'expired'],
-                'breakdowns' => ['by_department', 'by_location', 'by_employment_type', 'by_designation', 'by_status'],
+                'breakdowns' => ['by_department', 'by_cluster', 'by_location', 'by_employment_type', 'by_designation', 'by_status'],
                 'trends' => ['onboarding'],
                 'recent' => ['employees', 'invitations'],
                 'setup_completion',
@@ -333,6 +334,49 @@ class DashboardTest extends TestCase
             ]);
     }
 
+    public function test_cluster_leader_gets_cluster_scoped_manager_dashboard(): void
+    {
+        $this->seed();
+
+        $leaderUser = User::query()->where('email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $leader = Employee::query()->where('work_email', 'daniel.adeyemi@valtireo.test')->firstOrFail();
+        $department = $leader->department;
+        $member = Employee::query()
+            ->where('organization_id', $leader->organization_id)
+            ->where('department_id', $department->id)
+            ->whereKeyNot($leader->id)
+            ->firstOrFail();
+
+        $cluster = Cluster::query()->create([
+            'organization_id' => $leader->organization_id,
+            'department_id' => $department->id,
+            'manager_employee_id' => $leader->id,
+            'name' => 'Operations West',
+            'code' => 'OPS-WEST',
+        ]);
+
+        $leader->update(['cluster_id' => $cluster->id]);
+        $member->update(['cluster_id' => $cluster->id]);
+
+        Sanctum::actingAs($leaderUser);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertOk()
+            ->assertJsonPath('scope.type', 'cluster')
+            ->assertJsonPath('scope.cluster.code', 'OPS-WEST')
+            ->assertJsonPath('scope.source', 'cluster_leadership_assignment')
+            ->assertJsonPath('employees.total', 2);
+
+        Sanctum::actingAs(User::query()->where('email', 'admin@valtireo.test')->firstOrFail());
+
+        $this->getJson('/api/dashboard/organization')
+            ->assertOk()
+            ->assertJsonPath('structure.clusters', 1)
+            ->assertJsonPath('structure.clusters_with_manager', 1)
+            ->assertJsonPath('breakdowns.by_cluster.0.code', 'OPS-WEST')
+            ->assertJsonPath('breakdowns.by_cluster.0.manager.employee_number', $leader->employee_number);
+    }
+
     public function test_supervisor_can_view_direct_reports_dashboard(): void
     {
         $this->seed();
@@ -407,7 +451,7 @@ class DashboardTest extends TestCase
         ]);
         $this->setPermissionsTeamId($admin->organization_id);
         $deptHeadUser->assignRole('Department Head');
-        Employee::factory()->create([
+        $deptHeadEmployee = Employee::factory()->create([
             'organization_id' => $admin->organization_id,
             'user_id' => $deptHeadUser->id,
             'department_id' => $opsDepartment->id,
@@ -419,6 +463,7 @@ class DashboardTest extends TestCase
             'reporting_manager_id' => null,
             'status' => 'active',
         ]);
+        $opsDepartment->update(['head_employee_id' => $deptHeadEmployee->id]);
 
         $opsDepartmentTotal = Employee::query()->where('department_id', $opsDepartment->id)->count();
 
@@ -452,7 +497,7 @@ class DashboardTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_organization_admin_who_is_also_an_employee_gets_department_scope_from_view_department_permission(): void
+    public function test_organization_admin_who_is_also_an_employee_gets_department_scope_when_assigned_as_department_head(): void
     {
         $this->seed();
 
@@ -472,17 +517,14 @@ class DashboardTest extends TestCase
             'reporting_manager_id' => null,
             'status' => 'active',
         ]);
+        $opsDepartment->update(['head_employee_id' => $adminEmployee->id]);
 
         $supervisor->update(['reporting_manager_id' => $adminEmployee->id]);
 
         Sanctum::actingAs($admin);
 
-        // Organization Admin's seeded role carries every permission,
-        // including employees.view_department — so scope resolution picks
-        // the department-wide view before it ever gets to checking direct
-        // reports (see DashboardService::managerScope()). Direct-report-only
-        // scoping for a permission holder without employees.view_department
-        // is covered separately by test_supervisor_can_view_direct_reports_dashboard.
+        // Department scope requires both access permission and explicit
+        // assignment as the department head; the role alone is no longer enough.
         $this->getJson('/api/dashboard/manager')
             ->assertOk()
             ->assertJsonPath('scope.type', 'department')

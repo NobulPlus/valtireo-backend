@@ -73,9 +73,10 @@ Implemented areas include:
 - Employee directory, creation, profile, onboarding, approval, status, reporting, documents, and activity
 - Employee self-service: profile, leave, attendance
 - Organization, manager, and personal dashboards
+- Calendar/company events for organization-wide and department-scoped announcements
 - Documents and compliance
 - Approval workflows and approval requests
-- Leave types, periods, holidays, entitlements, requests, and balances
+- Leave types, periods, holidays, entitlements, requests, handovers, and balances
 - Attendance settings, shifts, records, and correction requests
 - Reports and CSV exports
 - Notifications

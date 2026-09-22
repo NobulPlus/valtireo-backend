@@ -20,6 +20,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -451,6 +452,47 @@ class LeaveModuleTest extends TestCase
         ]);
     }
 
+    public function test_gender_restricted_leave_types_are_only_auto_granted_to_matching_gender(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $maternityId = $this->postJson('/api/leave/types', [
+            'name' => 'Test Maternity Leave',
+            'code' => 'testmtl',
+            'default_days_per_year' => 60,
+            'auto_grant_on_activation' => true,
+            'restricted_to_gender' => 'female',
+        ])->assertCreated()->json('leave_type.id');
+
+        $paternityId = $this->postJson('/api/leave/types', [
+            'name' => 'Test Paternity Leave',
+            'code' => 'testptl',
+            'default_days_per_year' => 10,
+            'auto_grant_on_activation' => true,
+            'restricted_to_gender' => 'male',
+        ])->assertCreated()->json('leave_type.id');
+
+        // createOnboardingEmployee() sets gender to 'female' by default.
+        $employee = $this->createOnboardingEmployee();
+        $employee->profile()->update(['completion_status' => 'submitted']);
+
+        $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'not_applicable'])
+            ->assertOk();
+
+        $this->assertDatabaseHas('leave_entitlements', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $maternityId,
+            'days_allocated' => 60,
+        ]);
+        $this->assertDatabaseMissing('leave_entitlements', [
+            'employee_id' => $employee->id,
+            'leave_type_id' => $paternityId,
+        ]);
+    }
+
     /**
      * @param array<string, mixed> $overrides
      */
@@ -542,10 +584,13 @@ class LeaveModuleTest extends TestCase
         $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
         Sanctum::actingAs($employeeUser);
 
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(2);
+
         $leaveRequestId = $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => '2026-09-07',
-            'ends_on' => '2026-09-09',
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
             'reason' => 'Family travel.',
         ])
             ->assertCreated()
@@ -566,6 +611,155 @@ class LeaveModuleTest extends TestCase
             'leave_type_id' => $annual->id,
             'days_pending' => 3,
         ]);
+    }
+
+    public function test_employee_can_submit_leave_with_handover_and_handover_employee_is_notified(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        // ICT Admin holds no leave_requests.* permission at all, so this
+        // fixture actually exercises the privacy boundary below — a handover
+        // recipient with HR access (e.g. HR Director) would trivially pass
+        // the evidence-download assertion regardless of the handover gate.
+        $handover = Employee::query()
+            ->with('user')
+            ->where('organization_id', $employeeUser->organization_id)
+            ->whereHas('user', fn ($query) => $query->where('email', 'samuel.eze@valtireo.test'))
+            ->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(2);
+
+        Sanctum::actingAs($employeeUser);
+
+        $leaveRequestId = $this->post('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+            'reason' => 'Family travel.',
+            'handover_to_employee_id' => $handover->id,
+            'handover_note' => 'Please cover the finance approval desk while I am away.',
+            'evidence' => UploadedFile::fake()->create('private-note.pdf', 128, 'application/pdf'),
+            'handover_document' => UploadedFile::fake()->create('handover-brief.pdf', 128, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('leave_request.status', 'submitted')
+            ->assertJsonPath('leave_request.handover_to_employee_id', $handover->id)
+            ->assertJsonPath('leave_request.handover_to.id', $handover->id)
+            ->assertJsonPath('leave_request.handover_note', 'Please cover the finance approval desk while I am away.')
+            ->assertJsonPath('leave_request.handover_file_name', 'handover-brief.pdf')
+            ->assertJsonPath('leave_request.handover_download_url', fn ($url) => str_contains($url, '/handover-document/download'))
+            ->json('leave_request.id');
+
+        $request = LeaveRequest::query()->findOrFail($leaveRequestId);
+        Storage::disk('local')->assertExists($request->handover_file_path);
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequestId,
+            'handover_to_employee_id' => $handover->id,
+            'handover_file_name' => 'handover-brief.pdf',
+        ]);
+        $this->assertTrue(DB::table('notifications')
+            ->where('notifiable_id', $handover->user_id)
+            ->where('data->event', 'leave.handover_assigned')
+            ->exists());
+
+        Sanctum::actingAs($handover->user);
+
+        $this->getJson('/api/leave/requests')
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $leaveRequestId,
+                'handover_to_employee_id' => $handover->id,
+            ]);
+
+        $this->get("/api/leave/requests/{$leaveRequestId}/handover-document/download", ['Accept' => 'application/pdf'])
+            ->assertOk();
+
+        $this->get("/api/leave/requests/{$leaveRequestId}/evidence/download", ['Accept' => 'application/pdf'])
+            ->assertForbidden();
+    }
+
+    public function test_leave_handover_requires_a_recipient_for_notes_or_documents(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $startsOn->addDay()->toDateString(),
+            'handover_note' => 'Someone should cover my approvals.',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['handover_to_employee_id']);
+    }
+
+    public function test_leave_handover_rejects_self_and_overlapping_handover_employee(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $employee = $employeeUser->employee;
+        $handover = Employee::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('status', 'active')
+            ->where('id', '!=', $employee->id)
+            ->firstOrFail();
+        $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
+
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(2);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+            'handover_to_employee_id' => $employee->id,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['handover_to_employee_id']);
+
+        $period = LeavePeriod::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('is_active', true)
+            ->whereDate('starts_on', '<=', $startsOn->toDateString())
+            ->whereDate('ends_on', '>=', $endsOn->toDateString())
+            ->firstOrFail();
+
+        LeaveRequest::query()->create([
+            'organization_id' => $employeeUser->organization_id,
+            'employee_id' => $handover->id,
+            'leave_type_id' => $annual->id,
+            'leave_period_id' => $period->id,
+            'requested_by_id' => $handover->user_id ?? $employeeUser->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+            'total_days' => 3,
+            'status' => 'approved',
+            'submitted_at' => now(),
+            'reviewed_at' => now(),
+        ]);
+
+        $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $annual->id,
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+            'handover_to_employee_id' => $handover->id,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['handover_to_employee_id']);
     }
 
     public function test_leave_type_requiring_attachment_rejects_request_without_evidence(): void
@@ -590,6 +784,95 @@ class LeaveModuleTest extends TestCase
             'leave_type_id' => $sick->id,
             'starts_on' => '2026-09-10',
         ]);
+    }
+
+    public function test_gender_restricted_leave_type_blocks_a_mismatched_employee(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $employeeUser->employee->profile()->update(['gender' => 'male']);
+
+        $maternity = LeaveType::query()->create([
+            'organization_id' => $employeeUser->organization_id,
+            'name' => 'Test Maternity Leave',
+            'code' => 'TESTMTL2',
+            'default_days_per_year' => 60,
+            'is_paid' => true,
+            'restricted_to_gender' => 'female',
+        ]);
+
+        $period = LeavePeriod::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('is_active', true)
+            ->whereDate('starts_on', '<=', '2026-09-07')
+            ->whereDate('ends_on', '>=', '2026-09-09')
+            ->firstOrFail();
+
+        LeaveEntitlement::query()->create([
+            'organization_id' => $employeeUser->organization_id,
+            'employee_id' => $employeeUser->employee->id,
+            'leave_type_id' => $maternity->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 60,
+        ]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $maternity->id,
+            'starts_on' => '2026-09-07',
+            'ends_on' => '2026-09-09',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['leave_type_id']);
+
+        $this->assertDatabaseMissing('leave_requests', [
+            'employee_id' => $employeeUser->employee->id,
+            'leave_type_id' => $maternity->id,
+        ]);
+    }
+
+    public function test_gender_restricted_leave_type_allows_a_matching_employee(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $employeeUser->employee->profile()->update(['gender' => 'female']);
+
+        $maternity = LeaveType::query()->create([
+            'organization_id' => $employeeUser->organization_id,
+            'name' => 'Test Maternity Leave',
+            'code' => 'TESTMTL3',
+            'default_days_per_year' => 60,
+            'is_paid' => true,
+            'restricted_to_gender' => 'female',
+        ]);
+
+        $period = LeavePeriod::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('is_active', true)
+            ->whereDate('starts_on', '<=', '2026-09-07')
+            ->whereDate('ends_on', '>=', '2026-09-09')
+            ->firstOrFail();
+
+        LeaveEntitlement::query()->create([
+            'organization_id' => $employeeUser->organization_id,
+            'employee_id' => $employeeUser->employee->id,
+            'leave_type_id' => $maternity->id,
+            'leave_period_id' => $period->id,
+            'days_allocated' => 60,
+        ]);
+
+        Sanctum::actingAs($employeeUser);
+
+        $this->postJson('/api/leave/requests', [
+            'leave_type_id' => $maternity->id,
+            'starts_on' => '2026-09-07',
+            'ends_on' => '2026-09-09',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('leave_request.status', 'submitted');
     }
 
     public function test_employee_can_submit_required_attachment_leave_and_download_evidence(): void
@@ -633,13 +916,23 @@ class LeaveModuleTest extends TestCase
 
         $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $handover = Employee::query()
+            ->where('organization_id', $employeeUser->organization_id)
+            ->where('status', 'active')
+            ->whereNotNull('user_id')
+            ->where('id', '!=', $employeeUser->employee->id)
+            ->firstOrFail();
         $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
         Sanctum::actingAs($employeeUser);
 
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+        $endsOn = $startsOn->addDays(2);
+
         $leaveRequestId = $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => '2026-09-14',
-            'ends_on' => '2026-09-16',
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $endsOn->toDateString(),
+            'handover_to_employee_id' => $handover->id,
         ])
             ->assertCreated()
             ->json('leave_request.id');
@@ -648,12 +941,7 @@ class LeaveModuleTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/approvals/{$approval->id}/actions", [
-            'action' => 'approve',
-            'note' => 'Enjoy your leave.',
-        ])
-            ->assertOk()
-            ->assertJsonPath('approval_request.status', 'approved');
+        $this->approveApprovalCompletely($approval, 'Enjoy your leave.');
 
         $this->assertDatabaseHas('leave_requests', [
             'id' => $leaveRequestId,
@@ -665,6 +953,10 @@ class LeaveModuleTest extends TestCase
             'days_pending' => 0,
             'days_used' => 3,
         ]);
+        $this->assertTrue(DB::table('notifications')
+            ->where('notifiable_id', $handover->user_id)
+            ->where('data->event', 'leave.handover_status_changed')
+            ->exists());
     }
 
     public function test_cancelling_an_approved_leave_that_has_not_started_returns_all_days(): void
@@ -687,7 +979,7 @@ class LeaveModuleTest extends TestCase
 
         $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
         Sanctum::actingAs($admin);
-        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+        $this->approveApprovalCompletely($approval);
 
         Sanctum::actingAs(User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail());
         $this->patchJson("/api/leave/requests/{$leaveRequestId}/cancel")
@@ -725,7 +1017,7 @@ class LeaveModuleTest extends TestCase
 
         $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
         Sanctum::actingAs($admin);
-        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+        $this->approveApprovalCompletely($approval);
 
         // Wednesday of that week: Mon/Tue/Wed already taken, Thu/Fri remain.
         $this->travelTo($startsOn->addDays(2));
@@ -765,7 +1057,7 @@ class LeaveModuleTest extends TestCase
 
         $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
         Sanctum::actingAs($admin);
-        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+        $this->approveApprovalCompletely($approval);
 
         // Same day the leave is scheduled — nothing left to return.
         $this->travelTo($day);
@@ -798,7 +1090,7 @@ class LeaveModuleTest extends TestCase
 
         $approval = ApprovalRequest::query()->where('approvable_type', LeaveRequest::class)->where('approvable_id', $leaveRequestId)->firstOrFail();
         Sanctum::actingAs($admin);
-        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+        $this->approveApprovalCompletely($approval);
 
         $this->travelTo($endsOn->addDay());
 
@@ -818,16 +1110,18 @@ class LeaveModuleTest extends TestCase
         $annual = LeaveType::query()->where('organization_id', $employeeUser->organization_id)->where('code', 'ANNUAL')->firstOrFail();
         Sanctum::actingAs($employeeUser);
 
+        $startsOn = CarbonImmutable::now()->addWeeks(3)->next(CarbonImmutable::MONDAY);
+
         $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => '2026-10-05',
-            'ends_on' => '2026-10-07',
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $startsOn->addDays(2)->toDateString(),
         ])->assertCreated();
 
         $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => '2026-10-06',
-            'ends_on' => '2026-10-08',
+            'starts_on' => $startsOn->addDay()->toDateString(),
+            'ends_on' => $startsOn->addDays(3)->toDateString(),
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['starts_on']);
@@ -887,5 +1181,26 @@ class LeaveModuleTest extends TestCase
         $this->assertDatabaseMissing('leave_types', ['id' => $otherType->id, 'name' => 'Hijacked']);
         $this->assertDatabaseMissing('leave_periods', ['id' => $otherPeriod->id, 'name' => 'Hijacked']);
         $this->assertDatabaseMissing('leave_holidays', ['id' => $otherHoliday->id, 'name' => 'Hijacked']);
+    }
+
+    private function approveApprovalCompletely(ApprovalRequest $approval, ?string $note = null): void
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $approval->refresh();
+
+            if ($approval->status !== 'pending') {
+                break;
+            }
+
+            $this->postJson("/api/approvals/{$approval->id}/actions", [
+                'action' => 'approve',
+                'note' => $note,
+            ])->assertOk();
+        }
+
+        $this->assertDatabaseHas('approval_requests', [
+            'id' => $approval->id,
+            'status' => 'approved',
+        ]);
     }
 }

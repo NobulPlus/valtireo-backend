@@ -32,6 +32,7 @@ class CustomerOrganizationDemoSeeder extends Seeder
         foreach ($this->organizations() as $organizationData) {
             $organization = $this->seedOrganization($organizationData);
             $roles = $this->seedRoles($organization);
+            app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
             $this->seedModules($organization, $organizationData['modules']);
             $this->seedLocations($organization, $organizationData['locations']);
             $this->seedStructure($organization, $organizationData['departments']);
@@ -78,8 +79,6 @@ class CustomerOrganizationDemoSeeder extends Seeder
             'country' => $data['country'],
             'settings' => $data['settings'],
         ]);
-
-        app(DefaultApprovalWorkflowService::class)->seedForOrganization($organization);
 
         return $organization->refresh();
     }
@@ -309,7 +308,43 @@ class CustomerOrganizationDemoSeeder extends Seeder
             ]);
         }
 
+        $this->assignDepartmentHeads($organization, $employees, $seeded);
+
         return $seeded;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $employees
+     * @param array<string, Employee> $seeded
+     */
+    private function assignDepartmentHeads(Organization $organization, array $employees, array $seeded): void
+    {
+        foreach ($employees as $employeeData) {
+            if (! in_array($employeeData['role_key'], ['department_head', 'hr_director'], true)) {
+                continue;
+            }
+
+            $department = $this->department($organization, $employeeData['department_code']);
+            $department->update([
+                'head_employee_id' => $seeded[$employeeData['employee_number']]?->id,
+            ]);
+        }
+
+        $organization->departments()
+            ->whereNull('head_employee_id')
+            ->get()
+            ->each(function (Department $department) use ($organization): void {
+                $head = Employee::query()
+                    ->where('organization_id', $organization->id)
+                    ->where('department_id', $department->id)
+                    ->where('status', 'active')
+                    ->orderBy('start_date')
+                    ->first();
+
+                if ($head) {
+                    $department->update(['head_employee_id' => $head->id]);
+                }
+            });
     }
 
     /**

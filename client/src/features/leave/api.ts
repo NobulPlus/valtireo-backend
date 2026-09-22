@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiClient } from '@/lib/apiClient';
-import type { LeaveRequest, LeaveType, Paginated } from '@/types/api';
+import type { LeaveHoliday, LeaveRequest, LeaveType, Paginated } from '@/types/api';
 
 export function useLeaveTypes() {
   return useQuery({
@@ -10,10 +10,20 @@ export function useLeaveTypes() {
   });
 }
 
-export function useMyLeaveRequests() {
+export function useLeaveHolidays(options: { enabled?: boolean } = {}) {
+  return useQuery({
+    queryKey: ['leave', 'holidays', 'mine'],
+    queryFn: () => api.get<Paginated<LeaveHoliday>>('/leave/holidays', { params: { per_page: 100, is_active: true } }),
+    enabled: options.enabled ?? true,
+    staleTime: 60_000,
+  });
+}
+
+export function useMyLeaveRequests(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['leave', 'requests', 'mine'],
     queryFn: () => api.get<Paginated<LeaveRequest>>('/leave/requests?per_page=50'),
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -23,6 +33,9 @@ export interface CreateLeaveRequestPayload {
   ends_on: string;
   reason?: string;
   evidence?: File | null;
+  handover_to_employee_id?: number | null;
+  handover_note?: string;
+  handover_document?: File | null;
 }
 
 export function useCreateLeaveRequest() {
@@ -35,6 +48,9 @@ export function useCreateLeaveRequest() {
       formData.append('ends_on', payload.ends_on);
       if (payload.reason) formData.append('reason', payload.reason);
       if (payload.evidence) formData.append('evidence', payload.evidence);
+      if (payload.handover_to_employee_id) formData.append('handover_to_employee_id', String(payload.handover_to_employee_id));
+      if (payload.handover_note) formData.append('handover_note', payload.handover_note);
+      if (payload.handover_document) formData.append('handover_document', payload.handover_document);
 
       return api.post<{ leave_request: LeaveRequest }>('/leave/requests', formData);
     },
@@ -67,6 +83,23 @@ export async function openLeaveEvidenceInNewTab(leaveRequest: LeaveEvidenceDownl
   const responseType = response.headers['content-type'];
   const blob = new Blob([response.data], {
     type: leaveRequest.evidence_mime_type ?? (typeof responseType === 'string' ? responseType : 'application/octet-stream'),
+  });
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
+}
+
+type LeaveHandoverDocumentDownload = Pick<LeaveRequest, 'id' | 'handover_mime_type' | 'handover_download_url'>;
+
+export async function openLeaveHandoverDocumentInNewTab(leaveRequest: LeaveHandoverDocumentDownload): Promise<void> {
+  if (!leaveRequest.handover_download_url) return;
+
+  const response = await apiClient.get(`/leave/requests/${leaveRequest.id}/handover-document/download`, {
+    responseType: 'blob',
+  });
+  const responseType = response.headers['content-type'];
+  const blob = new Blob([response.data], {
+    type: leaveRequest.handover_mime_type ?? (typeof responseType === 'string' ? responseType : 'application/octet-stream'),
   });
   const url = window.URL.createObjectURL(blob);
   window.open(url, '_blank', 'noopener,noreferrer');

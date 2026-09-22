@@ -67,7 +67,7 @@ class TicketPriorityAndSlaTest extends TestCase
         $this->patchJson("/api/tickets/{$ticketId}/priority", ['priority' => 'low'])->assertForbidden();
     }
 
-    public function test_sla_due_at_is_computed_from_category_resolution_hours_and_null_without_one(): void
+    public function test_sla_due_dates_are_computed_from_category_response_and_resolution_hours(): void
     {
         $this->seed();
 
@@ -75,7 +75,14 @@ class TicketPriorityAndSlaTest extends TestCase
         $itCategoryId = $this->categoryId($employeeUser->organization_id, 'IT');
         $otherCategoryId = $this->categoryId($employeeUser->organization_id, 'OTHER');
 
-        TicketCategory::query()->whereKey($itCategoryId)->update(['resolution_sla_hours' => 24]);
+        TicketCategory::query()->whereKey($itCategoryId)->update([
+            'response_sla_hours' => 4,
+            'resolution_sla_hours' => 24,
+        ]);
+        TicketCategory::query()->whereKey($otherCategoryId)->update([
+            'response_sla_hours' => null,
+            'resolution_sla_hours' => null,
+        ]);
 
         Sanctum::actingAs($employeeUser);
 
@@ -86,7 +93,13 @@ class TicketPriorityAndSlaTest extends TestCase
         ])->assertCreated()->json('ticket');
 
         $this->assertNotNull($withSla['sla_due_at']);
+        $this->assertNotNull($withSla['response_sla_due_at']);
         $ticket = Ticket::query()->findOrFail($withSla['id']);
+        $this->assertEqualsWithDelta(
+            $ticket->submitted_at->addHours(4)->getTimestamp(),
+            $ticket->response_sla_due_at->getTimestamp(),
+            2,
+        );
         $this->assertEqualsWithDelta(
             $ticket->submitted_at->addHours(24)->getTimestamp(),
             $ticket->sla_due_at->getTimestamp(),
@@ -100,6 +113,47 @@ class TicketPriorityAndSlaTest extends TestCase
         ])->assertCreated()->json('ticket');
 
         $this->assertNull($withoutSla['sla_due_at']);
+        $this->assertNull($withoutSla['response_sla_due_at']);
+    }
+
+    public function test_on_hold_time_pauses_resolution_sla_due_date(): void
+    {
+        $this->seed();
+
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $ictAdmin = User::query()->where('email', 'samuel.eze@valtireo.test')->firstOrFail();
+        $itCategoryId = $this->categoryId($employeeUser->organization_id, 'IT');
+
+        TicketCategory::query()->whereKey($itCategoryId)->update([
+            'response_sla_hours' => 4,
+            'resolution_sla_hours' => 24,
+        ]);
+
+        Sanctum::actingAs($employeeUser);
+        $ticketId = $this->postJson('/api/tickets', [
+            'ticket_category_id' => $itCategoryId,
+            'subject' => 'Pause SLA',
+            'description' => 'SLA should pause while on hold.',
+        ])->assertCreated()->json('ticket.id');
+
+        $approval = \App\Models\ApprovalRequest::query()
+            ->where('approvable_id', $ticketId)
+            ->where('module', 'service_desk')
+            ->firstOrFail();
+
+        Sanctum::actingAs($ictAdmin);
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])->assertOk();
+
+        $ticket = Ticket::query()->findOrFail($ticketId);
+        $originalResolutionDue = $ticket->sla_due_at;
+
+        $this->patchJson("/api/tickets/{$ticketId}/hold", ['reason' => 'Waiting for employee confirmation.'])->assertOk();
+        $this->travelTo(now()->addHours(2));
+        $this->patchJson("/api/tickets/{$ticketId}/resume", ['note' => 'Employee responded.'])->assertOk();
+
+        $ticket->refresh();
+
+        $this->assertEqualsWithDelta($originalResolutionDue->addHours(2)->getTimestamp(), $ticket->sla_due_at->getTimestamp(), 2);
     }
 
     public function test_sla_breach_reminder_notifies_assignee_once_and_never_for_resolved_tickets(): void

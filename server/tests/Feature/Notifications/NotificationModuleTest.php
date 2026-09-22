@@ -102,17 +102,33 @@ class NotificationModuleTest extends TestCase
             ->latest()
             ->firstOrFail();
 
-        $this->postJson("/api/approvals/{$approval->id}/actions", [
-            'action' => 'approve',
-        ])->assertOk()
-            ->assertJsonPath('approval_request.status', 'approved');
+        // Leave approval is a multi-step chain (reporting manager -> department
+        // head -> HR director). Admin bypasses per-step approver-type checks
+        // via organizations.administer, so repeat the approve action until the
+        // request reaches a terminal status, whatever the chain length is.
+        $status = null;
+        for ($i = 0; $i < 5 && $status !== 'approved'; $i++) {
+            $status = $this->postJson("/api/approvals/{$approval->id}/actions", [
+                'action' => 'approve',
+            ])->assertOk()->json('approval_request.status');
+        }
+        $this->assertSame('approved', $status);
 
         Sanctum::actingAs($employeeUser);
 
+        // Several intermediate "next step now pending" notifications may also
+        // land for the employee along the way (see the multi-step chain
+        // above) — assert the terminal "decided" notification exists among
+        // them rather than assuming it's first in the list.
         $this->getJson('/api/notifications?category=approvals')
             ->assertOk()
-            ->assertJsonPath('data.0.event', 'approval.decided')
-            ->assertJsonPath('data.0.metadata.status', 'approved');
+            ->assertJsonFragment(['event' => 'approval.decided']);
+
+        $decided = $employeeUser->notifications()
+            ->get()
+            ->firstWhere(fn ($notification) => $notification->data['event'] === 'approval.decided');
+        $this->assertNotNull($decided);
+        $this->assertSame('approved', $decided->data['metadata']['status']);
     }
 
     public function test_user_cannot_mark_another_users_notification_read(): void
