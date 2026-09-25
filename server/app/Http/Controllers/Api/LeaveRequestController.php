@@ -1,0 +1,117 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Leave\CancelLeaveRequestRequest;
+use App\Http\Requests\Leave\StoreLeaveRequestRequest;
+use App\Http\Resources\LeaveRequestResource;
+use App\Models\LeaveRequest;
+use App\Services\LeaveRequestService;
+use App\Services\OperationAutomationService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class LeaveRequestController extends Controller
+{
+    public function index(Request $request, LeaveRequestService $leave): AnonymousResourceCollection
+    {
+        abort_unless(
+            $request->user()->can('leave_requests.view')
+                || $request->user()->can('leave_requests.create')
+                || $request->user()->employee?->status === 'active',
+            403
+        );
+
+        $query = LeaveRequest::query()
+            ->with($leave->relations())
+            ->where('organization_id', $request->user()->organization_id)
+            ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($request->integer('leave_type_id'), fn (Builder $query, int $id) => $query->where('leave_type_id', $id))
+            ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('starts_on', '>=', $date->toDateString()))
+            ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('ends_on', '<=', $date->toDateString()));
+
+        if (! $request->user()->can('leave_requests.view')) {
+            $employeeId = $request->user()->employee?->id;
+            abort_unless($employeeId, 403);
+
+            $query->where(fn (Builder $query) => $query
+                ->where('employee_id', $employeeId)
+                ->orWhere('handover_to_employee_id', $employeeId));
+        } elseif ($request->integer('employee_id')) {
+            $query->where('employee_id', $request->integer('employee_id'));
+        }
+
+        return LeaveRequestResource::collection($query->latest('id')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
+    }
+
+    public function store(StoreLeaveRequestRequest $request, LeaveRequestService $leave, OperationAutomationService $automations): JsonResponse
+    {
+        $data = $request->validated();
+        if ($request->hasFile('evidence')) {
+            $data['evidence'] = $request->file('evidence');
+        }
+        if ($request->hasFile('handover_document')) {
+            $data['handover_document'] = $request->file('handover_document');
+        }
+
+        $leaveRequest = $leave->submit($request->user(), $data);
+        $automations->dispatch('leave.submitted', $leaveRequest, [
+            'event_id' => "submitted:{$leaveRequest->submitted_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $leaveRequest->employee_id,
+        ]);
+
+        return response()->json([
+            'leave_request' => new LeaveRequestResource($leaveRequest),
+        ], 201);
+    }
+
+    public function show(Request $request, LeaveRequest $leaveRequest, LeaveRequestService $leave): LeaveRequestResource
+    {
+        abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('leave_requests.view') || in_array($request->user()->employee?->id, [$leaveRequest->employee_id, $leaveRequest->handover_to_employee_id], true), 403);
+
+        return new LeaveRequestResource($leaveRequest->load($leave->relations()));
+    }
+
+    public function downloadEvidence(Request $request, LeaveRequest $leaveRequest): StreamedResponse
+    {
+        abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('leave_requests.view') || $request->user()->employee?->id === $leaveRequest->employee_id, 403);
+        abort_unless(filled($leaveRequest->evidence_file_path) && Storage::disk('local')->exists($leaveRequest->evidence_file_path), 404);
+
+        return Storage::disk('local')->download($leaveRequest->evidence_file_path, $leaveRequest->evidence_file_name);
+    }
+
+    public function downloadHandoverDocument(Request $request, LeaveRequest $leaveRequest): StreamedResponse
+    {
+        abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('leave_requests.view') || in_array($request->user()->employee?->id, [$leaveRequest->employee_id, $leaveRequest->handover_to_employee_id], true), 403);
+        abort_unless(filled($leaveRequest->handover_file_path) && Storage::disk('local')->exists($leaveRequest->handover_file_path), 404);
+
+        return Storage::disk('local')->download($leaveRequest->handover_file_path, $leaveRequest->handover_file_name);
+    }
+
+    public function cancel(
+        CancelLeaveRequestRequest $request,
+        LeaveRequest $leaveRequest,
+        LeaveRequestService $leave,
+        OperationAutomationService $automations
+    ): JsonResponse {
+        $leaveRequest = $leave->cancel($request->user(), $leaveRequest, $request->input('note'));
+        $automations->dispatch('leave.cancelled', $leaveRequest, [
+            'event_id' => "cancelled:{$leaveRequest->updated_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $leaveRequest->employee_id,
+        ]);
+
+        return response()->json([
+            'leave_request' => new LeaveRequestResource($leaveRequest),
+        ]);
+    }
+}

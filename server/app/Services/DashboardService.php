@@ -1,0 +1,1156 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ApprovalRequest;
+use App\Models\Asset;
+use App\Models\Cluster;
+use App\Models\Department;
+use App\Models\Designation;
+use App\Models\Employee;
+use App\Models\EmployeeInvitation;
+use App\Models\EmployeeProfile;
+use App\Models\AttendanceCorrectionRequest;
+use App\Models\AttendanceRecord;
+use App\Models\EmploymentType;
+use App\Models\GradeLevel;
+use App\Models\LeaveEntitlement;
+use App\Models\LeaveHoliday;
+use App\Models\LeaveRequest;
+use App\Models\Organization;
+use App\Models\OrganizationLocation;
+use App\Models\PlatformModule;
+use App\Models\Ticket;
+use App\Models\Unit;
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+
+class DashboardService
+{
+    public function __construct(
+        private readonly DocumentComplianceService $documentCompliance,
+        private readonly TicketReportingService $ticketReporting,
+    ) {
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function organization(User $user, Request $request): array
+    {
+        $organization = $user->organization;
+        $filters = $this->filters($request);
+        $employeeQuery = $this->employeeQuery($organization, $filters);
+
+        return [
+            'filters' => $filters,
+            'employees' => [
+                'total' => (clone $employeeQuery)->count(),
+                'active' => (clone $employeeQuery)->where('status', 'active')->count(),
+                'draft' => (clone $employeeQuery)->where('status', 'draft')->count(),
+                'invited' => (clone $employeeQuery)->where('status', 'invited')->count(),
+                'onboarding' => (clone $employeeQuery)->where('status', 'onboarding')->count(),
+                'suspended' => (clone $employeeQuery)->where('status', 'suspended')->count(),
+                'exited' => (clone $employeeQuery)->where('status', 'exited')->count(),
+            ],
+            'onboarding' => $this->onboardingMetrics($organization, $filters),
+            'structure' => $this->structureMetrics($organization),
+            'modules' => $this->moduleMetrics($organization),
+            'approvals' => $this->approvalsSummary($organization),
+            'service_desk' => $this->serviceDeskSummary($organization),
+            'assets' => $this->assetsSummary($organization),
+            'leave' => $this->leaveSummary($organization),
+            'attendance' => $this->attendanceSummary($organization),
+            'documents' => $this->documentsSummary($user),
+            'breakdowns' => [
+                'by_department' => $this->breakdown($organization, $filters, Department::class, 'department_id'),
+                'by_cluster' => $this->clusterBreakdown($organization, $filters),
+                'by_location' => $this->breakdown($organization, $filters, OrganizationLocation::class, 'organization_location_id', ['is_primary']),
+                'by_employment_type' => $this->breakdown($organization, $filters, EmploymentType::class, 'employment_type_id'),
+                'by_designation' => $this->breakdown($organization, $filters, Designation::class, 'designation_id'),
+                'by_status' => $this->statusBreakdown($organization, $filters),
+            ],
+            'trends' => [
+                'onboarding' => $this->onboardingTrend($organization, $filters),
+            ],
+            'recent' => [
+                'employees' => $this->recentEmployees($organization, $filters),
+                'invitations' => $this->recentInvitations($organization, $filters),
+            ],
+            'setup_completion' => $this->setupCompletion($organization),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function manager(User $user, Request $request): array
+    {
+        $organization = $user->organization;
+        $employee = $user->employee()
+            ->with(['department', 'unit', 'cluster', 'designation', 'location'])
+            ->first();
+        $filters = $this->filters($request);
+        $scope = $this->managerScope($user, $employee, $request);
+
+        $employeeQuery = $this->employeeQuery($organization, $filters);
+
+        if ($scope['type'] === 'department') {
+            $employeeQuery->where('department_id', $scope['department']['id']);
+        }
+
+        if ($scope['type'] === 'cluster') {
+            $employeeQuery->where('cluster_id', $scope['cluster']['id']);
+        }
+
+        if ($scope['type'] === 'direct_reports') {
+            $employeeQuery->where('reporting_manager_id', $employee->id);
+        }
+
+        $employeeIds = (clone $employeeQuery)->pluck('id');
+
+        return [
+            'scope' => $scope,
+            'filters' => $filters,
+            'employees' => $this->employeeCounts($employeeQuery),
+            'team_health' => [
+                'profiles_pending' => EmployeeProfile::query()->whereIn('employee_id', $employeeIds)->where('completion_status', 'pending')->count(),
+                'profiles_submitted' => EmployeeProfile::query()->whereIn('employee_id', $employeeIds)->where('completion_status', 'submitted')->count(),
+                'profiles_approved' => EmployeeProfile::query()->whereIn('employee_id', $employeeIds)->where('completion_status', 'approved')->count(),
+                'incomplete_profiles' => Employee::query()->whereIn('id', $employeeIds)->whereDoesntHave('profile')->count(),
+            ],
+            'composition' => [
+                'by_designation' => $this->scopedBreakdown($employeeQuery, Designation::class, 'designation_id'),
+                'by_employment_type' => $this->scopedBreakdown($employeeQuery, EmploymentType::class, 'employment_type_id'),
+                'by_location' => $this->scopedBreakdown($employeeQuery, OrganizationLocation::class, 'organization_location_id'),
+                'by_status' => $this->scopedStatusBreakdown($employeeQuery),
+            ],
+            'recent' => [
+                'new_joiners' => (clone $employeeQuery)
+                    ->with(['department:id,code,name', 'location:id,code,name'])
+                    ->orderByDesc('start_date')
+                    ->limit($filters['recent_limit'])
+                    ->get()
+                    ->map(fn (Employee $employee) => $this->employeeSummary($employee))
+                    ->all(),
+                'profile_updates' => EmployeeProfile::query()
+                    ->with('employee.department:id,code,name', 'employee.location:id,code,name')
+                    ->whereIn('employee_id', $employeeIds)
+                    ->latest('updated_at')
+                    ->limit($filters['recent_limit'])
+                    ->get()
+                    ->map(fn (EmployeeProfile $profile) => [
+                        'id' => $profile->id,
+                        'completion_status' => $profile->completion_status,
+                        'updated_at' => $profile->updated_at,
+                        'employee' => $profile->employee ? $this->employeeSummary($profile->employee) : null,
+                    ])
+                    ->all(),
+            ],
+            'people' => [
+                'members' => (clone $employeeQuery)
+                    ->with(['department:id,code,name', 'location:id,code,name'])
+                    ->orderBy('first_name')
+                    ->limit($filters['recent_limit'])
+                    ->get()
+                    ->map(fn (Employee $employee) => $this->employeeSummary($employee))
+                    ->all(),
+                'direct_reports' => $employee ? Employee::query()
+                    ->with(['department:id,code,name', 'location:id,code,name'])
+                    ->where('organization_id', $organization->id)
+                    ->where('reporting_manager_id', $employee->id)
+                    ->orderBy('first_name')
+                    ->limit($filters['recent_limit'])
+                    ->get()
+                    ->map(fn (Employee $employee) => $this->employeeSummary($employee))
+                    ->all() : [],
+            ],
+            'leave' => $this->leaveMetricsForEmployees($employeeIds),
+            'attendance' => $this->attendanceMetricsForEmployees($employeeIds),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function me(User $user, Request $request): array
+    {
+        $employee = $user->employee()
+            ->with([
+                'organization',
+                'department',
+                'unit',
+                'designation',
+                'gradeLevel',
+                'employmentType',
+                'location',
+                'reportingManager',
+                'profile',
+            ])
+            ->first();
+
+        return [
+            'employee' => $employee ? $this->employeePayload($employee) : null,
+            'organization' => $user->organization ? [
+                'id' => $user->organization->id,
+                'name' => $user->organization->name,
+                'code' => $user->organization->code,
+                'status' => $user->organization->status,
+            ] : null,
+            'work' => $employee ? [
+                'department' => $this->lookupPayload($employee->department),
+                'unit' => $this->lookupPayload($employee->unit),
+                'designation' => $this->lookupPayload($employee->designation),
+                'grade_level' => $this->lookupPayload($employee->gradeLevel),
+                'employment_type' => $this->lookupPayload($employee->employmentType),
+                'location' => $this->lookupPayload($employee->location),
+                'reporting_manager' => $employee->reportingManager ? $this->employeeSummary($employee->reportingManager) : null,
+            ] : null,
+            'profile' => $employee?->profile ? [
+                'id' => $employee->profile->id,
+                'completion_status' => $employee->profile->completion_status,
+                'passport_photo_path' => $employee->profile->passport_photo_path,
+                'passport_photo_url' => $employee->profile->passport_photo_path ? Storage::disk('public')->url($employee->profile->passport_photo_path) : null,
+                'updated_at' => $employee->profile->updated_at,
+            ] : null,
+            'pending_actions' => $employee ? $this->pendingActions($employee) : [],
+            'leave' => $employee ? $this->leaveSummaryForEmployee($employee) : null,
+            'attendance' => $employee ? $this->attendanceSummaryForEmployee($employee, $request) : null,
+            'document_compliance' => $employee ? $this->documentCompliance->complianceForEmployee($employee) : [],
+            'next_holiday' => $employee ? $this->nextHoliday($employee->organization_id, $employee->organization_location_id) : null,
+            'tenure' => $employee ? $this->tenureSummary($employee) : null,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function filters(Request $request): array
+    {
+        $sortBy = $request->string('sort_by', 'created_at')->toString();
+        $sortDirection = strtolower($request->string('sort_direction', 'desc')->toString()) === 'asc' ? 'asc' : 'desc';
+        $dateColumn = $request->string('date_column', 'created_at')->toString();
+
+        return [
+            'date_from' => $request->date('date_from')?->toDateString(),
+            'date_to' => $request->date('date_to')?->toDateString(),
+            'date_column' => in_array($dateColumn, $this->dateColumns(), true) ? $dateColumn : 'created_at',
+            'department_id' => $request->integer('department_id') ?: null,
+            'unit_id' => $request->integer('unit_id') ?: null,
+            'cluster_id' => $request->integer('cluster_id') ?: null,
+            'designation_id' => $request->integer('designation_id') ?: null,
+            'grade_level_id' => $request->integer('grade_level_id') ?: null,
+            'employment_type_id' => $request->integer('employment_type_id') ?: null,
+            'organization_location_id' => $request->integer('organization_location_id') ?: null,
+            'status' => $request->string('status')->toString() ?: null,
+            'search' => $request->string('search')->toString() ?: null,
+            'sort_by' => in_array($sortBy, $this->sortColumns(), true) ? $sortBy : 'created_at',
+            'sort_direction' => $sortDirection,
+            'recent_limit' => min(max($request->integer('recent_limit', 5), 1), 25),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return Builder<Employee>
+     */
+    private function employeeQuery(Organization $organization, array $filters): Builder
+    {
+        return Employee::query()
+            ->where('organization_id', $organization->id)
+            ->when($filters['department_id'], fn (Builder $query, int $id) => $query->where('department_id', $id))
+            ->when($filters['unit_id'], fn (Builder $query, int $id) => $query->where('unit_id', $id))
+            ->when($filters['cluster_id'], fn (Builder $query, int $id) => $query->where('cluster_id', $id))
+            ->when($filters['designation_id'], fn (Builder $query, int $id) => $query->where('designation_id', $id))
+            ->when($filters['grade_level_id'], fn (Builder $query, int $id) => $query->where('grade_level_id', $id))
+            ->when($filters['employment_type_id'], fn (Builder $query, int $id) => $query->where('employment_type_id', $id))
+            ->when($filters['organization_location_id'], fn (Builder $query, int $id) => $query->where('organization_location_id', $id))
+            ->when($filters['status'], fn (Builder $query, string $status) => $query->where('status', $status))
+            ->when($filters['search'], function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query
+                        ->where('employee_number', 'like', "%{$search}%")
+                        ->orWhere('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('work_email', 'like', "%{$search}%");
+                });
+            })
+            ->when($filters['date_from'], fn (Builder $query, string $date) => $query->whereDate($filters['date_column'], '>=', $date))
+            ->when($filters['date_to'], fn (Builder $query, string $date) => $query->whereDate($filters['date_column'], '<=', $date));
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<string, int>
+     */
+    private function onboardingMetrics(Organization $organization, array $filters): array
+    {
+        $employeeIds = $this->employeeQuery($organization, $filters)->pluck('id');
+
+        return [
+            'pending_profiles' => EmployeeProfile::query()->whereIn('employee_id', $employeeIds)->where('completion_status', 'pending')->count(),
+            'submitted_profiles' => EmployeeProfile::query()->whereIn('employee_id', $employeeIds)->where('completion_status', 'submitted')->count(),
+            'approved_profiles' => EmployeeProfile::query()->whereIn('employee_id', $employeeIds)->where('completion_status', 'approved')->count(),
+            'pending_invitations' => EmployeeInvitation::query()->where('organization_id', $organization->id)->where('status', 'pending')->count(),
+            'accepted_invitations' => EmployeeInvitation::query()->where('organization_id', $organization->id)->where('status', 'accepted')->count(),
+            'expired_invitations' => EmployeeInvitation::query()
+                ->where('organization_id', $organization->id)
+                ->where(fn (Builder $query) => $query->where('status', 'expired')->orWhere(fn (Builder $query) => $query->where('status', 'pending')->where('expires_at', '<', now())))
+                ->count(),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function onboardingTrend(Organization $organization, array $filters): array
+    {
+        $scopeFilters = [
+            ...$filters,
+            'date_from' => null,
+            'date_to' => null,
+        ];
+        $employeeIds = $this->employeeQuery($organization, $scopeFilters)->pluck('id');
+
+        if ($filters['date_from'] || $filters['date_to']) {
+            $periodStart = $filters['date_from']
+                ? CarbonImmutable::parse($filters['date_from'])->startOfDay()
+                : CarbonImmutable::now()->startOfYear();
+            $periodEnd = $filters['date_to']
+                ? CarbonImmutable::parse($filters['date_to'])->endOfDay()
+                : CarbonImmutable::now()->endOfDay();
+        } else {
+            $periodStart = CarbonImmutable::now()->startOfYear();
+            $periodEnd = CarbonImmutable::now()->endOfYear();
+        }
+
+        $daily = $periodStart->diffInDays($periodEnd) <= 62;
+        $bucketFormat = $daily ? 'Y-m-d' : 'Y-m';
+        $steps = $daily
+            ? $periodStart->daysUntil($periodEnd)
+            : $periodStart->startOfMonth()->monthsUntil($periodEnd->startOfMonth());
+
+        $employeeTimestamps = Employee::query()
+            ->whereIn('id', $employeeIds)
+            ->get(['id', 'created_at', 'invited_at', 'activated_at']);
+
+        $submittedProfiles = EmployeeProfile::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->whereIn('completion_status', ['submitted', 'approved'])
+            ->get(['employee_id', 'updated_at']);
+
+        $bucketCounts = function ($items, string $column) use ($periodStart, $periodEnd, $bucketFormat) {
+            return $items
+                ->filter(fn ($item) => $item->{$column} && $item->{$column}->between($periodStart, $periodEnd))
+                ->countBy(fn ($item) => $item->{$column}->format($bucketFormat));
+        };
+
+        $createdCounts = $bucketCounts($employeeTimestamps, 'created_at');
+        $invitedCounts = $bucketCounts($employeeTimestamps, 'invited_at');
+        $activatedCounts = $bucketCounts($employeeTimestamps, 'activated_at');
+        $submittedCounts = $bucketCounts($submittedProfiles, 'updated_at');
+
+        $entries = collect($steps)
+            ->map(function (CarbonImmutable $date) use ($daily, $bucketFormat, $createdCounts, $invitedCounts, $submittedCounts, $activatedCounts): array {
+                $key = $date->format($bucketFormat);
+                $created = $createdCounts->get($key, 0);
+                $invited = $invitedCounts->get($key, 0);
+                $submitted = $submittedCounts->get($key, 0);
+                $activated = $activatedCounts->get($key, 0);
+
+                return [
+                    'key' => $key,
+                    'label' => $daily ? $date->format('M j') : $date->format('M Y'),
+                    'created' => $created,
+                    'invited' => $invited,
+                    'submitted' => $submitted,
+                    'activated' => $activated,
+                    'completion_rate' => $created > 0 ? (int) round(($activated / $created) * 100) : 0,
+                ];
+            })
+            ->filter(fn (array $entry): bool => ($entry['created'] + $entry['invited'] + $entry['submitted'] + $entry['activated']) > 0)
+            ->values()
+            ->all();
+
+        $label = $periodStart->isSameYear($periodEnd)
+            ? sprintf('%s - %s', $periodStart->format('M j'), $periodEnd->format('M j, Y'))
+            : sprintf('%s - %s', $periodStart->format('M j, Y'), $periodEnd->format('M j, Y'));
+
+        return [
+            'grain' => $daily ? 'day' : 'month',
+            'label' => $label,
+            'date_from' => $periodStart->toDateString(),
+            'date_to' => $periodEnd->toDateString(),
+            'entries' => $entries,
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function employeeCounts(Builder $employeeQuery): array
+    {
+        return [
+            'total' => (clone $employeeQuery)->count(),
+            'active' => (clone $employeeQuery)->where('status', 'active')->count(),
+            'draft' => (clone $employeeQuery)->where('status', 'draft')->count(),
+            'invited' => (clone $employeeQuery)->where('status', 'invited')->count(),
+            'onboarding' => (clone $employeeQuery)->where('status', 'onboarding')->count(),
+            'suspended' => (clone $employeeQuery)->where('status', 'suspended')->count(),
+            'exited' => (clone $employeeQuery)->where('status', 'exited')->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function structureMetrics(Organization $organization): array
+    {
+        return [
+            'departments' => Department::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'units' => Unit::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'clusters' => Cluster::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'clusters_with_manager' => Cluster::query()->where('organization_id', $organization->id)->where('is_active', true)->whereNotNull('manager_employee_id')->count(),
+            'clusters_with_supervisor' => Cluster::query()->where('organization_id', $organization->id)->where('is_active', true)->whereNotNull('supervisor_employee_id')->count(),
+            'employees_without_cluster' => Employee::query()->where('organization_id', $organization->id)->whereNull('cluster_id')->count(),
+            'locations' => OrganizationLocation::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'designations' => Designation::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'grade_levels' => GradeLevel::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+            'employment_types' => EmploymentType::query()->where('organization_id', $organization->id)->where('is_active', true)->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function approvalsSummary(Organization $organization): array
+    {
+        $query = ApprovalRequest::query()->where('organization_id', $organization->id);
+
+        return [
+            'pending' => (clone $query)->where('status', 'pending')->count(),
+            'needs_attention' => (clone $query)->whereIn('status', ['rejected', 'changes_requested'])->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function serviceDeskSummary(Organization $organization): array
+    {
+        $query = Ticket::query()->where('organization_id', $organization->id);
+
+        return [
+            'open' => (clone $query)->whereNotIn('status', ['resolved', 'rejected', 'cancelled'])->count(),
+            'unassigned' => (clone $query)
+                ->whereNotIn('status', ['resolved', 'rejected', 'cancelled'])
+                ->whereNull('assigned_to_user_id')
+                ->count(),
+            'sla_breached' => $this->ticketReporting->breachedTicketsQuery($organization->id)->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function assetsSummary(Organization $organization): array
+    {
+        $query = Asset::query()->where('organization_id', $organization->id);
+
+        return [
+            'available' => (clone $query)->where('status', 'available')->count(),
+            'assigned' => (clone $query)->where('status', 'assigned')->count(),
+            'maintenance' => (clone $query)->where('status', 'maintenance')->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function leaveSummary(Organization $organization): array
+    {
+        $query = LeaveRequest::query()->where('organization_id', $organization->id);
+        $today = now()->toDateString();
+        $weekAhead = now()->addDays(7)->toDateString();
+
+        return [
+            'pending' => (clone $query)->where('status', 'submitted')->count(),
+            'upcoming' => (clone $query)
+                ->where('status', 'approved')
+                ->whereDate('starts_on', '>=', $today)
+                ->whereDate('starts_on', '<=', $weekAhead)
+                ->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function attendanceSummary(Organization $organization): array
+    {
+        $query = AttendanceRecord::query()
+            ->where('organization_id', $organization->id)
+            ->whereDate('attendance_date', now()->toDateString());
+
+        return [
+            'present' => (clone $query)->where('status', 'present')->count(),
+            'late' => (clone $query)->where('status', 'late')->count(),
+            'absent' => (clone $query)->where('status', 'absent')->count(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function documentsSummary(User $user): array
+    {
+        $summary = $this->documentCompliance->compliance($user)['summary'];
+
+        return [
+            'missing' => $summary['missing'],
+            'expiring_soon' => $summary['expiring_soon'],
+            'expired' => $summary['expired'],
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function moduleMetrics(Organization $organization): array
+    {
+        $available = PlatformModule::query()->where('is_active', true)->count();
+        $active = $organization->moduleSubscriptions()->whereIn('status', ['active', 'trial'])->count();
+
+        return [
+            'available' => $available,
+            'active' => $active,
+            'locked' => max($available - $active, 0),
+        ];
+    }
+
+    /**
+     * @param class-string $model
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    /**
+     * Every active lookup row is included regardless of headcount — a
+     * freshly-added location or employment type with nobody assigned yet
+     * still needs to show up (as a 0) rather than silently vanish from the
+     * dashboard until someone happens to be assigned to it.
+     *
+     * @param array<int, string> $extraColumns
+     */
+    private function breakdown(Organization $organization, array $filters, string $model, string $foreignKey, array $extraColumns = []): array
+    {
+        $counts = $this->employeeQuery($organization, $filters)
+            ->selectRaw("{$foreignKey}, count(*) as total")
+            ->whereNotNull($foreignKey)
+            ->groupBy($foreignKey)
+            ->pluck('total', $foreignKey);
+
+        $entries = $model::query()
+            ->where('organization_id', $organization->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(array_merge(['id', 'code', 'name'], $extraColumns))
+            ->map(function ($item) use ($counts, $extraColumns) {
+                $entry = [
+                    'id' => $item->id,
+                    'code' => $item->code,
+                    'name' => $item->name,
+                    'total' => (int) $counts->get($item->id, 0),
+                ];
+
+                foreach ($extraColumns as $column) {
+                    $entry[$column] = $item->{$column};
+                }
+
+                return $entry;
+            });
+
+        if (in_array('is_primary', $extraColumns, true)) {
+            $entries = $entries->sortByDesc('is_primary')->values();
+        }
+
+        return $entries->all();
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function clusterBreakdown(Organization $organization, array $filters): array
+    {
+        $counts = $this->employeeQuery($organization, $filters)
+            ->selectRaw('cluster_id, count(*) as total')
+            ->whereNotNull('cluster_id')
+            ->groupBy('cluster_id')
+            ->pluck('total', 'cluster_id');
+
+        return Cluster::query()
+            ->with([
+                'department:id,code,name',
+                'manager:id,employee_number,first_name,last_name,work_email',
+                'supervisor:id,employee_number,first_name,last_name,work_email',
+            ])
+            ->where('organization_id', $organization->id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'department_id', 'manager_employee_id', 'supervisor_employee_id', 'code', 'name'])
+            ->map(fn (Cluster $cluster) => [
+                'id' => $cluster->id,
+                'code' => $cluster->code,
+                'name' => $cluster->name,
+                'department' => $this->lookupPayload($cluster->department),
+                'manager' => $cluster->manager ? $this->employeeSummary($cluster->manager) : null,
+                'supervisor' => $cluster->supervisor ? $this->employeeSummary($cluster->supervisor) : null,
+                'total' => (int) $counts->get($cluster->id, 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param class-string $model
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function scopedBreakdown(Builder $employeeQuery, string $model, string $foreignKey): array
+    {
+        $counts = (clone $employeeQuery)
+            ->selectRaw("{$foreignKey}, count(*) as total")
+            ->whereNotNull($foreignKey)
+            ->groupBy($foreignKey)
+            ->pluck('total', $foreignKey);
+
+        return $model::query()
+            ->whereIn('id', $counts->keys())
+            ->orderBy('name')
+            ->get(['id', 'code', 'name'])
+            ->map(fn ($item) => [
+                'id' => $item->id,
+                'code' => $item->code,
+                'name' => $item->name,
+                'total' => (int) $counts->get($item->id, 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function statusBreakdown(Organization $organization, array $filters): array
+    {
+        return $this->employeeQuery($organization, $filters)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->orderBy('status')
+            ->get()
+            ->map(fn (Employee $employee) => [
+                'status' => $employee->status,
+                'total' => (int) $employee->total,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function scopedStatusBreakdown(Builder $employeeQuery): array
+    {
+        return (clone $employeeQuery)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->orderBy('status')
+            ->get()
+            ->map(fn (Employee $employee) => [
+                'status' => $employee->status,
+                'total' => (int) $employee->total,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function managerScope(User $user, ?Employee $employee, Request $request): array
+    {
+        if ($user->can('reports.view') && $request->integer('department_id')) {
+            $department = Department::query()
+                ->where('organization_id', $user->organization_id)
+                ->where('id', $request->integer('department_id'))
+                ->firstOrFail();
+
+            return [
+                'type' => 'department',
+                'department' => $this->lookupPayload($department),
+                'source' => 'requested_department',
+            ];
+        }
+
+        if ($user->can('reports.view') && $request->integer('cluster_id')) {
+            $cluster = Cluster::query()
+                ->where('organization_id', $user->organization_id)
+                ->where('id', $request->integer('cluster_id'))
+                ->firstOrFail();
+
+            return [
+                'type' => 'cluster',
+                'cluster' => $this->lookupPayload($cluster),
+                'source' => 'requested_cluster',
+            ];
+        }
+
+        if (! $this->hasManagerScope($user, $employee)) {
+            throw new HttpException(403, 'You do not have a department or team dashboard scope.');
+        }
+
+        if (
+            $user->can('employees.view_department')
+            && $employee->department
+            && $employee->department->head_employee_id === $employee->id
+        ) {
+            return [
+                'type' => 'department',
+                'department' => $this->lookupPayload($employee->department),
+                'source' => 'department_head_assignment',
+            ];
+        }
+
+        $cluster = Cluster::query()
+            ->where('organization_id', $user->organization_id)
+            ->where('is_active', true)
+            ->where(fn (Builder $query) => $query
+                ->where('manager_employee_id', $employee->id)
+                ->orWhere('supervisor_employee_id', $employee->id))
+            ->first(['id', 'code', 'name']);
+
+        if ($cluster) {
+            return [
+                'type' => 'cluster',
+                'cluster' => $this->lookupPayload($cluster),
+                'source' => 'cluster_leadership_assignment',
+            ];
+        }
+
+        if (Employee::query()->where('reporting_manager_id', $employee->id)->exists()) {
+            return [
+                'type' => 'direct_reports',
+                'manager' => $this->employeeSummary($employee),
+                'source' => 'direct_reports_detected',
+            ];
+        }
+
+        return [
+            'type' => 'direct_reports',
+            'manager' => $this->employeeSummary($employee),
+            'source' => 'no_reports_yet',
+        ];
+    }
+
+    /**
+     * Role/permission + organizational scope, combined: eligible only if the
+     * user is themselves an employee AND holds team-visibility permission —
+     * neither alone is sufficient (see managerScope()).
+     */
+    public function hasManagerScope(User $user, ?Employee $employee = null): bool
+    {
+        $employee ??= $user->employee()->first();
+
+        return $employee !== null && $user->can('employees.view_team');
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function recentEmployees(Organization $organization, array $filters): array
+    {
+        return $this->employeeQuery($organization, $filters)
+            ->with(['department:id,code,name', 'location:id,code,name'])
+            ->orderBy($filters['sort_by'], $filters['sort_direction'])
+            ->limit($filters['recent_limit'])
+            ->get()
+            ->map(fn (Employee $employee) => $this->employeeSummary($employee))
+            ->all();
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function recentInvitations(Organization $organization, array $filters): array
+    {
+        return EmployeeInvitation::query()
+            ->with('employee:id,employee_number,first_name,last_name')
+            ->where('organization_id', $organization->id)
+            ->latest('id')
+            ->limit($filters['recent_limit'])
+            ->get()
+            ->map(fn (EmployeeInvitation $invitation) => [
+                'id' => $invitation->id,
+                'email' => $invitation->email,
+                'status' => $invitation->status,
+                'expires_at' => $invitation->expires_at,
+                'accepted_at' => $invitation->accepted_at,
+                'employee' => $invitation->employee ? $this->employeeSummary($invitation->employee) : null,
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function setupCompletion(Organization $organization): array
+    {
+        $items = [
+            'locations' => OrganizationLocation::query()->where('organization_id', $organization->id)->exists(),
+            'departments' => Department::query()->where('organization_id', $organization->id)->exists(),
+            'units' => Unit::query()->where('organization_id', $organization->id)->exists(),
+            'designations' => Designation::query()->where('organization_id', $organization->id)->exists(),
+            'grade_levels' => GradeLevel::query()->where('organization_id', $organization->id)->exists(),
+            'employment_types' => EmploymentType::query()->where('organization_id', $organization->id)->exists(),
+            'employees' => Employee::query()->where('organization_id', $organization->id)->exists(),
+        ];
+        $completed = collect($items)->filter()->count();
+
+        return [
+            'completed' => $completed,
+            'total' => count($items),
+            'percentage' => (int) round(($completed / count($items)) * 100),
+            'items' => $items,
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    private function pendingActions(Employee $employee): array
+    {
+        $actions = [];
+
+        if (! $employee->profile || $employee->profile->completion_status === 'pending') {
+            $actions[] = [
+                'key' => 'complete_profile',
+                'label' => 'Complete your employee profile.',
+            ];
+        }
+
+        if ($employee->profile?->completion_status === 'submitted' && $employee->status === 'onboarding') {
+            $actions[] = [
+                'key' => 'profile_approval',
+                'label' => 'Your submitted profile is awaiting HR approval.',
+            ];
+        }
+
+        if ($employee->leaveRequests()->where('status', 'submitted')->exists()) {
+            $actions[] = [
+                'key' => 'leave_approval',
+                'label' => 'Your leave request is awaiting approval.',
+            ];
+        }
+
+        if (LeaveRequest::query()
+            ->where('handover_to_employee_id', $employee->id)
+            ->whereIn('status', ['submitted', 'approved'])
+            ->whereDate('ends_on', '>=', now()->toDateString())
+            ->exists()) {
+            $actions[] = [
+                'key' => 'leave_handover_cover',
+                'label' => 'You have a leave handover cover assignment.',
+            ];
+        }
+
+        if ($employee->tickets()->whereIn('status', ['submitted', 'changes_requested'])->exists()) {
+            $actions[] = [
+                'key' => 'ticket_pending',
+                'label' => 'Your service desk ticket is awaiting review.',
+            ];
+        }
+
+        return $actions;
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, int> $employeeIds
+     *
+     * @return array<string, mixed>
+     */
+    private function leaveMetricsForEmployees($employeeIds): array
+    {
+        return [
+            'available' => true,
+            'pending_requests' => LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'submitted')->count(),
+            'approved_requests' => LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'approved')->count(),
+            'rejected_requests' => LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'rejected')->count(),
+            'days_pending' => (float) LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'submitted')->sum('total_days'),
+            'days_approved' => (float) LeaveRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'approved')->sum('total_days'),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function leaveSummaryForEmployee(Employee $employee): array
+    {
+        return [
+            'pending_requests' => $employee->leaveRequests()->where('status', 'submitted')->count(),
+            'approved_requests' => $employee->leaveRequests()->where('status', 'approved')->count(),
+            'handover_assignments' => LeaveRequest::query()
+                ->with(['employee.department:id,code,name', 'employee.location:id,code,name', 'leaveType:id,name,code'])
+                ->where('handover_to_employee_id', $employee->id)
+                ->whereIn('status', ['submitted', 'approved'])
+                ->whereDate('ends_on', '>=', now()->toDateString())
+                ->orderBy('starts_on')
+                ->limit(5)
+                ->get()
+                ->map(fn (LeaveRequest $request) => [
+                    'id' => $request->id,
+                    'status' => $request->status,
+                    'starts_on' => $request->starts_on?->toDateString(),
+                    'ends_on' => $request->ends_on?->toDateString(),
+                    'total_days' => (float) $request->total_days,
+                    'handover_note' => $request->handover_note,
+                    'handover_file_name' => $request->handover_file_name,
+                    'handover_download_url' => $request->handover_file_path ? url("/api/leave/requests/{$request->id}/handover-document/download") : null,
+                    'employee' => $this->employeeSummary($request->employee),
+                    'leave_type' => $this->lookupPayload($request->leaveType),
+                ])
+                ->values()
+                ->all(),
+            'balances' => LeaveEntitlement::query()
+                ->with('leaveType:id,name,code')
+                ->where('employee_id', $employee->id)
+                ->get()
+                ->map(fn (LeaveEntitlement $entitlement) => [
+                    'leave_type' => $this->lookupPayload($entitlement->leaveType),
+                    'days_allocated' => (float) $entitlement->days_allocated,
+                    'days_used' => (float) $entitlement->days_used,
+                    'days_pending' => (float) $entitlement->days_pending,
+                    'days_available' => max((float) $entitlement->days_allocated - (float) $entitlement->days_used - (float) $entitlement->days_pending, 0),
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    private function attendanceMetricsForEmployees($employeeIds): array
+    {
+        return [
+            'available' => true,
+            'present' => AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->where('status', 'present')->count(),
+            'late' => AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->where('status', 'late')->count(),
+            'absent' => AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->where('status', 'absent')->count(),
+            'corrections_pending' => AttendanceCorrectionRequest::query()->whereIn('employee_id', $employeeIds)->where('status', 'submitted')->count(),
+            'duration_minutes' => (int) AttendanceRecord::query()->whereIn('employee_id', $employeeIds)->sum('duration_minutes'),
+        ];
+    }
+
+    private function attendanceSummaryForEmployee(Employee $employee, Request $request): array
+    {
+        $monthRecords = $employee->attendanceRecords()
+            ->where('attendance_date', '>=', CarbonImmutable::now()->startOfMonth())
+            ->get(['status', 'duration_minutes']);
+
+        [$trend, $range] = $this->attendanceTrend($employee, $request);
+
+        return [
+            'trend' => $trend,
+            'range' => $range,
+            'corrections_pending' => $employee->attendanceCorrectionRequests()->where('status', 'submitted')->count(),
+            'this_month' => [
+                'present' => $monthRecords->where('status', 'present')->count(),
+                'late' => $monthRecords->where('status', 'late')->count(),
+                'absent' => $monthRecords->where('status', 'absent')->count(),
+                'total_hours' => round($monthRecords->sum('duration_minutes') / 60, 1),
+            ],
+        ];
+    }
+
+    /**
+     * Daily attendance across a date range, one entry per calendar day
+     * (including days with no record) so the dashboard can render it as a
+     * continuous trend rather than a flat list of only the days worked.
+     * Defaults to the last 7 days; `date_from`/`date_to` widen or shift it.
+     *
+     * @return array{0: array<int, array<string, mixed>>, 1: array<string, string>}
+     */
+    private function attendanceTrend(Employee $employee, Request $request): array
+    {
+        $requestedTo = $request->date('date_to');
+        $requestedFrom = $request->date('date_from');
+
+        $dateTo = $requestedTo ? CarbonImmutable::instance($requestedTo)->startOfDay() : CarbonImmutable::today();
+        $dateFrom = $requestedFrom ? CarbonImmutable::instance($requestedFrom)->startOfDay() : $dateTo->subDays(6);
+
+        if ($dateFrom->gt($dateTo)) {
+            [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+        }
+
+        $records = $employee->attendanceRecords()
+            ->where('attendance_date', '>=', $dateFrom->toDateString())
+            ->where('attendance_date', '<=', $dateTo->toDateString())
+            ->get(['attendance_date', 'duration_minutes', 'status'])
+            ->keyBy(fn (AttendanceRecord $record) => CarbonImmutable::parse($record->attendance_date)->toDateString());
+
+        $trend = collect($dateFrom->daysUntil($dateTo))
+            ->map(function (CarbonImmutable $date) use ($records): array {
+                $record = $records->get($date->toDateString());
+
+                return [
+                    'label' => $date->format('M j'),
+                    'value' => $record ? round((float) $record->duration_minutes / 60, 1) : 0,
+                    'status' => $record->status ?? 'no_record',
+                ];
+            })
+            ->values()
+            ->all();
+
+        return [$trend, ['date_from' => $dateFrom->toDateString(), 'date_to' => $dateTo->toDateString()]];
+    }
+
+    /**
+     * Nearest upcoming holiday for the employee's organization/location.
+     * Recurring holidays are re-anchored to the current (or next) year since
+     * their stored `date` only carries the original month/day.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function nextHoliday(int $organizationId, ?int $locationId): ?array
+    {
+        $today = CarbonImmutable::today();
+
+        return LeaveHoliday::query()
+            ->where('organization_id', $organizationId)
+            ->where('is_active', true)
+            ->where(fn (Builder $query) => $query->whereNull('organization_location_id')->orWhere('organization_location_id', $locationId))
+            ->get(['name', 'date', 'is_recurring'])
+            ->map(function (LeaveHoliday $holiday) use ($today) {
+                $date = CarbonImmutable::parse($holiday->date);
+
+                if ($holiday->is_recurring) {
+                    $date = $date->setYear($today->year);
+                    if ($date->lt($today)) {
+                        $date = $date->addYear();
+                    }
+                }
+
+                return $date->lt($today) ? null : [
+                    'name' => $holiday->name,
+                    'date' => $date->toDateString(),
+                    'days_away' => $today->diffInDays($date),
+                ];
+            })
+            ->filter()
+            ->sortBy('days_away')
+            ->first();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function tenureSummary(Employee $employee): ?array
+    {
+        if (! $employee->start_date) {
+            return null;
+        }
+
+        $start = CarbonImmutable::parse($employee->start_date);
+        $today = CarbonImmutable::today();
+        $years = (int) $start->diffInYears($today);
+
+        $anniversary = $start->setYear($today->year);
+        if ($anniversary->lt($today)) {
+            $anniversary = $anniversary->addYear();
+        }
+
+        return [
+            'years_of_service' => $years,
+            'next_anniversary' => $anniversary->toDateString(),
+            'days_until_anniversary' => $today->diffInDays($anniversary),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function employeePayload(Employee $employee): array
+    {
+        return [
+            ...$this->employeeSummary($employee),
+            'phone' => $employee->phone,
+            'status' => $employee->status,
+            'start_date' => $employee->start_date,
+            'invited_at' => $employee->invited_at,
+            'onboarding_completed_at' => $employee->onboarding_completed_at,
+            'activated_at' => $employee->activated_at,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function employeeSummary(Employee $employee): array
+    {
+        return [
+            'id' => $employee->id,
+            'employee_number' => $employee->employee_number,
+            'first_name' => $employee->first_name,
+            'last_name' => $employee->last_name,
+            'full_name' => trim($employee->first_name.' '.$employee->last_name),
+            'work_email' => $employee->work_email,
+            'department' => $this->lookupPayload($employee->department),
+            'location' => $this->lookupPayload($employee->location),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function lookupPayload(mixed $model): ?array
+    {
+        if (! $model) {
+            return null;
+        }
+
+        return [
+            'id' => $model->id,
+            'code' => $model->code,
+            'name' => $model->name,
+        ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function dateColumns(): array
+    {
+        return ['created_at', 'updated_at', 'start_date', 'invited_at', 'activated_at', 'onboarding_completed_at'];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function sortColumns(): array
+    {
+        return ['id', 'created_at', 'updated_at', 'start_date', 'invited_at', 'activated_at', 'employee_number', 'first_name', 'last_name'];
+    }
+}

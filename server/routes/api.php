@@ -1,0 +1,396 @@
+<?php
+
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ApprovalRequestController;
+use App\Http\Controllers\Api\AssetCategoryController;
+use App\Http\Controllers\Api\AssetController;
+use App\Http\Controllers\Api\ApprovalWorkflowController;
+use App\Http\Controllers\Api\AttendanceCorrectionRequestController;
+use App\Http\Controllers\Api\AttendanceRecordController;
+use App\Http\Controllers\Api\AttendanceSettingController;
+use App\Http\Controllers\Api\AuditVisibilityController;
+use App\Http\Controllers\Api\CompanyEventController;
+use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DocumentRequirementController;
+use App\Http\Controllers\Api\DocumentTypeController;
+use App\Http\Controllers\Api\EmployeeDocumentController;
+use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EmployeeCustomFieldController;
+use App\Http\Controllers\Api\EmployeeCustomFieldValueController;
+use App\Http\Controllers\Api\EmployeeDependentController;
+use App\Http\Controllers\Api\EmployeeEmergencyContactController;
+use App\Http\Controllers\Api\EmployeeLifecycleController;
+use App\Http\Controllers\Api\EmployeeProfileActivityController;
+use App\Http\Controllers\Api\EmployeeProfileOverviewController;
+use App\Http\Controllers\Api\EmployeePayrollController;
+use App\Http\Controllers\Api\LeaveEntitlementController;
+use App\Http\Controllers\Api\LeaveHolidayController;
+use App\Http\Controllers\Api\LeavePeriodController;
+use App\Http\Controllers\Api\LeaveRequestController;
+use App\Http\Controllers\Api\LeaveTypeController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\OrganizationVerificationController;
+use App\Http\Controllers\Api\OperationsCenterController;
+use App\Http\Controllers\Api\PlatformModuleController;
+use App\Http\Controllers\Api\PlatformOrganizationController;
+use App\Http\Controllers\Api\PayrollConfigurationController;
+use App\Http\Controllers\Api\PayrollRunController;
+use App\Http\Controllers\Api\PayrollOperationsController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SetupChecklistController;
+use App\Http\Controllers\Api\SetupLookupController;
+use App\Http\Controllers\Api\SystemErrorLogController;
+use App\Http\Controllers\Api\TemplateController;
+use App\Http\Controllers\Api\TicketCategoryController;
+use App\Http\Controllers\Api\TicketCommentController;
+use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\WorkspaceController;
+use App\Http\Controllers\Api\WorkShiftController;
+use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\RoleController;
+use App\Http\Middleware\EnsureOrganizationIsActive;
+use App\Http\Middleware\EnsureModuleIsSubscribed;
+use App\Http\Middleware\SetPermissionsTeamId;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'service' => 'valtireo-backend',
+    ]);
+});
+
+Route::prefix('auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login']);
+
+    Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class])->group(function () {
+        Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+    });
+});
+
+Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class])->group(function () {
+    Route::prefix('platform')->group(function () {
+        Route::get('/dashboard', [PlatformOrganizationController::class, 'dashboard']);
+        Route::get('/modules', [PlatformModuleController::class, 'index']);
+        Route::get('/organizations', [PlatformOrganizationController::class, 'index']);
+        Route::get('/organizations/export', [PlatformOrganizationController::class, 'export']);
+        Route::post('/organizations', [PlatformOrganizationController::class, 'store']);
+        Route::get('/organizations/{organization}', [PlatformOrganizationController::class, 'show']);
+        Route::patch('/organizations/{organization}/status', [PlatformOrganizationController::class, 'updateStatus']);
+        Route::get('/organizations/{organization}/verification-documents', [OrganizationVerificationController::class, 'platformIndex']);
+        Route::patch('/organizations/{organization}/verification-documents/{document}', [OrganizationVerificationController::class, 'platformReview']);
+        Route::patch('/organizations/{organization}/modules/{platformModule}', [PlatformOrganizationController::class, 'updateModule']);
+        Route::patch('/organizations/{organization}/workspace', [PlatformOrganizationController::class, 'updateWorkspace']);
+        Route::patch('/permissions/{permission}', [PermissionController::class, 'update']);
+        Route::get('/error-logs/summary', [SystemErrorLogController::class, 'summary']);
+        Route::get('/error-logs', [SystemErrorLogController::class, 'index']);
+        Route::patch('/error-logs/{systemErrorLog}/resolve', [SystemErrorLogController::class, 'resolve']);
+    });
+
+    Route::prefix('organization-verification')->group(function () {
+        Route::get('/', [OrganizationVerificationController::class, 'show']);
+        Route::post('/documents', [OrganizationVerificationController::class, 'store']);
+        Route::post('/submit', [OrganizationVerificationController::class, 'submit']);
+        Route::get('/documents/{document}/download', [OrganizationVerificationController::class, 'download']);
+    });
+
+    Route::get('/workspace', [WorkspaceController::class, 'show']);
+    Route::patch('/workspace/settings', [WorkspaceController::class, 'update']);
+    Route::post('/workspace/identity/logo', [WorkspaceController::class, 'updateLogo']);
+    Route::delete('/workspace/identity/logo', [WorkspaceController::class, 'removeLogo']);
+
+    Route::prefix('dashboard')->group(function () {
+        Route::get('/organization', [DashboardController::class, 'organization']);
+        Route::get('/manager', [DashboardController::class, 'manager']);
+        Route::get('/me', [DashboardController::class, 'me']);
+    });
+
+    Route::prefix('operations')->group(function () {
+        Route::get('/center', [OperationsCenterController::class, 'index']);
+        Route::get('/lookups', [OperationsCenterController::class, 'lookups']);
+        Route::post('/tasks', [OperationsCenterController::class, 'storeTask']);
+        Route::patch('/tasks/{operationTask}', [OperationsCenterController::class, 'updateTask']);
+        Route::post('/tasks/{operationTask}/actions', [OperationsCenterController::class, 'taskAction']);
+        Route::get('/automation-catalog', [OperationsCenterController::class, 'automationCatalog']);
+        Route::get('/automation-rules', [OperationsCenterController::class, 'rules']);
+        Route::post('/automation-rules', [OperationsCenterController::class, 'storeRule']);
+        Route::patch('/automation-rules/{operationAutomationRule}', [OperationsCenterController::class, 'updateRule']);
+        Route::get('/automation-runs', [OperationsCenterController::class, 'runs']);
+    });
+
+    Route::get('/templates', [TemplateController::class, 'index']);
+    Route::get('/templates/{key}/download', [TemplateController::class, 'download']);
+    Route::post('/templates/{key}/preview', [TemplateController::class, 'preview']);
+    Route::post('/templates/{key}/import', [TemplateController::class, 'import']);
+    Route::post('/templates/{key}/failed-rows', [TemplateController::class, 'failedRows']);
+
+    Route::middleware(EnsureModuleIsSubscribed::class.':reports')->group(function () {
+        Route::get('/reports', [ReportController::class, 'index']);
+        Route::get('/reports/{key}', [ReportController::class, 'show']);
+        Route::get('/reports/{key}/export', [ReportController::class, 'export']);
+    });
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+
+    Route::middleware(EnsureModuleIsSubscribed::class.':audit_logs')->group(function () {
+        Route::get('/audit-logs', [AuditVisibilityController::class, 'auditLogs']);
+        Route::get('/activity-feed', [AuditVisibilityController::class, 'activityFeed']);
+    });
+
+    Route::prefix('approval-workflows')->group(function () {
+        Route::get('/', [ApprovalWorkflowController::class, 'index']);
+        Route::post('/', [ApprovalWorkflowController::class, 'store']);
+        Route::get('/{approvalWorkflow}', [ApprovalWorkflowController::class, 'show']);
+        Route::patch('/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update']);
+    });
+
+    Route::prefix('approvals')->group(function () {
+        Route::get('/', [ApprovalRequestController::class, 'index']);
+        Route::get('/{approvalRequest}', [ApprovalRequestController::class, 'show']);
+        Route::post('/{approvalRequest}/actions', [ApprovalRequestController::class, 'act']);
+    });
+
+    Route::prefix('setup')->group(function () {
+        Route::get('/checklist', [SetupChecklistController::class, 'show']);
+        Route::get('/lookups', [SetupLookupController::class, 'index']);
+        Route::get('/departments', [SetupLookupController::class, 'departments']);
+        Route::post('/departments', [SetupLookupController::class, 'storeDepartment']);
+        Route::patch('/departments/{department}', [SetupLookupController::class, 'updateDepartment']);
+        Route::get('/units', [SetupLookupController::class, 'units']);
+        Route::post('/units', [SetupLookupController::class, 'storeUnit']);
+        Route::patch('/units/{unit}', [SetupLookupController::class, 'updateUnit']);
+        Route::get('/designations', [SetupLookupController::class, 'designations']);
+        Route::post('/designations', [SetupLookupController::class, 'storeDesignation']);
+        Route::patch('/designations/{designation}', [SetupLookupController::class, 'updateDesignation']);
+        Route::get('/grade-levels', [SetupLookupController::class, 'gradeLevels']);
+        Route::post('/grade-levels', [SetupLookupController::class, 'storeGradeLevel']);
+        Route::patch('/grade-levels/{gradeLevel}', [SetupLookupController::class, 'updateGradeLevel']);
+        Route::get('/employment-types', [SetupLookupController::class, 'employmentTypes']);
+        Route::post('/employment-types', [SetupLookupController::class, 'storeEmploymentType']);
+        Route::patch('/employment-types/{employmentType}', [SetupLookupController::class, 'updateEmploymentType']);
+        Route::get('/locations', [SetupLookupController::class, 'locations']);
+        Route::post('/locations', [SetupLookupController::class, 'storeLocation']);
+        Route::patch('/locations/{location}', [SetupLookupController::class, 'updateLocation']);
+        Route::get('/clusters', [SetupLookupController::class, 'clusters']);
+        Route::post('/clusters', [SetupLookupController::class, 'storeCluster']);
+        Route::patch('/clusters/{cluster}', [SetupLookupController::class, 'updateCluster']);
+        Route::get('/assignable-roles', [SetupLookupController::class, 'assignableRoles']);
+    });
+
+    Route::prefix('roles')->group(function () {
+        Route::get('/activities', [RoleController::class, 'activities']);
+        Route::get('/', [RoleController::class, 'index']);
+        Route::post('/', [RoleController::class, 'store']);
+        Route::patch('/{role}', [RoleController::class, 'update']);
+        Route::delete('/{role}', [RoleController::class, 'destroy']);
+    });
+
+    Route::get('/permissions', [PermissionController::class, 'index']);
+
+    Route::prefix('documents')->middleware(EnsureModuleIsSubscribed::class.':documents')->group(function () {
+        Route::get('/types', [DocumentTypeController::class, 'index']);
+        Route::post('/types', [DocumentTypeController::class, 'store']);
+        Route::get('/types/{documentType}', [DocumentTypeController::class, 'show']);
+        Route::patch('/types/{documentType}', [DocumentTypeController::class, 'update']);
+
+        Route::get('/requirements', [DocumentRequirementController::class, 'index']);
+        Route::post('/requirements', [DocumentRequirementController::class, 'store']);
+        Route::get('/requirements/{documentRequirement}', [DocumentRequirementController::class, 'show']);
+        Route::patch('/requirements/{documentRequirement}', [DocumentRequirementController::class, 'update']);
+
+        Route::get('/compliance', [EmployeeDocumentController::class, 'compliance']);
+        Route::get('/', [EmployeeDocumentController::class, 'index']);
+        Route::post('/', [EmployeeDocumentController::class, 'store']);
+        Route::get('/{employeeDocument}/download', [EmployeeDocumentController::class, 'download']);
+        Route::get('/{employeeDocument}/view', [EmployeeDocumentController::class, 'view']);
+        Route::get('/{employeeDocument}', [EmployeeDocumentController::class, 'show']);
+        Route::patch('/{employeeDocument}/review', [EmployeeDocumentController::class, 'review']);
+        Route::patch('/{employeeDocument}/acknowledge', [EmployeeDocumentController::class, 'acknowledge']);
+        Route::post('/{employeeDocument}/signed-copy', [EmployeeDocumentController::class, 'signedCopy']);
+    });
+
+    Route::prefix('company-events')->group(function () {
+        Route::get('/', [CompanyEventController::class, 'index']);
+        Route::post('/', [CompanyEventController::class, 'store']);
+        Route::patch('/{companyEvent}', [CompanyEventController::class, 'update']);
+        Route::delete('/{companyEvent}', [CompanyEventController::class, 'destroy']);
+    });
+
+    Route::prefix('leave')->middleware(EnsureModuleIsSubscribed::class.':leave')->group(function () {
+        Route::get('/types', [LeaveTypeController::class, 'index']);
+        Route::post('/types', [LeaveTypeController::class, 'store']);
+        Route::patch('/types/{leaveType}', [LeaveTypeController::class, 'update']);
+        Route::get('/periods', [LeavePeriodController::class, 'index']);
+        Route::post('/periods', [LeavePeriodController::class, 'store']);
+        Route::patch('/periods/{leavePeriod}', [LeavePeriodController::class, 'update']);
+        Route::get('/holidays', [LeaveHolidayController::class, 'index']);
+        Route::post('/holidays', [LeaveHolidayController::class, 'store']);
+        Route::patch('/holidays/{leaveHoliday}', [LeaveHolidayController::class, 'update']);
+        Route::get('/entitlements', [LeaveEntitlementController::class, 'index']);
+        Route::post('/entitlements', [LeaveEntitlementController::class, 'store']);
+        Route::post('/entitlements/bulk', [LeaveEntitlementController::class, 'bulkStore']);
+        Route::delete('/entitlements/{leaveEntitlement}', [LeaveEntitlementController::class, 'destroy']);
+        Route::get('/requests', [LeaveRequestController::class, 'index']);
+        Route::post('/requests', [LeaveRequestController::class, 'store']);
+        Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show']);
+        Route::get('/requests/{leaveRequest}/evidence/download', [LeaveRequestController::class, 'downloadEvidence']);
+        Route::get('/requests/{leaveRequest}/handover-document/download', [LeaveRequestController::class, 'downloadHandoverDocument']);
+        Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel']);
+    });
+
+    Route::prefix('tickets')->middleware(EnsureModuleIsSubscribed::class.':service_desk')->group(function () {
+        Route::get('/categories', [TicketCategoryController::class, 'index']);
+        Route::post('/categories', [TicketCategoryController::class, 'store']);
+        Route::get('/categories/{ticketCategory}', [TicketCategoryController::class, 'show']);
+        Route::patch('/categories/{ticketCategory}', [TicketCategoryController::class, 'update']);
+        Route::get('/resolvers', [TicketController::class, 'resolvers']);
+        Route::get('/reporting', [TicketController::class, 'reporting']);
+        Route::get('/', [TicketController::class, 'index']);
+        Route::post('/', [TicketController::class, 'store']);
+        Route::get('/{ticket}', [TicketController::class, 'show']);
+        Route::get('/{ticket}/attachment/download', [TicketController::class, 'downloadAttachment']);
+        Route::patch('/{ticket}/cancel', [TicketController::class, 'cancel']);
+        Route::patch('/{ticket}/resubmit', [TicketController::class, 'resubmit']);
+        Route::patch('/{ticket}/assign', [TicketController::class, 'assign']);
+        Route::patch('/{ticket}/priority', [TicketController::class, 'updatePriority']);
+        Route::patch('/{ticket}/decline', [TicketController::class, 'decline']);
+        Route::patch('/{ticket}/start', [TicketController::class, 'start']);
+        Route::patch('/{ticket}/hold', [TicketController::class, 'hold']);
+        Route::patch('/{ticket}/resume', [TicketController::class, 'resume']);
+        Route::patch('/{ticket}/escalate', [TicketController::class, 'escalate']);
+        Route::patch('/{ticket}/resolve', [TicketController::class, 'resolve']);
+        Route::patch('/{ticket}/close', [TicketController::class, 'close']);
+        Route::patch('/{ticket}/reopen', [TicketController::class, 'reopen']);
+        Route::post('/{ticket}/watch', [TicketController::class, 'watch']);
+        Route::delete('/{ticket}/watch', [TicketController::class, 'unwatch']);
+        Route::post('/{ticket}/comments', [TicketCommentController::class, 'store']);
+        Route::get('/{ticket}/comments/{ticketComment}/attachment/download', [TicketCommentController::class, 'downloadAttachment']);
+    });
+
+    Route::prefix('assets')->middleware(EnsureModuleIsSubscribed::class.':assets')->group(function () {
+        Route::get('/', [AssetController::class, 'index']);
+        Route::post('/', [AssetController::class, 'store']);
+        Route::get('/categories', [AssetCategoryController::class, 'index']);
+        Route::post('/categories', [AssetCategoryController::class, 'store']);
+        Route::patch('/categories/{assetCategory}', [AssetCategoryController::class, 'update']);
+        Route::get('/reporting', [AssetController::class, 'reporting']);
+        Route::get('/{asset}', [AssetController::class, 'show']);
+        Route::patch('/{asset}', [AssetController::class, 'update']);
+        Route::patch('/{asset}/assign', [AssetController::class, 'assign']);
+        Route::patch('/{asset}/return', [AssetController::class, 'returnAsset']);
+        Route::patch('/{asset}/report-fault', [AssetController::class, 'reportFault']);
+        Route::patch('/{asset}/return-to-service', [AssetController::class, 'returnToService']);
+    });
+
+    Route::prefix('attendance')->middleware(EnsureModuleIsSubscribed::class.':attendance')->group(function () {
+        Route::get('/settings', [AttendanceSettingController::class, 'show']);
+        Route::patch('/settings', [AttendanceSettingController::class, 'update']);
+        Route::get('/shifts', [WorkShiftController::class, 'index']);
+        Route::post('/shifts', [WorkShiftController::class, 'store']);
+        Route::patch('/shifts/{workShift}', [WorkShiftController::class, 'update']);
+        Route::get('/records', [AttendanceRecordController::class, 'index']);
+        Route::post('/records', [AttendanceRecordController::class, 'store']);
+        Route::get('/records/{attendanceRecord}', [AttendanceRecordController::class, 'show']);
+        Route::get('/corrections', [AttendanceCorrectionRequestController::class, 'index']);
+        Route::post('/corrections', [AttendanceCorrectionRequestController::class, 'store']);
+        Route::get('/corrections/{attendanceCorrection}', [AttendanceCorrectionRequestController::class, 'show']);
+    });
+
+    Route::prefix('payroll')->middleware(EnsureModuleIsSubscribed::class.':payroll')->group(function () {
+        Route::get('/settings', [PayrollConfigurationController::class, 'settings']);
+        Route::patch('/settings', [PayrollConfigurationController::class, 'updateSettings']);
+        Route::get('/pay-groups', [PayrollConfigurationController::class, 'payGroups']);
+        Route::post('/pay-groups', [PayrollConfigurationController::class, 'storePayGroup']);
+        Route::patch('/pay-groups/{payGroup}', [PayrollConfigurationController::class, 'updatePayGroup']);
+        Route::get('/components', [PayrollConfigurationController::class, 'components']);
+        Route::post('/components', [PayrollConfigurationController::class, 'storeComponent']);
+        Route::patch('/components/{component}', [PayrollConfigurationController::class, 'updateComponent']);
+        Route::get('/employees/{employee}', [EmployeePayrollController::class, 'show']);
+        Route::post('/employees/{employee}/compensations', [EmployeePayrollController::class, 'storeCompensation']);
+        Route::post('/employees/{employee}/bank-accounts', [EmployeePayrollController::class, 'storeBankAccount']);
+        Route::patch('/bank-accounts/{bankAccount}', [EmployeePayrollController::class, 'updateBankAccount']);
+        Route::get('/me/payslips', [EmployeePayrollController::class, 'myPayslips']);
+        Route::get('/me/payslips/{payrollRunItem}', [EmployeePayrollController::class, 'myPayslip']);
+        Route::get('/runs', [PayrollRunController::class, 'index']);
+        Route::post('/runs', [PayrollRunController::class, 'store']);
+        Route::get('/runs/{payrollRun}', [PayrollRunController::class, 'show']);
+        Route::get('/runs/{payrollRun}/readiness', [PayrollRunController::class, 'readiness']);
+        Route::post('/runs/{payrollRun}/calculate', [PayrollRunController::class, 'calculate']);
+        Route::post('/runs/{payrollRun}/submit', [PayrollRunController::class, 'submit']);
+        Route::post('/runs/{payrollRun}/finalize', [PayrollRunController::class, 'finalize']);
+        Route::post('/runs/{payrollRun}/publish', [PayrollRunController::class, 'publish']);
+        Route::post('/runs/{payrollRun}/void', [PayrollRunController::class, 'void']);
+        Route::get('/inputs', [PayrollOperationsController::class, 'inputs']);
+        Route::post('/inputs', [PayrollOperationsController::class, 'storeInput']);
+        Route::patch('/inputs/{payrollInput}', [PayrollOperationsController::class, 'updateInput']);
+        Route::get('/employees/{employee}/statutory-profile', [PayrollOperationsController::class, 'statutoryProfile']);
+        Route::put('/employees/{employee}/statutory-profile', [PayrollOperationsController::class, 'updateStatutoryProfile']);
+        Route::get('/loans', [PayrollOperationsController::class, 'loans']);
+        Route::post('/loans', [PayrollOperationsController::class, 'storeLoan']);
+        Route::post('/loans/{loan}/actions', [PayrollOperationsController::class, 'loanAction']);
+        Route::post('/runs/{payrollRun}/payment-export', [PayrollOperationsController::class, 'paymentExport']);
+        Route::get('/payment-batches/{paymentBatch}/download', [PayrollOperationsController::class, 'downloadPayment']);
+        Route::post('/payment-batches/{paymentBatch}/mark-paid', [PayrollOperationsController::class, 'markPaymentBatchPaid']);
+        Route::post('/runs/{payrollRun}/journal', [PayrollOperationsController::class, 'journal']);
+        Route::post('/run-items/{payrollRunItem}/payslip', [PayrollOperationsController::class, 'payslip']);
+        Route::get('/run-items/{payrollRunItem}/payslip/download', [PayrollOperationsController::class, 'downloadPayslip']);
+        Route::get('/reports/summary', [PayrollOperationsController::class, 'report']);
+        Route::get('/reports/statutory', [PayrollOperationsController::class, 'statutoryReport']);
+        Route::get('/reports/register/export', [PayrollOperationsController::class, 'exportRegister']);
+    });
+
+    Route::middleware(EnsureModuleIsSubscribed::class.':employees')->group(function () {
+        Route::get('/employees', [EmployeeController::class, 'index']);
+        Route::get('/employees/export', [EmployeeController::class, 'export']);
+        Route::get('/employees/org-chart', [EmployeeController::class, 'orgChart']);
+        Route::get('/employees/directory', [EmployeeController::class, 'directory']);
+        Route::post('/employees', [EmployeeController::class, 'store']);
+        Route::get('/employees/{employee}/export', [EmployeeController::class, 'exportOne']);
+        Route::post('/employees/{employee}/correction-requests', [EmployeeController::class, 'requestCorrection']);
+        Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
+        Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+        Route::get('/employees/{employee}/profile-overview', [EmployeeProfileOverviewController::class, 'show']);
+        Route::get('/employees/{employee}/profile-activities', [EmployeeProfileActivityController::class, 'index']);
+        Route::get('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'index']);
+        Route::put('/employees/{employee}/custom-field-values', [EmployeeCustomFieldValueController::class, 'upsert']);
+        Route::get('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'statusHistory']);
+        Route::post('/employees/{employee}/status-history', [EmployeeLifecycleController::class, 'storeStatusHistory']);
+        Route::get('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'reportingHistory']);
+        Route::post('/employees/{employee}/reporting-history', [EmployeeLifecycleController::class, 'storeReportingHistory']);
+        Route::patch('/employees/{employee}/approve-onboarding', [EmployeeController::class, 'approveOnboarding']);
+    });
+
+    Route::patch('/me/employee-profile', [EmployeeController::class, 'updateMyProfile'])
+        ->middleware(EnsureModuleIsSubscribed::class.':employee_self_service');
+
+    Route::prefix('employee-profile')->middleware(EnsureModuleIsSubscribed::class.':employee_self_service')->group(function () {
+        Route::get('/overview', [EmployeeProfileOverviewController::class, 'me']);
+        Route::get('/activities', [EmployeeProfileActivityController::class, 'myIndex']);
+
+        Route::get('/custom-fields', [EmployeeCustomFieldController::class, 'index']);
+        Route::post('/custom-fields', [EmployeeCustomFieldController::class, 'store']);
+        Route::get('/custom-fields/{customField}', [EmployeeCustomFieldController::class, 'show']);
+        Route::patch('/custom-fields/{customField}', [EmployeeCustomFieldController::class, 'update']);
+
+        Route::get('/custom-field-values', [EmployeeCustomFieldValueController::class, 'myIndex']);
+        Route::put('/custom-field-values', [EmployeeCustomFieldValueController::class, 'myUpsert']);
+
+        Route::get('/emergency-contacts', [EmployeeEmergencyContactController::class, 'index']);
+        Route::post('/emergency-contacts', [EmployeeEmergencyContactController::class, 'store']);
+        Route::patch('/emergency-contacts/{emergencyContact}', [EmployeeEmergencyContactController::class, 'update']);
+        Route::delete('/emergency-contacts/{emergencyContact}', [EmployeeEmergencyContactController::class, 'destroy']);
+
+        Route::get('/dependents', [EmployeeDependentController::class, 'index']);
+        Route::post('/dependents', [EmployeeDependentController::class, 'store']);
+        Route::patch('/dependents/{dependent}', [EmployeeDependentController::class, 'update']);
+        Route::delete('/dependents/{dependent}', [EmployeeDependentController::class, 'destroy']);
+    });
+});
+
+Route::post('/employee-invitations/{token}/accept', [EmployeeController::class, 'acceptInvitation']);
+Route::post('/organization-admin-invitations/{token}/accept', [AuthController::class, 'acceptOrganizationAdminInvitation']);

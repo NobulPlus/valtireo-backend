@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Http\Resources;
+
+use App\Models\EmployeeDocument;
+use App\Models\LeaveRequest;
+use App\Models\Ticket;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @mixin \App\Models\ApprovalRequest */
+class ApprovalRequestResource extends JsonResource
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'organization_id' => $this->organization_id,
+            'approval_workflow_id' => $this->approval_workflow_id,
+            'requester' => $this->whenLoaded('requester', fn () => $this->requester ? [
+                'id' => $this->requester->id,
+                'name' => $this->requester->name,
+                'email' => $this->requester->email,
+            ] : null),
+            'subject_employee' => $this->whenLoaded('subjectEmployee', fn () => $this->subjectEmployee ? [
+                'id' => $this->subjectEmployee->id,
+                'employee_number' => $this->subjectEmployee->employee_number,
+                'full_name' => trim($this->subjectEmployee->first_name.' '.$this->subjectEmployee->last_name),
+                'work_email' => $this->subjectEmployee->work_email,
+            ] : null),
+            'approvable_type' => $this->approvable_type,
+            'approvable_id' => $this->approvable_id,
+            'module' => $this->module,
+            'action' => $this->action,
+            'title' => $this->title,
+            'status' => $this->status,
+            'current_step_order' => $this->current_step_order,
+            'submitted_at' => $this->submitted_at,
+            'completed_at' => $this->completed_at,
+            'metadata' => $this->metadata ?? [],
+            // So the reviewer can actually see the file before deciding —
+            // not every approvable type has one, only documents do.
+            'document' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof EmployeeDocument ? [
+                'id' => $this->approvable->id,
+                'title' => $this->approvable->title,
+                'file_name' => $this->approvable->file_name,
+                'mime_type' => $this->approvable->mime_type,
+                'download_url' => url("/api/documents/{$this->approvable->id}/download"),
+                'view_url' => url("/api/documents/{$this->approvable->id}/view"),
+            ] : null),
+            'leave_request' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof LeaveRequest ? [
+                'id' => $this->approvable->id,
+                'handover_to_employee_id' => $this->approvable->handover_to_employee_id,
+                'handover_note' => $this->approvable->handover_note,
+                'handover_to' => $this->approvable->loadMissing('handoverTo')->handoverTo ? [
+                    'id' => $this->approvable->handoverTo->id,
+                    'employee_number' => $this->approvable->handoverTo->employee_number,
+                    'full_name' => trim($this->approvable->handoverTo->first_name.' '.$this->approvable->handoverTo->last_name),
+                    'work_email' => $this->approvable->handoverTo->work_email,
+                ] : null,
+                'evidence_file_name' => $this->approvable->evidence_file_name,
+                'evidence_mime_type' => $this->approvable->evidence_mime_type,
+                'evidence_file_size' => $this->approvable->evidence_file_size,
+                'evidence_download_url' => $this->approvable->evidence_file_path ? url("/api/leave/requests/{$this->approvable->id}/evidence/download") : null,
+                'handover_file_name' => $this->approvable->handover_file_name,
+                'handover_mime_type' => $this->approvable->handover_mime_type,
+                'handover_file_size' => $this->approvable->handover_file_size,
+                'handover_download_url' => $this->approvable->handover_file_path ? url("/api/leave/requests/{$this->approvable->id}/handover-document/download") : null,
+            ] : null),
+            'ticket' => $this->whenLoaded('approvable', fn () => $this->approvable instanceof Ticket ? [
+                'id' => $this->approvable->id,
+                'category' => $this->approvable->loadMissing('category')->category ? [
+                    'id' => $this->approvable->category->id,
+                    'name' => $this->approvable->category->name,
+                    'code' => $this->approvable->category->code,
+                ] : null,
+                'subject' => $this->approvable->subject,
+                'description' => $this->approvable->description,
+                'attachment_file_name' => $this->approvable->attachment_file_name,
+                'attachment_mime_type' => $this->approvable->attachment_mime_type,
+                'attachment_download_url' => $this->approvable->attachment_file_path ? url("/api/tickets/{$this->approvable->id}/attachment/download") : null,
+            ] : null),
+            'workflow' => new ApprovalWorkflowResource($this->whenLoaded('workflow')),
+            'decisions' => ApprovalDecisionResource::collection($this->whenLoaded('decisions')),
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+        ];
+    }
+}

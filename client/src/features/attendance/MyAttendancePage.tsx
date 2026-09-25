@@ -1,0 +1,258 @@
+import { useState } from 'react';
+import { CalendarClock, Clock3, Plus, Timer } from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Input';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Modal } from '@/components/ui/Modal';
+import { ModalCancelAction, ModalSendAction } from '@/components/ui/ModalActions';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StatTile } from '@/components/ui/StatTile';
+import { useToast } from '@/components/ui/Toast';
+import {
+  useLogAttendance,
+  useMyAttendanceCorrections,
+  useMyAttendanceRecords,
+  useRequestAttendanceCorrection,
+} from '@/features/attendance/api';
+import { ApiError } from '@/lib/apiClient';
+import { useDateFormatter } from '@/lib/dateFormat';
+import type { AttendanceRecord } from '@/types/api';
+
+function actionError(error: unknown, fallback: string): string {
+  return error instanceof ApiError ? error.message : fallback;
+}
+
+function CorrectionButton({ record, onSubmitted }: { record: AttendanceRecord; onSubmitted: () => void }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ check_in_date: record.attendance_date?.slice(0, 10) ?? '', check_in_time: '', check_out_date: record.attendance_date?.slice(0, 10) ?? '', check_out_time: '', reason: '' });
+  const correctionMutation = useRequestAttendanceCorrection();
+
+  async function handleSubmit() {
+    if (!form.reason.trim()) return;
+    try {
+      await correctionMutation.mutateAsync({
+        attendance_record_id: record.id,
+        requested_check_in_at: form.check_in_date && form.check_in_time ? `${form.check_in_date}T${form.check_in_time}` : undefined,
+        requested_check_out_at: form.check_out_date && form.check_out_time ? `${form.check_out_date}T${form.check_out_time}` : undefined,
+        reason: form.reason,
+      });
+      setOpen(false);
+      setForm({ check_in_date: record.attendance_date?.slice(0, 10) ?? '', check_in_time: '', check_out_date: record.attendance_date?.slice(0, 10) ?? '', check_out_time: '', reason: '' });
+      toast.success('Correction requested', 'Your request has been sent for review.');
+      onSubmitted();
+    } catch (error) {
+      toast.error('Could not submit correction', actionError(error, 'Could not submit this correction request.'));
+    }
+  }
+
+  return (
+    <>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Request correction
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Request attendance correction"
+        footer={
+          <>
+            <ModalCancelAction onClick={() => setOpen(false)} />
+            <ModalSendAction title="Submit request" isLoading={correctionMutation.isPending} disabled={!form.reason.trim()} onClick={handleSubmit} />
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-in date</span>
+              <DatePicker value={form.check_in_date} onChange={(value) => setForm((current) => ({ ...current, check_in_date: value }))} />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-in time</span>
+              <input
+                type="time"
+                value={form.check_in_time}
+                onChange={(event) => setForm((current) => ({ ...current, check_in_time: event.target.value }))}
+                className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-out date</span>
+              <DatePicker value={form.check_out_date} onChange={(value) => setForm((current) => ({ ...current, check_out_date: value }))} />
+            </label>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted">Corrected check-out time</span>
+              <input
+                type="time"
+                value={form.check_out_time}
+                onChange={(event) => setForm((current) => ({ ...current, check_out_time: event.target.value }))}
+                className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+              />
+            </label>
+          </div>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Reason</span>
+            <Textarea value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} required />
+          </label>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+function MyAttendanceContent() {
+  const toast = useToast();
+  const { formatDate, formatTime } = useDateFormatter();
+  const recordsQuery = useMyAttendanceRecords();
+  const correctionsQuery = useMyAttendanceCorrections();
+  const logMutation = useLogAttendance();
+
+  const [logModalOpen, setLogModalOpen] = useState(false);
+  const [logForm, setLogForm] = useState({ attendance_date: '', check_in_time: '', check_out_time: '' });
+
+  async function handleLogAttendance() {
+    if (!logForm.attendance_date) return;
+    try {
+      await logMutation.mutateAsync({
+        attendance_date: logForm.attendance_date,
+        check_in_at: logForm.attendance_date && logForm.check_in_time ? `${logForm.attendance_date}T${logForm.check_in_time}` : undefined,
+        check_out_at: logForm.attendance_date && logForm.check_out_time ? `${logForm.attendance_date}T${logForm.check_out_time}` : undefined,
+      });
+      setLogModalOpen(false);
+      setLogForm({ attendance_date: '', check_in_time: '', check_out_time: '' });
+      toast.success('Attendance logged');
+    } catch (error) {
+      toast.error('Could not log attendance', actionError(error, 'Could not log this attendance record.'));
+    }
+  }
+
+  const records = recordsQuery.data?.data ?? [];
+  const corrections = correctionsQuery.data?.data ?? [];
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayRecord = records.find((record) => record.attendance_date?.slice(0, 10) === todayKey);
+  const presentCount = records.filter((record) => record.status === 'present').length;
+  const lateCount = records.filter((record) => record.status === 'late').length;
+  const absentCount = records.filter((record) => record.status === 'absent').length;
+  const pendingCorrections = corrections.filter((correction) => correction.status === 'submitted').length;
+
+  return (
+    <div>
+      <PageHeader
+        title="My attendance"
+        subtitle="Your attendance records and correction requests."
+        actions={
+          <Button type="button" variant="primary" onClick={() => setLogModalOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> Log attendance
+          </Button>
+        }
+      />
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="Today" value={todayRecord?.status ? todayRecord.status.replaceAll('_', ' ') : 'No record'} icon={Timer} tone={todayRecord?.status === 'absent' ? 'danger' : todayRecord?.status === 'late' ? 'warning' : todayRecord?.status === 'present' ? 'success' : 'default'} />
+        <StatTile label="Present records" value={presentCount} icon={CalendarClock} tone="success" />
+        <StatTile label="Late / absent" value={lateCount + absentCount} icon={Clock3} tone={lateCount + absentCount ? 'warning' : 'default'} />
+        <StatTile label="Pending corrections" value={pendingCorrections} icon={Plus} tone={pendingCorrections ? 'warning' : 'default'} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Records</CardTitle>
+          </CardHeader>
+          <CardBody className="p-0">
+            {recordsQuery.isLoading && <LoadingState label="Loading your attendance…" />}
+            {recordsQuery.isError && <ErrorState error={recordsQuery.error} onRetry={() => recordsQuery.refetch()} />}
+            {recordsQuery.data && records.length === 0 && <EmptyState title="No attendance records yet" />}
+            {records.length > 0 && (
+              <ul className="divide-y divide-border">
+                {records.map((record) => (
+                  <li key={record.id} className="px-5 py-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-strong">{formatDate(record.attendance_date)}</p>
+                      <StatusBadge status={record.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-muted">
+                      {formatTime(record.check_in_at)} → {formatTime(record.check_out_at)}
+                    </p>
+                    <div className="mt-2">
+                      <CorrectionButton record={record} onSubmitted={() => correctionsQuery.refetch()} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Correction requests</CardTitle>
+          </CardHeader>
+          <CardBody className="p-0">
+            {correctionsQuery.isLoading && <LoadingState label="Loading your corrections…" />}
+            {correctionsQuery.isError && <ErrorState error={correctionsQuery.error} onRetry={() => correctionsQuery.refetch()} />}
+            {correctionsQuery.data && corrections.length === 0 && <EmptyState title="No correction requests yet" />}
+            {corrections.length > 0 && (
+              <ul className="divide-y divide-border">
+                {corrections.map((correction) => (
+                  <li key={correction.id} className="px-5 py-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-strong">{correction.reason}</p>
+                      <StatusBadge status={correction.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-muted">Submitted {formatDate(correction.submitted_at)}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      <Modal
+        open={logModalOpen}
+        onClose={() => setLogModalOpen(false)}
+        title="Log attendance"
+        footer={
+          <>
+            <ModalCancelAction onClick={() => setLogModalOpen(false)} />
+            <ModalSendAction title="Save" isLoading={logMutation.isPending} disabled={!logForm.attendance_date} onClick={handleLogAttendance} />
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Date</span>
+            <DatePicker value={logForm.attendance_date} onChange={(value) => setLogForm((current) => ({ ...current, attendance_date: value }))} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Check-in</span>
+            <input
+              type="time"
+              value={logForm.check_in_time}
+              onChange={(event) => setLogForm((current) => ({ ...current, check_in_time: event.target.value }))}
+              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted">Check-out</span>
+            <input
+              type="time"
+              value={logForm.check_out_time}
+              onChange={(event) => setLogForm((current) => ({ ...current, check_out_time: event.target.value }))}
+              className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-strong focus:border-teal focus:outline-none focus:ring-2 focus:ring-teal/20"
+            />
+          </label>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export function MyAttendancePage() {
+  return <MyAttendanceContent />;
+}

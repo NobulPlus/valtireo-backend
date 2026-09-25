@@ -1,0 +1,65 @@
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+/** @mixin \App\Models\LeaveRequest */
+class LeaveRequestResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        $canViewEvidence = $request->user()?->can('leave_requests.view')
+            || $request->user()?->employee?->id === $this->employee_id;
+
+        return [
+            'id' => $this->id,
+            'organization_id' => $this->organization_id,
+            'employee_id' => $this->employee_id,
+            'handover_to_employee_id' => $this->handover_to_employee_id,
+            'leave_type_id' => $this->leave_type_id,
+            'leave_period_id' => $this->leave_period_id,
+            'requested_by_id' => $this->requested_by_id,
+            'starts_on' => $this->starts_on,
+            'ends_on' => $this->ends_on,
+            'total_days' => (float) $this->total_days,
+            'status' => $this->status,
+            'reason' => $this->reason,
+            'handover_note' => $this->handover_note,
+            'evidence_file_name' => $canViewEvidence ? $this->evidence_file_name : null,
+            'evidence_mime_type' => $canViewEvidence ? $this->evidence_mime_type : null,
+            'evidence_file_size' => $canViewEvidence ? $this->evidence_file_size : null,
+            'evidence_download_url' => $canViewEvidence && $this->evidence_file_path ? url("/api/leave/requests/{$this->id}/evidence/download") : null,
+            'handover_file_name' => $this->handover_file_name,
+            'handover_mime_type' => $this->handover_mime_type,
+            'handover_file_size' => $this->handover_file_size,
+            'handover_download_url' => $this->handover_file_path ? url("/api/leave/requests/{$this->id}/handover-document/download") : null,
+            'submitted_at' => $this->submitted_at,
+            'reviewed_at' => $this->reviewed_at,
+            'employee' => $this->whenLoaded('employee', fn () => [
+                'id' => $this->employee->id,
+                'employee_number' => $this->employee->employee_number,
+                'full_name' => trim($this->employee->first_name.' '.$this->employee->last_name),
+                'work_email' => $this->employee->work_email,
+            ]),
+            'leave_type' => new LeaveTypeResource($this->whenLoaded('leaveType')),
+            'leave_period' => new LeavePeriodResource($this->whenLoaded('leavePeriod')),
+            'requested_by' => $this->whenLoaded('requestedBy', fn () => $this->requestedBy ? [
+                'id' => $this->requestedBy->id,
+                'name' => $this->requestedBy->name,
+                'email' => $this->requestedBy->email,
+            ] : null),
+            'handover_to' => $this->whenLoaded('handoverTo', fn () => $this->handoverTo ? [
+                'id' => $this->handoverTo->id,
+                'employee_number' => $this->handoverTo->employee_number,
+                'full_name' => trim($this->handoverTo->first_name.' '.$this->handoverTo->last_name),
+                'work_email' => $this->handoverTo->work_email,
+            ] : null),
+            'comments' => LeaveRequestCommentResource::collection($this->whenLoaded('comments')),
+            'approval_requests' => ApprovalRequestResource::collection($this->whenLoaded('approvalRequests')),
+            'created_at' => $this->created_at,
+            'updated_at' => $this->updated_at,
+        ];
+    }
+}
