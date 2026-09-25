@@ -30,6 +30,22 @@ export interface Paginated<T> {
   };
 }
 
+/**
+ * Raw `LengthAwarePaginator::toArray()` shape — flat, not wrapped in an API
+ * Resource. The payroll controllers paginate directly without a Resource
+ * class (see the payroll frontend handoff notes), so their list endpoints
+ * return this shape instead of the nested `Paginated<T>` envelope.
+ */
+export interface LaravelPage<T> {
+  data: T[];
+  current_page: number;
+  from: number | null;
+  last_page: number;
+  per_page: number;
+  to: number | null;
+  total: number;
+}
+
 /** Laravel validation error envelope (422 responses). */
 export interface ValidationErrorResponse {
   message: string;
@@ -1564,6 +1580,21 @@ export interface EmployeeBankAccount {
   account_number_last_four: string;
   is_primary: boolean;
   verification_status: string;
+  verified_at?: string | null;
+}
+
+export interface PayrollReadinessIssue {
+  employee_id: number;
+  employee_number: string;
+  employee_name: string;
+  issues: string[];
+}
+
+export interface PayrollReadiness {
+  ready: boolean;
+  employee_count: number;
+  issue_count: number;
+  issues: PayrollReadinessIssue[];
 }
 
 export interface EmployeeStatutoryProfile {
@@ -1662,13 +1693,14 @@ export interface PayrollInput {
   organization_id: number;
   employee_id: number;
   payroll_component_id: number | null;
+  payroll_run_id: number | null;
   type: PayrollInputType;
   description: string;
   effective_date: string;
   quantity: string | null;
   rate: string | null;
   amount: string;
-  status: 'approved' | 'consumed';
+  status: 'approved' | 'consumed' | 'cancelled';
   employee?: { id: number; employee_number: string; first_name: string; last_name: string } | null;
   component?: PayrollComponent | null;
   created_at: string;
@@ -1687,7 +1719,7 @@ export interface EmployeeLoan {
   outstanding_balance: string;
   starts_on: string;
   ends_on: string | null;
-  status: 'active' | 'repaid';
+  status: 'active' | 'paused' | 'repaid' | 'cancelled' | 'written_off';
   employee?: { id: number; employee_number: string; first_name: string; last_name: string } | null;
   created_at: string;
 }
@@ -1698,9 +1730,11 @@ export interface PayrollPaymentBatch {
   payroll_run_id: number;
   reference: string;
   format: string;
+  status: 'generated' | 'paid' | 'voided';
   payment_count: number;
   total_amount: string;
   generated_at: string;
+  marked_paid_at?: string | null;
 }
 
 export interface PayrollJournalLine {
@@ -1740,4 +1774,148 @@ export interface PayrollStatutoryReportRow {
   type: PayrollComponentType;
   employee_count: number;
   total_amount: string;
+}
+
+// ---------------------------------------------------------------------------
+// Operations Centre
+// ---------------------------------------------------------------------------
+
+export type OperationTaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled';
+export type OperationTaskPriority = 'low' | 'normal' | 'high' | 'critical';
+
+export interface OperationTask {
+  id: number;
+  organization_id: number;
+  key: string | null;
+  source_type: string | null;
+  source_id: number | null;
+  subject_employee_id: number | null;
+  assigned_user_id: number | null;
+  created_by_id: number | null;
+  completed_by_id: number | null;
+  category: string;
+  title: string;
+  description: string | null;
+  priority: OperationTaskPriority;
+  status: OperationTaskStatus;
+  due_at: string | null;
+  action_url: string | null;
+  metadata: Record<string, unknown> | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_user?: { id: number; name: string; email: string } | null;
+  subject_employee?: { id: number; first_name: string; last_name: string; employee_number: string } | null;
+  created_by?: { id: number; name: string } | null;
+}
+
+export interface OperationsSummary {
+  open: number;
+  overdue: number;
+  due_soon: number;
+  critical: number;
+  assigned_to_me: number;
+}
+
+/** Note: `actionUrl` is camelCase on the wire (an inconsistency in this one endpoint vs. the rest of the API's snake_case). */
+export interface OperationsSignal {
+  key: string;
+  category: string;
+  title: string;
+  count: number;
+  actionUrl: string;
+  severity: 'info' | 'warning' | 'critical';
+}
+
+export type OperationAutomationTrigger =
+  | 'employee.status_changed'
+  | 'employee.activated'
+  | 'employee.exited'
+  | 'employee.probation_ending'
+  | 'leave.submitted'
+  | 'leave.cancelled'
+  | 'document.submitted'
+  | 'document.reviewed'
+  | 'document.expiring'
+  | 'document.expired'
+  | 'attendance.correction_submitted'
+  | 'ticket.submitted'
+  | 'ticket.assigned'
+  | 'ticket.resolved'
+  | 'ticket.sla_breached'
+  | 'asset.assigned'
+  | 'asset.returned'
+  | 'payroll.calculated'
+  | 'payroll.exceptions_detected'
+  | 'payroll.submitted'
+  | 'payroll.finalized'
+  | 'operation.task_overdue';
+export type OperationAutomationConditionOperator = 'equals' | 'not_equals' | 'in' | 'not_in' | 'present';
+export type OperationAutomationActionType = 'create_task' | 'notify_user';
+
+export interface OperationAutomationCondition {
+  field: string;
+  operator: OperationAutomationConditionOperator;
+  value?: unknown;
+}
+
+export interface OperationAutomationAction {
+  type: OperationAutomationActionType;
+  title?: string | null;
+  description?: string | null;
+  message?: string | null;
+  category?: string | null;
+  priority?: OperationTaskPriority | null;
+  severity?: 'info' | 'success' | 'warning' | 'critical' | null;
+  /** A literal id, or a `context.<path>` reference resolved at dispatch time. */
+  assigned_user_id?: string | number | null;
+  subject_employee_id?: string | number | null;
+  user_id?: string | number | null;
+  due_in_days?: number | null;
+  action_label?: string | null;
+  action_url?: string | null;
+}
+
+export interface OperationAutomationRule {
+  id: number;
+  organization_id: number;
+  name: string;
+  trigger: OperationAutomationTrigger;
+  conditions: OperationAutomationCondition[] | null;
+  actions: OperationAutomationAction[];
+  is_active: boolean;
+  execution_order: number;
+  created_by_id: number | null;
+  created_at: string;
+  updated_at: string;
+  runs_count?: number;
+}
+
+export type OperationAutomationRunStatus = 'running' | 'completed' | 'skipped' | 'failed';
+
+export interface OperationAutomationRun {
+  id: number;
+  organization_id: number;
+  operation_automation_rule_id: number;
+  subject_type: string | null;
+  subject_id: number | null;
+  trigger: string;
+  status: OperationAutomationRunStatus;
+  context: Record<string, unknown> | null;
+  results: unknown[] | null;
+  error: string | null;
+  started_at: string;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  rule?: { id: number; name: string; trigger: string } | null;
+}
+
+export interface OperationsAutomationCatalog {
+  triggers: OperationAutomationTrigger[];
+  condition_operators: OperationAutomationConditionOperator[];
+  action_types: OperationAutomationActionType[];
+  task_statuses: OperationTaskStatus[];
+  priorities: OperationTaskPriority[];
 }

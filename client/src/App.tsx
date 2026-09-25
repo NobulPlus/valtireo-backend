@@ -16,6 +16,7 @@ import { AssetManagementPage } from '@/features/assets/AssetManagementPage';
 import { MyAssetsPage } from '@/features/assets/MyAssetsPage';
 import { PayrollControlPage } from '@/features/payroll/PayrollControlPage';
 import { MyPayslipsPage } from '@/features/payroll/MyPayslipsPage';
+import { OperationsCenterPage } from '@/features/operations/OperationsCenterPage';
 import { MyAttendancePage } from '@/features/attendance/MyAttendancePage';
 import { MyOrgChartPage } from '@/features/employees/MyOrgChartPage';
 import { MyDirectoryPage } from '@/features/employees/MyDirectoryPage';
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="dashboard/:tab" element={<DashboardPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="calendar" element={<CalendarPage />} />
+        <Route path="operations" element={<OperationsCenterPage />} />
         <Route path="employees" element={<EmployeeListPage />} />
         <Route path="employees/new" element={<EmployeeCreatePage />} />
         <Route path="employees/:id" element={<EmployeeDetailPage />} />

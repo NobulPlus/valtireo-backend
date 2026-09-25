@@ -61,6 +61,17 @@ const STATUS_TONE: Record<string, Tone> = {
   updated: 'info',
   deleted: 'danger',
   restored: 'success',
+  // Operational tasks / automation runs
+  open: 'info',
+  completed: 'success',
+  running: 'info',
+  skipped: 'draft',
+  failed: 'danger',
+  // Priority levels
+  low: 'draft',
+  normal: 'info',
+  high: 'warning',
+  critical: 'danger',
 };
 
 function toneFor(status: string | null | undefined): Tone {

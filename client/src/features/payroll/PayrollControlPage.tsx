@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Banknote, Download, FileSpreadsheet, Landmark, Plus, Settings as SettingsIcon, Wallet } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Banknote, Ban, CircleDollarSign, Download, FileSpreadsheet, Landmark, Pause, Play, Plus, Settings as SettingsIcon, Trash2, Wallet } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -33,6 +33,9 @@ import {
   useUpdatePayGroup,
   useUpdatePayrollComponent,
   useUpdatePayrollSettings,
+  useUpdatePayrollInput,
+  usePayrollLoanAction,
+  type PayrollLoanAction,
   type CreatePayrollRunPayload,
   type PayGroupPayload,
   type PayrollComponentPayload,
@@ -43,7 +46,8 @@ import { PayrollRunDetailModal } from '@/features/payroll/PayrollRunDetailModal'
 import { useCurrencyFormatter } from '@/features/payroll/useCurrencyFormatter';
 import { ApiError } from '@/lib/apiClient';
 import { useDateFormatter } from '@/lib/dateFormat';
-import type { EmployeeLoan, PayFrequency, PayGroup, PayrollComponent, PayrollInput } from '@/types/api';
+import { Pagination } from '@/components/ui/Pagination';
+import type { EmployeeLoan, PayFrequency, PayGroup, PayrollComponent, PayrollInput, PayrollStatutoryRules } from '@/types/api';
 
 type Tab = 'settings' | 'runs' | 'inputs' | 'reports';
 
@@ -164,35 +168,7 @@ function SettingsTab() {
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Statutory rules</CardTitle>
-        </CardHeader>
-        <CardBody className="space-y-3">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-border p-3">
-              <p className="text-sm font-medium text-strong">Pension</p>
-              <p className="mt-1 text-xs text-muted">
-                {settings.statutory_rules.pension.enabled
-                  ? `${settings.statutory_rules.pension.employee_rate}% employee / ${settings.statutory_rules.pension.employer_rate}% employer`
-                  : 'Disabled'}
-              </p>
-            </div>
-            <div className="rounded-md border border-border p-3">
-              <p className="text-sm font-medium text-strong">PAYE</p>
-              <p className="mt-1 text-xs text-muted">{settings.statutory_rules.paye.enabled ? 'Enabled' : 'Disabled — configure brackets to enable'}</p>
-            </div>
-            <div className="rounded-md border border-border p-3">
-              <p className="text-sm font-medium text-strong">NHF</p>
-              <p className="mt-1 text-xs text-muted">{settings.statutory_rules.nhf.enabled ? `${settings.statutory_rules.nhf.employee_rate}%` : 'Disabled'}</p>
-            </div>
-          </div>
-          <p className="text-xs text-muted">
-            Statutory rates are organization-wide defaults. Individual employees only have pension/PAYE/NHF deducted once
-            enabled on their own statutory profile, from the employee's Payroll tab.
-          </p>
-        </CardBody>
-      </Card>
+      <StatutoryRulesCard settings={settings} canUpdate={canUpdate} />
 
       <Card>
         <CardHeader>
@@ -283,6 +259,225 @@ function SettingsTab() {
   );
 }
 
+function StatutoryRulesCard({ settings, canUpdate }: { settings: NonNullable<ReturnType<typeof usePayrollSettings>['data']>; canUpdate: boolean }) {
+  const toast = useToast();
+  const updateMutation = useUpdatePayrollSettings();
+  const [rules, setRules] = useState<PayrollStatutoryRules>(settings.statutory_rules);
+
+  useEffect(() => {
+    setRules(settings.statutory_rules);
+  }, [settings.statutory_rules]);
+
+  const isDirty = JSON.stringify(rules) !== JSON.stringify(settings.statutory_rules);
+
+  function updateSection<K extends keyof PayrollStatutoryRules>(key: K, patch: Partial<PayrollStatutoryRules[K]>) {
+    setRules((current) => ({ ...current, [key]: { ...current[key], ...patch } }));
+  }
+
+  function updateBracket(index: number, patch: Partial<PayrollStatutoryRules['paye']['brackets'][number]>) {
+    setRules((current) => ({
+      ...current,
+      paye: { ...current.paye, brackets: current.paye.brackets.map((bracket, i) => (i === index ? { ...bracket, ...patch } : bracket)) },
+    }));
+  }
+
+  function addBracket() {
+    setRules((current) => ({ ...current, paye: { ...current.paye, brackets: [...current.paye.brackets, { amount: null, rate: 0 }] } }));
+  }
+
+  function removeBracket(index: number) {
+    setRules((current) => ({ ...current, paye: { ...current.paye, brackets: current.paye.brackets.filter((_, i) => i !== index) } }));
+  }
+
+  async function handleSave() {
+    try {
+      await updateMutation.mutateAsync({ statutory_rules: rules });
+      toast.success('Statutory rules updated');
+    } catch (error) {
+      toast.error('Could not update statutory rules', actionError(error, 'Could not update statutory rules.'));
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Statutory & overtime rules</CardTitle>
+        {canUpdate && (
+          <Button type="button" size="sm" variant="primary" isLoading={updateMutation.isPending} disabled={!isDirty} onClick={handleSave}>
+            Save changes
+          </Button>
+        )}
+      </CardHeader>
+      <CardBody className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-md border border-border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-strong">
+              <input
+                type="checkbox"
+                checked={rules.pension.enabled}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('pension', { enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-border"
+              />
+              Pension
+            </label>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <label className="block text-xs">
+                <span className="mb-1 block text-muted">Employee rate (%)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rules.pension.employee_rate}
+                  disabled={!canUpdate}
+                  onChange={(e) => updateSection('pension', { employee_rate: Number(e.target.value) })}
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block text-muted">Employer rate (%)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rules.pension.employer_rate}
+                  disabled={!canUpdate}
+                  onChange={(e) => updateSection('pension', { employer_rate: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-strong">
+              <input
+                type="checkbox"
+                checked={rules.nhf.enabled}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('nhf', { enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-border"
+              />
+              NHF
+            </label>
+            <label className="mt-2 block text-xs">
+              <span className="mb-1 block text-muted">Employee rate (%)</span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={rules.nhf.employee_rate}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('nhf', { employee_rate: Number(e.target.value) })}
+              />
+            </label>
+          </div>
+
+          <div className="rounded-md border border-border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-strong">
+              <input
+                type="checkbox"
+                checked={rules.overtime.enabled}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('overtime', { enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-border"
+              />
+              Overtime
+            </label>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <label className="block text-xs">
+                <span className="mb-1 block text-muted">Multiplier</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step="0.1"
+                  value={rules.overtime.multiplier}
+                  disabled={!canUpdate}
+                  onChange={(e) => updateSection('overtime', { multiplier: Number(e.target.value) })}
+                />
+              </label>
+              <label className="block text-xs">
+                <span className="mb-1 block text-muted">Standard monthly hours</span>
+                <Input
+                  type="number"
+                  min={1}
+                  step="0.01"
+                  value={rules.overtime.standard_monthly_hours}
+                  disabled={!canUpdate}
+                  onChange={(e) => updateSection('overtime', { standard_monthly_hours: Number(e.target.value) })}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-strong">
+              <input
+                type="checkbox"
+                checked={rules.paye.enabled}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('paye', { enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-border"
+              />
+              PAYE
+            </label>
+            <label className="mt-2 block text-xs">
+              <span className="mb-1 block text-muted">Effective from</span>
+              <DatePicker value={rules.paye.effective_from ?? ''} onChange={(value) => updateSection('paye', { effective_from: value || null })} />
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">PAYE brackets</p>
+            {canUpdate && (
+              <Button type="button" size="sm" variant="secondary" onClick={addBracket}>
+                <Plus className="h-3.5 w-3.5" /> Add bracket
+              </Button>
+            )}
+          </div>
+          {rules.paye.brackets.length === 0 && <p className="mt-2 text-sm text-muted">No brackets configured yet — PAYE will deduct nothing until at least one bracket is added.</p>}
+          {rules.paye.brackets.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {rules.paye.brackets.map((bracket, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="Up to amount (blank = no limit)"
+                    value={bracket.amount ?? ''}
+                    disabled={!canUpdate}
+                    onChange={(e) => updateBracket(index, { amount: e.target.value === '' ? null : Number(e.target.value) })}
+                  />
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-28 flex-shrink-0"
+                    placeholder="Rate %"
+                    value={bracket.rate}
+                    disabled={!canUpdate}
+                    onChange={(e) => updateBracket(index, { rate: Number(e.target.value) })}
+                  />
+                  {canUpdate && (
+                    <Button type="button" size="icon" variant="ghost" title="Remove bracket" aria-label="Remove bracket" onClick={() => removeBracket(index)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <p className="text-xs text-muted">
+          These are organization-wide defaults. An individual employee only has pension/PAYE/NHF deducted once it's also enabled on
+          their own statutory profile, from the employee's Payroll tab.
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
 function PayGroupModal({ payGroup, onClose }: { payGroup: PayGroup | 'new' | null; onClose: () => void }) {
   const toast = useToast();
   const isNew = payGroup === 'new';
@@ -294,11 +489,13 @@ function PayGroupModal({ payGroup, onClose }: { payGroup: PayGroup | 'new' | nul
   const [code, setCode] = useState(payGroup && payGroup !== 'new' ? payGroup.code : '');
   const [frequency, setFrequency] = useState<string>(payGroup && payGroup !== 'new' ? payGroup.frequency : 'monthly');
   const [payDay, setPayDay] = useState(payGroup && payGroup !== 'new' ? String(payGroup.pay_day) : '25');
+  const [isActive, setIsActive] = useState(payGroup && payGroup !== 'new' ? payGroup.is_active : true);
 
   async function handleSubmit() {
     if (!name.trim() || (isNew && !code.trim()) || !payDay) return;
     const payload: PayGroupPayload = { name: name.trim(), frequency, pay_day: Number(payDay) };
     if (isNew) payload.code = code.trim();
+    else payload.is_active = isActive;
     try {
       await mutation.mutateAsync(payload);
       toast.success(isNew ? 'Pay group created' : 'Pay group updated');
@@ -341,6 +538,12 @@ function PayGroupModal({ payGroup, onClose }: { payGroup: PayGroup | 'new' | nul
             <Input type="number" min={1} max={31} value={payDay} onChange={(e) => setPayDay(e.target.value)} />
           </label>
         </div>
+        {!isNew && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-border" />
+            <span className="text-muted">Active</span>
+          </label>
+        )}
       </div>
     </Modal>
   );
@@ -373,6 +576,7 @@ function PayrollComponentModal({
   const [calculationType, setCalculationType] = useState<string>(component && component !== 'new' ? component.calculation_type : 'fixed');
   const [defaultValue, setDefaultValue] = useState(component && component !== 'new' ? component.default_value : '0');
   const [isTaxable, setIsTaxable] = useState(component && component !== 'new' ? component.is_taxable : false);
+  const [isActive, setIsActive] = useState(component && component !== 'new' ? component.is_active : true);
 
   const percentageBaseOptions = [
     { value: '', label: 'No base (flat)' },
@@ -393,6 +597,7 @@ function PayrollComponentModal({
       is_taxable: isTaxable,
     };
     if (isNew) payload.code = code.trim();
+    else payload.is_active = isActive;
     try {
       await mutation.mutateAsync(payload);
       toast.success(isNew ? 'Component created' : 'Component updated');
@@ -454,10 +659,18 @@ function PayrollComponentModal({
             </label>
           )}
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={isTaxable} onChange={(e) => setIsTaxable(e.target.checked)} className="h-4 w-4 rounded border-border" />
-          <span className="text-muted">Taxable</span>
-        </label>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={isTaxable} onChange={(e) => setIsTaxable(e.target.checked)} className="h-4 w-4 rounded border-border" />
+            <span className="text-muted">Taxable</span>
+          </label>
+          {!isNew && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="h-4 w-4 rounded border-border" />
+              <span className="text-muted">Active</span>
+            </label>
+          )}
+        </div>
       </div>
     </Modal>
   );
@@ -467,21 +680,69 @@ function PayrollComponentModal({
 // Runs tab
 // ---------------------------------------------------------------------------
 
+const RUN_STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'calculated', label: 'Calculated' },
+  { value: 'pending_approval', label: 'Pending approval' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'finalized', label: 'Finalized' },
+  { value: 'voided', label: 'Voided' },
+];
+
 function RunsTab() {
   const { formatDate } = useDateFormatter();
   const { formatCurrency } = useCurrencyFormatter();
   const { hasPermission } = useAuth();
   const canManage = hasPermission('payroll.runs.manage');
-  const runsQuery = usePayrollRuns();
   const payGroupsQuery = usePayGroups();
   const [createOpen, setCreateOpen] = useState(false);
   const [openRunId, setOpenRunId] = useState<number | null>(null);
+  const [status, setStatus] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+
+  const runsQuery = usePayrollRuns({
+    status: status || undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    page,
+  });
 
   const runs = runsQuery.data?.data ?? [];
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <SelectMenu
+            value={status}
+            onChange={(value) => {
+              setStatus(value);
+              setPage(1);
+            }}
+            options={RUN_STATUS_OPTIONS}
+            className="w-44"
+          />
+          <DatePicker
+            value={dateFrom}
+            onChange={(value) => {
+              setDateFrom(value);
+              setPage(1);
+            }}
+            placeholder="From period start"
+          />
+          <DatePicker
+            value={dateTo}
+            onChange={(value) => {
+              setDateTo(value);
+              setPage(1);
+            }}
+            placeholder="To period end"
+          />
+        </div>
         {canManage && (
           <Button type="button" variant="primary" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> Create run
@@ -494,7 +755,7 @@ function RunsTab() {
           {runsQuery.isLoading && <LoadingState label="Loading payroll runs…" />}
           {runsQuery.isError && <ErrorState error={runsQuery.error} onRetry={() => runsQuery.refetch()} />}
           {runsQuery.data && runs.length === 0 && (
-            <EmptyState title="No payroll runs yet" description="Create a run for a pay period to start processing payroll." />
+            <EmptyState title="No payroll runs found" description="Create a run for a pay period, or adjust your filters." />
           )}
           {runs.length > 0 && (
             <ul className="divide-y divide-border">
@@ -518,6 +779,7 @@ function RunsTab() {
               ))}
             </ul>
           )}
+          {runsQuery.data && <Pagination meta={runsQuery.data} onPageChange={setPage} />}
         </CardBody>
       </Card>
 
@@ -620,16 +882,31 @@ const INPUT_TYPE_OPTIONS = [
   { value: 'adjustment', label: 'Adjustment' },
 ];
 
+const INPUT_STATUS_OPTIONS = [
+  { value: '', label: 'All statuses' },
+  { value: 'approved', label: 'Approved (pending a run)' },
+  { value: 'consumed', label: 'Consumed by a run' },
+];
+
 function InputsTab() {
+  const toast = useToast();
   const { formatDate } = useDateFormatter();
   const { formatCurrency } = useCurrencyFormatter();
   const { hasPermission } = useAuth();
   const canManage = hasPermission('payroll.runs.manage');
   const canManageLoans = hasPermission('payroll.compensation.manage');
-  const inputsQuery = usePayrollInputs();
-  const loansQuery = usePayrollLoans();
+  const [inputStatus, setInputStatus] = useState('');
+  const [inputPage, setInputPage] = useState(1);
+  const [loanPage, setLoanPage] = useState(1);
+  const inputsQuery = usePayrollInputs({ status: inputStatus || undefined, page: inputPage });
+  const loansQuery = usePayrollLoans(loanPage);
   const [inputModalOpen, setInputModalOpen] = useState(false);
   const [loanModalOpen, setLoanModalOpen] = useState(false);
+  const [loanAction, setLoanAction] = useState<{ loan: EmployeeLoan; action: PayrollLoanAction } | null>(null);
+  const [repaymentAmount, setRepaymentAmount] = useState('');
+  const [repaymentReference, setRepaymentReference] = useState('');
+  const updateInputMutation = useUpdatePayrollInput();
+  const loanActionMutation = usePayrollLoanAction();
 
   const inputs = inputsQuery.data?.data ?? [];
   const loans = loansQuery.data?.data ?? [];
@@ -639,16 +916,27 @@ function InputsTab() {
       <Card>
         <CardHeader>
           <CardTitle>One-off inputs</CardTitle>
-          {canManage && (
-            <Button type="button" size="sm" onClick={() => setInputModalOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> Add input
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <SelectMenu
+              value={inputStatus}
+              onChange={(value) => {
+                setInputStatus(value);
+                setInputPage(1);
+              }}
+              options={INPUT_STATUS_OPTIONS}
+              className="w-56"
+            />
+            {canManage && (
+              <Button type="button" size="sm" onClick={() => setInputModalOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> Add input
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardBody className="p-0">
           {inputsQuery.isLoading && <LoadingState label="Loading inputs…" />}
           {inputsQuery.data && inputs.length === 0 && (
-            <EmptyState title="No one-off inputs yet" description="Bonuses, allowances, and one-off deductions applied to a specific period." />
+            <EmptyState title="No one-off inputs found" description="Bonuses, allowances, and one-off deductions applied to a specific period." />
           )}
           {inputs.length > 0 && (
             <ul className="divide-y divide-border">
@@ -665,11 +953,18 @@ function InputsTab() {
                   <div className="flex flex-shrink-0 items-center gap-2">
                     <span className="font-medium text-strong">{formatCurrency(input.amount)}</span>
                     <StatusBadge status={input.status} />
+                    {canManage && input.status === 'approved' && !input.payroll_run_id && (
+                      <Button type="button" size="icon" variant="ghost" title="Cancel input" aria-label="Cancel input" isLoading={updateInputMutation.isPending} onClick={async () => {
+                        try { await updateInputMutation.mutateAsync({ id: input.id, status: 'cancelled' }); toast.success('Payroll input cancelled'); }
+                        catch (error) { toast.error('Could not cancel input', actionError(error, 'Could not cancel this payroll input.')); }
+                      }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
           )}
+          {inputsQuery.data && <Pagination meta={inputsQuery.data} onPageChange={setInputPage} />}
         </CardBody>
       </Card>
 
@@ -689,26 +984,48 @@ function InputsTab() {
           )}
           {loans.length > 0 && (
             <ul className="divide-y divide-border">
-              {loans.map((loan: EmployeeLoan) => (
-                <li key={loan.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-strong">
-                      {loan.employee ? `${loan.employee.first_name} ${loan.employee.last_name}` : `Employee #${loan.employee_id}`} · {loan.name}
-                    </p>
-                    <p className="text-xs text-muted">
-                      {loan.reference} · installment {formatCurrency(loan.installment_amount)} · outstanding {formatCurrency(loan.outstanding_balance)}
-                    </p>
-                  </div>
-                  <StatusBadge status={loan.status} />
-                </li>
-              ))}
+              {loans.map((loan: EmployeeLoan) => {
+                const outstanding = Number(loan.outstanding_balance);
+                const installment = Number(loan.installment_amount);
+                const remainingInstallments = installment > 0 ? Math.ceil(outstanding / installment) : 0;
+                return (
+                  <li key={loan.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-strong">
+                        {loan.employee ? `${loan.employee.first_name} ${loan.employee.last_name}` : `Employee #${loan.employee_id}`} · {loan.name}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {loan.reference} · installment {formatCurrency(loan.installment_amount)} · outstanding {formatCurrency(loan.outstanding_balance)}
+                        {loan.status === 'active' && remainingInstallments > 0 ? ` · ~${remainingInstallments} installment(s) left` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <StatusBadge status={loan.status} />
+                      {canManageLoans && loan.status === 'active' && <Button type="button" size="icon" variant="ghost" title="Pause loan" aria-label="Pause loan" onClick={() => setLoanAction({ loan, action: 'pause' })}><Pause className="h-3.5 w-3.5" /></Button>}
+                      {canManageLoans && loan.status === 'paused' && <Button type="button" size="icon" variant="ghost" title="Resume loan" aria-label="Resume loan" onClick={() => setLoanAction({ loan, action: 'resume' })}><Play className="h-3.5 w-3.5" /></Button>}
+                      {canManageLoans && ['active', 'paused'].includes(loan.status) && <Button type="button" size="icon" variant="ghost" title="Record repayment" aria-label="Record repayment" onClick={() => setLoanAction({ loan, action: 'record_repayment' })}><CircleDollarSign className="h-3.5 w-3.5" /></Button>}
+                      {canManageLoans && ['active', 'paused'].includes(loan.status) && <Button type="button" size="icon" variant="ghost" title="Write off loan" aria-label="Write off loan" onClick={() => setLoanAction({ loan, action: 'write_off' })}><Ban className="h-3.5 w-3.5" /></Button>}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
+          {loansQuery.data && <Pagination meta={loansQuery.data} onPageChange={setLoanPage} />}
         </CardBody>
       </Card>
 
       <PayrollInputModal open={inputModalOpen} onClose={() => setInputModalOpen(false)} />
       <PayrollLoanModal open={loanModalOpen} onClose={() => setLoanModalOpen(false)} />
+      <Modal open={loanAction !== null} onClose={() => setLoanAction(null)} title={loanAction?.action === 'record_repayment' ? 'Record loan repayment' : 'Confirm loan action'} footer={<><ModalCancelAction onClick={() => setLoanAction(null)} /><ModalConfirmAction title="Confirm" isLoading={loanActionMutation.isPending} onClick={async () => {
+        if (!loanAction) return;
+        try {
+          await loanActionMutation.mutateAsync({ id: loanAction.loan.id, action: loanAction.action, amount: loanAction.action === 'record_repayment' ? Number(repaymentAmount) : undefined, reference: repaymentReference.trim() || undefined });
+          toast.success('Loan updated'); setLoanAction(null); setRepaymentAmount(''); setRepaymentReference('');
+        } catch (error) { toast.error('Could not update loan', actionError(error, 'Could not perform this loan action.')); }
+      }} disabled={loanAction?.action === 'record_repayment' && !(Number(repaymentAmount) > 0)} /></>}>
+        {loanAction?.action === 'record_repayment' ? <div className="space-y-3"><Input type="number" min={0.01} value={repaymentAmount} onChange={(event) => setRepaymentAmount(event.target.value)} placeholder="Amount" /><Input value={repaymentReference} onChange={(event) => setRepaymentReference(event.target.value)} placeholder="Reference (optional)" /></div> : <p className="text-sm text-muted">This will {loanAction?.action.replace('_', ' ')} {loanAction?.loan.name}. The action is recorded in the audit trail.</p>}
+      </Modal>
     </div>
   );
 }
@@ -909,15 +1226,21 @@ function PayrollLoanModal({ open, onClose }: { open: boolean; onClose: () => voi
 
 function ReportsTab() {
   const toast = useToast();
+  const { formatDate } = useDateFormatter();
   const { formatCurrency } = useCurrencyFormatter();
-  const summaryQuery = usePayrollReportSummary();
-  const statutoryQuery = usePayrollStatutoryReport();
+  const [status, setStatus] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+  const filters = { status: status || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined };
+  const summaryQuery = usePayrollReportSummary({ ...filters, page });
+  const statutoryQuery = usePayrollStatutoryReport(filters);
   const [isExporting, setIsExporting] = useState(false);
 
   async function handleExport() {
     setIsExporting(true);
     try {
-      await downloadPayrollRegister();
+      await downloadPayrollRegister(filters);
       toast.success('Register exported');
     } catch (error) {
       toast.error('Could not export register', actionError(error, 'Could not export the payroll register.'));
@@ -927,11 +1250,38 @@ function ReportsTab() {
   }
 
   const summary = summaryQuery.data?.summary;
+  const runs = summaryQuery.data?.data.data ?? [];
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted">Totals across all payroll runs.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <SelectMenu
+            value={status}
+            onChange={(value) => {
+              setStatus(value);
+              setPage(1);
+            }}
+            options={RUN_STATUS_OPTIONS}
+            className="w-44"
+          />
+          <DatePicker
+            value={dateFrom}
+            onChange={(value) => {
+              setDateFrom(value);
+              setPage(1);
+            }}
+            placeholder="From period start"
+          />
+          <DatePicker
+            value={dateTo}
+            onChange={(value) => {
+              setDateTo(value);
+              setPage(1);
+            }}
+            placeholder="To period end"
+          />
+        </div>
         <Button type="button" variant="secondary" isLoading={isExporting} onClick={handleExport}>
           <Download className="h-3.5 w-3.5" /> Export register (CSV)
         </Button>
@@ -948,6 +1298,36 @@ function ReportsTab() {
           <StatTile label="Employer contributions" value={formatCurrency(summary.employer_contributions)} icon={Landmark} />
         </div>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Runs in range</CardTitle>
+        </CardHeader>
+        <CardBody className="p-0">
+          {runs.length === 0 && !summaryQuery.isLoading && (
+            <EmptyState title="No runs found" description="Adjust the filters above to widen the range." />
+          )}
+          {runs.length > 0 && (
+            <ul className="divide-y divide-border">
+              {runs.map((run) => (
+                <li key={run.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-strong">{run.name}</p>
+                    <p className="text-xs text-muted">
+                      {run.reference} · {formatDate(run.period_start)} → {formatDate(run.period_end)}
+                    </p>
+                  </div>
+                  <div className="flex flex-shrink-0 items-center gap-3">
+                    <span className="font-medium text-strong">{formatCurrency(run.total_net, run.currency)}</span>
+                    <StatusBadge status={run.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {summaryQuery.data && <Pagination meta={summaryQuery.data.data} onPageChange={setPage} />}
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader>

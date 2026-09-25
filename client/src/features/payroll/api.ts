@@ -4,13 +4,14 @@ import type {
   EmployeeLoan,
   EmployeePayrollRecord,
   EmployeeStatutoryProfile,
-  Paginated,
+  LaravelPage,
   PayGroup,
   PayrollComponent,
   PayrollInput,
   PayrollJournalBatch,
   PayrollPaymentBatch,
   PayrollReportSummary,
+  PayrollReadiness,
   PayrollRun,
   PayrollSettings,
   PayrollStatutoryReportRow,
@@ -156,6 +157,15 @@ export function useCreateBankAccount(employeeId: number) {
   });
 }
 
+export function useUpdateBankAccount(employeeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }: { id: number; bank_name?: string; bank_code?: string | null; account_name?: string; account_number?: string; is_primary?: boolean; verification_status?: string }) =>
+      api.patch(`/payroll/bank-accounts/${id}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...KEY, 'employee', employeeId] }),
+  });
+}
+
 // ---- Statutory profile ----
 
 export function useStatutoryProfile(employeeId: number | null) {
@@ -193,13 +203,15 @@ export interface PayrollRunFilters {
   status?: string;
   date_from?: string;
   date_to?: string;
+  page?: number;
   per_page?: number;
 }
 
 export function usePayrollRuns(filters: PayrollRunFilters = {}) {
   return useQuery({
     queryKey: [...KEY, 'runs', filters],
-    queryFn: () => api.get<Paginated<PayrollRun>>('/payroll/runs', { params: { per_page: 50, ...filters } }),
+    queryFn: () => api.get<LaravelPage<PayrollRun>>('/payroll/runs', { params: { per_page: 15, ...filters } }),
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -208,6 +220,15 @@ export function usePayrollRun(runId: number | null) {
     queryKey: [...KEY, 'runs', 'detail', runId],
     queryFn: () => api.get<{ payroll_run: PayrollRun }>(`/payroll/runs/${runId}`),
     select: (response) => response.payroll_run,
+    enabled: runId !== null,
+  });
+}
+
+export function usePayrollReadiness(runId: number | null) {
+  return useQuery({
+    queryKey: [...KEY, 'runs', 'readiness', runId],
+    queryFn: () => api.get<{ readiness: PayrollReadiness }>(`/payroll/runs/${runId}/readiness`),
+    select: (response) => response.readiness,
     enabled: runId !== null,
   });
 }
@@ -280,13 +301,15 @@ export function useVoidPayrollRun(runId: number) {
 export interface PayrollInputFilters {
   employee_id?: number;
   status?: string;
+  page?: number;
   per_page?: number;
 }
 
 export function usePayrollInputs(filters: PayrollInputFilters = {}) {
   return useQuery({
     queryKey: [...KEY, 'inputs', filters],
-    queryFn: () => api.get<Paginated<PayrollInput>>('/payroll/inputs', { params: { per_page: 50, ...filters } }),
+    queryFn: () => api.get<LaravelPage<PayrollInput>>('/payroll/inputs', { params: { per_page: 15, ...filters } }),
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -309,10 +332,20 @@ export function useCreatePayrollInput() {
   });
 }
 
-export function usePayrollLoans() {
+export function useUpdatePayrollInput() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }: { id: number; description?: string; effective_date?: string; amount?: number; quantity?: number; rate?: number; status?: 'approved' | 'cancelled' }) =>
+      api.patch<{ payroll_input: PayrollInput }>(`/payroll/inputs/${id}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...KEY, 'inputs'] }),
+  });
+}
+
+export function usePayrollLoans(page = 1) {
   return useQuery({
-    queryKey: [...KEY, 'loans'],
-    queryFn: () => api.get<Paginated<EmployeeLoan>>('/payroll/loans', { params: { per_page: 50 } }),
+    queryKey: [...KEY, 'loans', page],
+    queryFn: () => api.get<LaravelPage<EmployeeLoan>>('/payroll/loans', { params: { per_page: 15, page } }),
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -335,12 +368,31 @@ export function useCreatePayrollLoan() {
   });
 }
 
+export type PayrollLoanAction = 'pause' | 'resume' | 'cancel' | 'write_off' | 'record_repayment';
+
+export function usePayrollLoanAction() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action, amount, reference }: { id: number; action: PayrollLoanAction; amount?: number; reference?: string }) =>
+      api.post<{ loan: EmployeeLoan }>(`/payroll/loans/${id}/actions`, { action, amount, reference }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...KEY, 'loans'] }),
+  });
+}
+
 // ---- Outputs ----
 
 export function usePaymentExport(runId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.post<{ payment_batch: PayrollPaymentBatch }>(`/payroll/runs/${runId}/payment-export`),
+    onSuccess: () => invalidateRuns(queryClient, runId),
+  });
+}
+
+export function useMarkPaymentBatchPaid(runId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (batchId: number) => api.post<{ payment_batch: PayrollPaymentBatch }>(`/payroll/payment-batches/${batchId}/mark-paid`),
     onSuccess: () => invalidateRuns(queryClient, runId),
   });
 }
@@ -384,12 +436,14 @@ export interface PayrollReportFilters {
   status?: string;
   date_from?: string;
   date_to?: string;
+  page?: number;
 }
 
 export function usePayrollReportSummary(filters: PayrollReportFilters = {}) {
   return useQuery({
     queryKey: [...KEY, 'reports', 'summary', filters],
-    queryFn: () => api.get<{ summary: PayrollReportSummary; data: Paginated<PayrollRun>['data'] }>('/payroll/reports/summary', { params: filters }),
+    queryFn: () => api.get<{ summary: PayrollReportSummary; data: LaravelPage<PayrollRun> }>('/payroll/reports/summary', { params: filters }),
+    placeholderData: (previous) => previous,
   });
 }
 
@@ -416,7 +470,7 @@ export async function downloadPayrollRegister(filters: PayrollReportFilters & { 
 export function useMyPayslips(perPage = 12) {
   return useQuery({
     queryKey: [...KEY, 'me', 'payslips', perPage],
-    queryFn: () => api.get<Paginated<import('@/types/api').PayrollRunItem>>('/payroll/me/payslips', { params: { per_page: perPage } }),
+    queryFn: () => api.get<LaravelPage<import('@/types/api').PayrollRunItem>>('/payroll/me/payslips', { params: { per_page: perPage } }),
   });
 }
 
