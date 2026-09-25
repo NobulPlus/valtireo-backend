@@ -13,6 +13,7 @@ use Illuminate\Validation\ValidationException;
 class EmployeeLifecycleService
 {
     private const PRE_ACTIVE_STATUSES = ['draft', 'invited', 'onboarding'];
+
     private const ACTIVE_LIFECYCLE_STATUSES = ['active', 'suspended', 'exited'];
 
     public function __construct(
@@ -20,11 +21,11 @@ class EmployeeLifecycleService
         private readonly EmployeeOnboardingService $onboarding,
         private readonly LeaveEntitlementProvisioningService $leaveEntitlements,
         private readonly EmployeeActivationReadinessService $activationReadiness,
-    ) {
-    }
+        private readonly OperationAutomationService $automations,
+    ) {}
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function changeStatus(User $actor, Employee $employee, array $data): EmployeeStatusHistory
     {
@@ -36,7 +37,7 @@ class EmployeeLifecycleService
             ]);
         }
 
-        return DB::transaction(function () use ($actor, $employee, $data): EmployeeStatusHistory {
+        $history = DB::transaction(function () use ($actor, $employee, $data): EmployeeStatusHistory {
             $previousStatus = $employee->status;
             $newStatus = $data['new_status'] ?? $previousStatus;
             $previousConfirmationStatus = $employee->confirmation_status;
@@ -120,10 +121,31 @@ class EmployeeLifecycleService
 
             return $history->load('changedBy');
         });
+
+        $employee->refresh();
+        $context = [
+            'organization_id' => $employee->organization_id,
+            'event_id' => $history->id,
+            'actor_user_id' => $actor->id,
+            'subject_employee_id' => $employee->id,
+            'assigned_user_id' => $employee->user_id,
+            'previous_status' => $history->previous_status,
+            'new_status' => $history->new_status,
+            'previous_confirmation_status' => $history->previous_confirmation_status,
+            'new_confirmation_status' => $history->new_confirmation_status,
+            'effective_date' => $history->effective_date?->toDateString(),
+        ];
+        $this->automations->dispatch('employee.status_changed', $employee, $context);
+        if ($history->previous_status !== $history->new_status && in_array($history->new_status, ['active', 'exited'], true)) {
+            $lifecycleTrigger = $history->new_status === 'active' ? 'employee.activated' : 'employee.exited';
+            $this->automations->dispatch($lifecycleTrigger, $employee, $context);
+        }
+
+        return $history;
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     public function changeReportingManager(User $actor, Employee $employee, array $data): EmployeeReportingHistory
     {

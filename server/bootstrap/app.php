@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // `php artisan schedule:run` every minute (standard Laravel
         // deployment requirement, not something this file alone can do).
         $schedule->command('valtireo:send-reminders')->daily();
+        $schedule->command('valtireo:run-operational-automations')->hourly()->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (\Throwable $exception) {

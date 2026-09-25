@@ -31,10 +31,10 @@ class PayrollFoundationTest extends TestCase
             'calculation_type' => 'fixed', 'default_value' => 50000, 'is_taxable' => true,
         ])->assertCreated()->json('component.id');
 
-        $this->postJson("/api/payroll/employees/{$employee->id}/bank-accounts", [
+        $bankAccountId = $this->postJson("/api/payroll/employees/{$employee->id}/bank-accounts", [
             'bank_name' => 'Test Bank', 'bank_code' => '999', 'account_number' => '0123456789',
             'account_name' => trim("{$employee->first_name} {$employee->last_name}"),
-        ])->assertCreated()->assertJsonPath('bank_account.account_number_last_four', '6789');
+        ])->assertCreated()->assertJsonPath('bank_account.account_number_last_four', '6789')->json('bank_account.id');
 
         $this->postJson("/api/payroll/employees/{$employee->id}/compensations", [
             'pay_group_id' => $groupId, 'base_salary' => 500000, 'currency' => 'NGN',
@@ -46,6 +46,13 @@ class PayrollFoundationTest extends TestCase
             'pay_group_id' => $groupId, 'reference' => 'PAY-2026-08', 'name' => 'August 2026 payroll',
             'period_start' => '2026-08-01', 'period_end' => '2026-08-31', 'payment_date' => '2026-08-31', 'currency' => 'NGN',
         ])->assertCreated()->json('payroll_run.id');
+
+        $this->getJson("/api/payroll/runs/{$runId}/readiness")
+            ->assertOk()
+            ->assertJsonPath('readiness.ready', false)
+            ->assertJsonPath('readiness.issues.0.issues.0', 'unverified_bank_account');
+        $this->patchJson("/api/payroll/bank-accounts/{$bankAccountId}", ['verification_status' => 'verified'])->assertOk();
+        $this->getJson("/api/payroll/runs/{$runId}/readiness")->assertOk()->assertJsonPath('readiness.ready', true);
 
         $this->postJson("/api/payroll/runs/{$runId}/calculate")
             ->assertOk()

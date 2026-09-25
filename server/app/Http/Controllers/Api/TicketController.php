@@ -10,8 +10,8 @@ use App\Http\Requests\ServiceDesk\DeclineTicketRequest;
 use App\Http\Requests\ServiceDesk\EscalateTicketRequest;
 use App\Http\Requests\ServiceDesk\HoldTicketRequest;
 use App\Http\Requests\ServiceDesk\ReopenTicketRequest;
-use App\Http\Requests\ServiceDesk\ResubmitTicketRequest;
 use App\Http\Requests\ServiceDesk\ResolveTicketRequest;
+use App\Http\Requests\ServiceDesk\ResubmitTicketRequest;
 use App\Http\Requests\ServiceDesk\ResumeTicketRequest;
 use App\Http\Requests\ServiceDesk\StartTicketRequest;
 use App\Http\Requests\ServiceDesk\StoreTicketRequest;
@@ -19,6 +19,7 @@ use App\Http\Requests\ServiceDesk\UpdateTicketPriorityRequest;
 use App\Http\Resources\TicketResource;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Services\OperationAutomationService;
 use App\Services\TicketReportingService;
 use App\Services\TicketService;
 use Illuminate\Database\Eloquent\Builder;
@@ -141,7 +142,7 @@ class TicketController extends Controller
         return TicketResource::collection($query->paginate(min(max($request->integer('per_page', 15), 1), 100)));
     }
 
-    public function store(StoreTicketRequest $request, TicketService $tickets): JsonResponse
+    public function store(StoreTicketRequest $request, TicketService $tickets, OperationAutomationService $automations): JsonResponse
     {
         $data = $request->validated();
         if ($request->hasFile('attachment')) {
@@ -149,6 +150,11 @@ class TicketController extends Controller
         }
 
         $ticket = $tickets->submit($request->user(), $data);
+        $automations->dispatch('ticket.submitted', $ticket, [
+            'event_id' => "submitted:{$ticket->submitted_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $ticket->employee_id,
+        ]);
 
         return response()->json([
             'ticket' => new TicketResource($ticket),
@@ -205,9 +211,15 @@ class TicketController extends Controller
         ]);
     }
 
-    public function assign(AssignTicketRequest $request, Ticket $ticket, TicketService $tickets): JsonResponse
+    public function assign(AssignTicketRequest $request, Ticket $ticket, TicketService $tickets, OperationAutomationService $automations): JsonResponse
     {
         $ticket = $tickets->assign($request->user(), $ticket, $request->integer('assigned_to_user_id') ?: null);
+        $automations->dispatch('ticket.assigned', $ticket, [
+            'event_id' => "assigned:{$ticket->updated_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $ticket->employee_id,
+            'assigned_user_id' => $ticket->assigned_to_user_id,
+        ]);
 
         return response()->json([
             'ticket' => new TicketResource($ticket),
@@ -274,9 +286,15 @@ class TicketController extends Controller
         ]);
     }
 
-    public function resolve(ResolveTicketRequest $request, Ticket $ticket, TicketService $tickets): JsonResponse
+    public function resolve(ResolveTicketRequest $request, Ticket $ticket, TicketService $tickets, OperationAutomationService $automations): JsonResponse
     {
         $ticket = $tickets->resolve($request->user(), $ticket, $request->input('note'));
+        $automations->dispatch('ticket.resolved', $ticket, [
+            'event_id' => "resolved:{$ticket->resolved_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $ticket->employee_id,
+            'assigned_user_id' => $ticket->assigned_to_user_id,
+        ]);
 
         return response()->json([
             'ticket' => new TicketResource($ticket),

@@ -8,6 +8,7 @@ use App\Http\Requests\Leave\StoreLeaveRequestRequest;
 use App\Http\Resources\LeaveRequestResource;
 use App\Models\LeaveRequest;
 use App\Services\LeaveRequestService;
+use App\Services\OperationAutomationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,7 +49,7 @@ class LeaveRequestController extends Controller
         return LeaveRequestResource::collection($query->latest('id')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
     }
 
-    public function store(StoreLeaveRequestRequest $request, LeaveRequestService $leave): JsonResponse
+    public function store(StoreLeaveRequestRequest $request, LeaveRequestService $leave, OperationAutomationService $automations): JsonResponse
     {
         $data = $request->validated();
         if ($request->hasFile('evidence')) {
@@ -59,6 +60,11 @@ class LeaveRequestController extends Controller
         }
 
         $leaveRequest = $leave->submit($request->user(), $data);
+        $automations->dispatch('leave.submitted', $leaveRequest, [
+            'event_id' => "submitted:{$leaveRequest->submitted_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $leaveRequest->employee_id,
+        ]);
 
         return response()->json([
             'leave_request' => new LeaveRequestResource($leaveRequest),
@@ -94,9 +100,15 @@ class LeaveRequestController extends Controller
     public function cancel(
         CancelLeaveRequestRequest $request,
         LeaveRequest $leaveRequest,
-        LeaveRequestService $leave
+        LeaveRequestService $leave,
+        OperationAutomationService $automations
     ): JsonResponse {
         $leaveRequest = $leave->cancel($request->user(), $leaveRequest, $request->input('note'));
+        $automations->dispatch('leave.cancelled', $leaveRequest, [
+            'event_id' => "cancelled:{$leaveRequest->updated_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $leaveRequest->employee_id,
+        ]);
 
         return response()->json([
             'leave_request' => new LeaveRequestResource($leaveRequest),

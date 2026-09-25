@@ -103,6 +103,57 @@ php artisan migrate:fresh --seed
 php artisan valtireo:send-reminders
 ```
 
+## Container Deployment
+
+Build from the `server` directory:
+
+```bash
+docker build -t valtireo-api .
+```
+
+The image runs Nginx and PHP-FPM and supports four process modes through
+`APP_PROCESS_MODE`:
+
+- `all` runs the API, queue worker, and scheduler in one container. This is
+  suitable for the first single-service deployment.
+- `web` runs only Nginx and PHP-FPM.
+- `worker` runs only the Laravel queue worker.
+- `scheduler` runs only Laravel's scheduler.
+
+For a scaled deployment, create separate services from the same image using
+`web`, `worker`, and `scheduler`. Set `RUN_MIGRATIONS=true` only on one web
+service or release process so multiple containers do not run migrations at
+the same time.
+
+Required production variables:
+
+```text
+APP_KEY=base64:...
+APP_URL=https://api.example.com
+FRONTEND_URL=https://app.example.com
+DB_CONNECTION=mysql
+DB_HOST=...
+DB_PORT=3306
+DB_DATABASE=...
+DB_USERNAME=...
+DB_PASSWORD=...
+APP_PROCESS_MODE=all
+RUN_MIGRATIONS=true
+RESET_DB_ON_BOOT=false
+```
+
+Set the Vercel frontend variable `VITE_API_BASE_URL` to the public backend API
+URL including `/api`, for example `https://api.example.com/api`. Because Vite
+injects this value at build time, redeploy the frontend after changing it.
+
+Production uploads require persistent object storage or a persistent mounted
+disk. Do not rely on the container filesystem for organization documents,
+employee files, branding, or generated payroll files. Configure the relevant
+Laravel filesystem disk before accepting real customer uploads.
+
+`RESET_DB_ON_BOOT` is guarded by `ALLOW_DESTRUCTIVE_DB_RESET=true` and must
+remain disabled for any persistent environment.
+
 ## Related Docs
 
 - `../docs/project-context.md`

@@ -26,8 +26,23 @@ class PayrollConfigurationController extends Controller
             'default_pay_frequency' => ['sometimes', Rule::in(['weekly', 'biweekly', 'monthly'])], 'pay_day' => ['sometimes', 'integer', 'between:1,31'],
             'prorate_joiners' => ['sometimes', 'boolean'], 'prorate_leavers' => ['sometimes', 'boolean'],
             'proration_basis' => ['sometimes', Rule::in(['calendar_days', 'working_days'])], 'statutory_rules' => ['sometimes', 'nullable', 'array'],
+            'statutory_rules.pension.enabled' => ['sometimes', 'boolean'], 'statutory_rules.pension.employee_rate' => ['sometimes', 'numeric', 'between:0,100'],
+            'statutory_rules.pension.employer_rate' => ['sometimes', 'numeric', 'between:0,100'], 'statutory_rules.pension.version' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'statutory_rules.paye.enabled' => ['sometimes', 'boolean'], 'statutory_rules.paye.version' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'statutory_rules.paye.effective_from' => ['sometimes', 'nullable', 'date'], 'statutory_rules.paye.brackets' => ['sometimes', 'array'],
+            'statutory_rules.paye.brackets.*.amount' => ['nullable', 'numeric', 'gt:0'], 'statutory_rules.paye.brackets.*.rate' => ['required_with:statutory_rules.paye.brackets', 'numeric', 'between:0,100'],
+            'statutory_rules.nhf.enabled' => ['sometimes', 'boolean'], 'statutory_rules.nhf.employee_rate' => ['sometimes', 'numeric', 'between:0,100'],
+            'statutory_rules.overtime.enabled' => ['sometimes', 'boolean'], 'statutory_rules.overtime.multiplier' => ['sometimes', 'numeric', 'gt:0', 'max:10'],
+            'statutory_rules.overtime.standard_monthly_hours' => ['sometimes', 'numeric', 'gt:0'], 'statutory_rules.overtime.minimum_minutes_per_day' => ['sometimes', 'integer', 'min:0'],
+            'statutory_rules.overtime.maximum_hours_per_period' => ['sometimes', 'nullable', 'numeric', 'gt:0'],
+            'statutory_rules.overtime.eligible_attendance_statuses' => ['sometimes', 'array'],
+            'statutory_rules.overtime.eligible_attendance_statuses.*' => ['string', Rule::in(['present', 'late', 'corrected'])],
+            'statutory_rules.accounting' => ['sometimes', 'array'], 'statutory_rules.accounting.*' => ['string', 'max:100'],
         ]);
         $settings = $payroll->settingsFor($request->user()->organization_id);
+        if (array_key_exists('statutory_rules', $data) && is_array($data['statutory_rules'])) {
+            $data['statutory_rules'] = array_replace_recursive($settings->statutory_rules ?? [], $data['statutory_rules']);
+        }
         $settings->update($data);
         return response()->json(['settings' => $settings->refresh()]);
     }

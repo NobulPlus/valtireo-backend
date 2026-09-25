@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Models\Employee;
 use App\Models\EmployeeCompensation;
+use App\Models\EmployeeStatusHistory;
+use App\Models\LeaveHoliday;
+use App\Models\LeaveWorkDay;
 use App\Models\PayrollComponent;
 use App\Models\PayrollRun;
 use App\Models\PayrollSetting;
@@ -25,9 +28,8 @@ class PayrollService
             ['currency' => 'NGN', 'default_pay_frequency' => 'monthly', 'pay_day' => 25, 'statutory_rules' => $this->defaultStatutoryRules()]
         );
 
-        if ($settings->statutory_rules === null) {
-            $settings->update(['statutory_rules' => $this->defaultStatutoryRules()]);
-        }
+        $rules = array_replace_recursive($this->defaultStatutoryRules(), $settings->statutory_rules ?? []);
+        if ($rules !== $settings->statutory_rules) $settings->update(['statutory_rules' => $rules]);
 
         return $settings->refresh();
     }
@@ -89,10 +91,18 @@ class PayrollService
 
             $lockedRun->items()->delete();
 
+            $periodStart = CarbonImmutable::parse($lockedRun->period_start);
+            $periodEnd = CarbonImmutable::parse($lockedRun->period_end);
             $employees = Employee::query()
                 ->with(['department', 'designation', 'gradeLevel', 'location', 'employmentType'])
                 ->where('organization_id', $lockedRun->organization_id)
-                ->where('status', 'active')
+                ->where(fn ($query) => $query->whereNull('start_date')->orWhereDate('start_date', '<=', $periodEnd))
+                ->where(function ($query) use ($periodStart): void {
+                    $query->where('status', 'active')
+                        ->orWhereHas('statusHistories', fn ($history) => $history
+                            ->where('previous_status', 'active')
+                            ->whereDate('effective_date', '>=', $periodStart));
+                })
                 ->when($lockedRun->pay_group_id, fn ($query, $groupId) => $query->whereHas('compensations', fn ($q) => $q->where('pay_group_id', $groupId)))
                 ->orderBy('id')
                 ->get();
@@ -104,19 +114,36 @@ class PayrollService
                 if (! $compensation) {
                     $exceptions[] = ['code' => 'missing_compensation', 'message' => 'No effective compensation record exists for this period.'];
                 }
+                if (! $employee->start_date) {
+                    $exceptions[] = ['code' => 'missing_start_date', 'message' => 'No employment start date is configured.'];
+                }
 
                 $bank = $employee->bankAccounts()->where('is_primary', true)->first();
                 if (! $bank) {
                     $exceptions[] = ['code' => 'missing_bank_account', 'message' => 'No primary bank account is configured.'];
                 }
 
-                $periodStart = CarbonImmutable::parse($lockedRun->period_start);
-                $periodEnd = CarbonImmutable::parse($lockedRun->period_end);
-                $periodDays = $periodStart->diffInDays($periodEnd) + 1;
+                $periodDays = $this->payrollDays($lockedRun->organization_id, $employee, $periodStart, $periodEnd, $settings->proration_basis);
                 $payableStart = $settings->prorate_joiners && $employee->start_date && $employee->start_date->greaterThan($periodStart)
                     ? CarbonImmutable::parse($employee->start_date)
                     : $periodStart;
-                $payableDays = max(0, $payableStart->diffInDays($periodEnd) + 1);
+                $payableEnd = $periodEnd;
+                if ($settings->prorate_leavers) {
+                    $leavingTransition = EmployeeStatusHistory::query()
+                        ->where('organization_id', $lockedRun->organization_id)
+                        ->where('employee_id', $employee->id)
+                        ->where('previous_status', 'active')
+                        ->where('new_status', '!=', 'active')
+                        ->whereBetween('effective_date', [$periodStart, $periodEnd])
+                        ->oldest('effective_date')
+                        ->first();
+                    if ($leavingTransition) {
+                        $payableEnd = CarbonImmutable::parse($leavingTransition->effective_date)->subDay();
+                    }
+                }
+                $payableDays = $payableEnd->lessThan($payableStart)
+                    ? 0
+                    : $this->payrollDays($lockedRun->organization_id, $employee, $payableStart, $payableEnd, $settings->proration_basis);
                 $ratio = $periodDays > 0 ? min(1, $payableDays / $periodDays) : 0;
                 $basePay = round(((float) ($compensation?->base_salary ?? 0)) * $ratio, $settings->decimal_places);
 
@@ -202,7 +229,7 @@ class PayrollService
                 'total_net' => $totals['net'],
                 'total_employer_contributions' => $totals['employer'],
                 'calculated_at' => now(),
-                'calculation_context' => ['settings' => $settings->toArray(), 'engine_version' => 1],
+                'calculation_context' => ['settings' => $settings->toArray(), 'engine_version' => 2],
             ]);
 
             return $lockedRun->load(['payGroup', 'items.lines']);
@@ -255,6 +282,46 @@ class PayrollService
             ->first();
     }
 
+    /** @return array<string, mixed> */
+    public function readiness(User $actor, PayrollRun $run): array
+    {
+        $this->ensureTenant($actor, $run->organization_id);
+        $employees = Employee::query()
+            ->where('organization_id', $run->organization_id)
+            ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('start_date')->orWhereDate('start_date', '<=', $run->period_end))
+            ->when($run->pay_group_id, fn ($query, $groupId) => $query->whereHas('compensations', fn ($q) => $q->where('pay_group_id', $groupId)))
+            ->get();
+        $issues = [];
+        foreach ($employees as $employee) {
+            $employeeIssues = [];
+            if (! $this->effectiveCompensation($employee, $run)) $employeeIssues[] = 'missing_compensation';
+            if (! $employee->start_date) $employeeIssues[] = 'missing_start_date';
+            $bank = $employee->bankAccounts()->where('is_primary', true)->first();
+            if (! $bank) $employeeIssues[] = 'missing_bank_account';
+            elseif ($bank->verification_status !== 'verified') $employeeIssues[] = 'unverified_bank_account';
+            if ($employeeIssues !== []) {
+                $issues[] = ['employee_id' => $employee->id, 'employee_number' => $employee->employee_number, 'employee_name' => trim("{$employee->first_name} {$employee->last_name}"), 'issues' => $employeeIssues];
+            }
+        }
+        return ['ready' => $issues === [], 'employee_count' => $employees->count(), 'issue_count' => count($issues), 'issues' => $issues];
+    }
+
+    private function payrollDays(int $organizationId, Employee $employee, CarbonImmutable $start, CarbonImmutable $end, string $basis): int
+    {
+        if ($basis !== 'working_days') return $start->diffInDays($end) + 1;
+        $workingDays = LeaveWorkDay::query()->where('organization_id', $organizationId)->where('is_working_day', true)->pluck('day_of_week')->map(fn ($day) => (int) $day)->all();
+        if ($workingDays === []) $workingDays = [1, 2, 3, 4, 5];
+        $holidays = LeaveHoliday::query()->where('organization_id', $organizationId)->where('is_active', true)
+            ->where(fn ($query) => $query->whereNull('organization_location_id')->orWhere('organization_location_id', $employee->organization_location_id))
+            ->whereBetween('date', [$start, $end])->pluck('date')->map(fn ($date) => CarbonImmutable::parse($date)->toDateString())->all();
+        $count = 0;
+        for ($date = $start; $date->lessThanOrEqualTo($end); $date = $date->addDay()) {
+            if (in_array($date->dayOfWeek, $workingDays, true) && ! in_array($date->toDateString(), $holidays, true)) $count++;
+        }
+        return $count;
+    }
+
     private function ensureTenant(User $actor, int $organizationId): void
     {
         abort_unless($actor->organization_id === $organizationId, 404);
@@ -270,7 +337,8 @@ class PayrollService
             // effective-dated brackets for the tax regime it is operating.
             'paye' => ['enabled' => false, 'version' => null, 'effective_from' => null, 'brackets' => []],
             'nhf' => ['enabled' => false, 'employee_rate' => 2.5, 'version' => null],
-            'overtime' => ['enabled' => false, 'multiplier' => 1.5, 'standard_monthly_hours' => 173.33],
+            'overtime' => ['enabled' => false, 'multiplier' => 1.5, 'standard_monthly_hours' => 173.33, 'eligible_attendance_statuses' => ['present', 'late', 'corrected'], 'minimum_minutes_per_day' => 0, 'maximum_hours_per_period' => null],
+            'accounting' => ['salary_expense' => 'SALARY_EXPENSE', 'employer_cost' => 'EMPLOYER_COST', 'payroll_bank' => 'PAYROLL_BANK', 'deductions_payable' => 'DEDUCTIONS_PAYABLE', 'employer_payable' => 'EMPLOYER_PAYABLE'],
         ];
     }
 }

@@ -83,6 +83,7 @@ class DefaultRoleSeedingService
                     'service_desk.create', 'service_desk.cancel', 'service_desk.view',
                     'assets.view',
                     'reports.view', 'audit_logs.view',
+                    'operations.view', 'operations.manage', 'operations.configure',
                     'payroll.view', 'payroll.settings.view',
                     'payroll.compensation.view', 'payroll.runs.view', 'payroll.reports.view',
                 ],
@@ -101,7 +102,7 @@ class DefaultRoleSeedingService
                     'attendance.view', 'attendance.create', 'attendance.update', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel', 'service_desk.view',
                     'assets.view',
-                    'reports.view',
+                    'reports.view', 'operations.view', 'operations.manage',
                     'payroll.view', 'payroll.compensation.view', 'payroll.runs.view',
                 ],
             ],
@@ -117,7 +118,7 @@ class DefaultRoleSeedingService
                     'approval_workflows.view', 'approvals.view', 'approvals.action',
                     'leave_requests.view', 'attendance.view', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel',
-                    'reports.view', 'audit_logs.view',
+                    'reports.view', 'audit_logs.view', 'operations.view',
                 ],
             ],
             'ict_admin' => [
@@ -130,6 +131,7 @@ class DefaultRoleSeedingService
                     'approvals.view', 'approvals.action',
                     'service_desk.create', 'service_desk.cancel', 'service_desk.view',
                     'assets.view', 'assets.create', 'assets.update',
+                    'operations.view',
                 ],
             ],
             'department_head' => [
@@ -144,7 +146,7 @@ class DefaultRoleSeedingService
                     'leave_requests.view', 'leave_requests.approve',
                     'attendance.view', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel',
-                    'reports.view',
+                    'reports.view', 'operations.view',
                 ],
             ],
             'supervisor' => [
@@ -158,6 +160,7 @@ class DefaultRoleSeedingService
                     'leave_requests.view', 'leave_requests.approve',
                     'attendance.view', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel',
+                    'operations.view',
                 ],
             ],
             'employee' => [
@@ -168,6 +171,7 @@ class DefaultRoleSeedingService
                     'leave_requests.create', 'leave_requests.cancel',
                     'attendance.create', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel',
+                    'operations.view',
                     'payroll.payslips.view_own',
                 ],
             ],

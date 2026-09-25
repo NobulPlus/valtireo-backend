@@ -33,7 +33,8 @@ class PayrollOperationsTest extends TestCase
         ]])->assertOk();
 
         $groupId=$this->postJson('/api/payroll/pay-groups',['name'=>'Monthly','code'=>'OPS-MONTHLY','frequency'=>'monthly','pay_day'=>25])->assertCreated()->json('pay_group.id');
-        $this->postJson("/api/payroll/employees/{$employee->id}/bank-accounts",['bank_name'=>'Test Bank','bank_code'=>'999','account_number'=>'0123456789','account_name'=>trim("{$employee->first_name} {$employee->last_name}")])->assertCreated();
+        $bankAccountId=$this->postJson("/api/payroll/employees/{$employee->id}/bank-accounts",['bank_name'=>'Test Bank','bank_code'=>'999','account_number'=>'0123456789','account_name'=>trim("{$employee->first_name} {$employee->last_name}")])->assertCreated()->json('bank_account.id');
+        $this->patchJson("/api/payroll/bank-accounts/{$bankAccountId}",['verification_status'=>'verified'])->assertOk();
         $this->postJson("/api/payroll/employees/{$employee->id}/compensations",['pay_group_id'=>$groupId,'base_salary'=>500000,'currency'=>'NGN','pay_frequency'=>'monthly','effective_from'=>'2026-01-01','recurring_components'=>[]])->assertCreated();
         $this->putJson("/api/payroll/employees/{$employee->id}/statutory-profile",['paye_enabled'=>false,'pension_enabled'=>true,'pfa_name'=>'Test PFA','rsa_pin'=>'PEN-123456789'])->assertOk();
 
@@ -55,6 +56,8 @@ class PayrollOperationsTest extends TestCase
 
         $batchPath=$this->postJson("/api/payroll/runs/{$runId}/payment-export")->assertCreated()->json('payment_batch.file_path');
         Storage::disk('local')->assertExists($batchPath);
+        $this->postJson("/api/payroll/runs/{$runId}/payment-export")->assertCreated()->assertJsonPath('payment_batch.file_path',$batchPath);
+        $this->assertDatabaseCount('payroll_payment_batches',1);
         $this->postJson("/api/payroll/runs/{$runId}/journal")->assertOk()->assertJsonPath('journal.total_debit',575000)->assertJsonPath('journal.total_credit',575000);
         $documentPath=$this->postJson("/api/payroll/run-items/{$item->id}/payslip")->assertOk()->json('document.file_path');
         Storage::disk('local')->assertExists($documentPath);
@@ -62,6 +65,10 @@ class PayrollOperationsTest extends TestCase
         $this->getJson('/api/payroll/reports/statutory')->assertOk()->assertJsonFragment(['component_code'=>'PENSION_EMPLOYEE']);
 
         $this->postJson("/api/payroll/runs/{$runId}/void",['reason'=>'Payment batch was created with an incorrect settlement date.'])->assertOk();
+        Storage::disk('local')->assertMissing($batchPath);
+        $this->assertDatabaseHas('payroll_payment_batches',['payroll_run_id'=>$runId,'status'=>'voided']);
+        $this->assertDatabaseHas('payroll_journal_batches',['payroll_run_id'=>$runId,'status'=>'reversed']);
+        $this->assertDatabaseMissing('payslip_documents',['payroll_run_item_id'=>$item->id]);
         $this->assertSame(100000.0,(float)EmployeeLoan::query()->findOrFail($loanId)->outstanding_balance);
         $this->assertSame('reversed',LoanRepayment::query()->where('employee_loan_id',$loanId)->firstOrFail()->status);
     }

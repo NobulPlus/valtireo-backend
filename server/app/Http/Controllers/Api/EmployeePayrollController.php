@@ -73,4 +73,30 @@ class EmployeePayrollController extends Controller
         $account = EmployeeBankAccount::query()->create([...$data, 'organization_id' => $request->user()->organization_id, 'employee_id' => $employee->id, 'is_primary' => $data['is_primary'] ?? true]);
         return response()->json(['bank_account' => ['id' => $account->id, 'bank_name' => $account->bank_name, 'account_name' => $account->account_name, 'account_number_last_four' => substr($account->account_number, -4), 'is_primary' => $account->is_primary, 'verification_status' => $account->verification_status]], 201);
     }
+
+    public function updateBankAccount(Request $request, EmployeeBankAccount $bankAccount): JsonResponse
+    {
+        abort_unless($bankAccount->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('payroll.bank_accounts.manage'), 403);
+        $data = $request->validate([
+            'bank_name' => ['sometimes', 'string', 'max:255'], 'bank_code' => ['nullable', 'string', 'max:20'],
+            'account_number' => ['sometimes', 'string', 'min:6', 'max:34'], 'account_name' => ['sometimes', 'string', 'max:255'],
+            'is_primary' => ['sometimes', 'boolean'], 'verification_status' => ['sometimes', Rule::in(['unverified', 'verified', 'rejected'])],
+        ]);
+        if (($data['is_primary'] ?? false) === true) {
+            EmployeeBankAccount::query()->where('employee_id', $bankAccount->employee_id)->where('id', '!=', $bankAccount->id)->update(['is_primary' => false]);
+        }
+        if (array_key_exists('account_number', $data) || array_key_exists('bank_code', $data) || array_key_exists('account_name', $data)) {
+            $data['verification_status'] = 'unverified';
+            $data['verified_at'] = null;
+        } elseif (($data['verification_status'] ?? null) === 'verified') {
+            $data['verified_at'] = now();
+        }
+        $bankAccount->update($data);
+        return response()->json(['bank_account' => [
+            'id' => $bankAccount->id, 'bank_name' => $bankAccount->bank_name, 'bank_code' => $bankAccount->bank_code,
+            'account_name' => $bankAccount->account_name, 'account_number_last_four' => substr($bankAccount->account_number, -4),
+            'is_primary' => $bankAccount->is_primary, 'verification_status' => $bankAccount->verification_status, 'verified_at' => $bankAccount->verified_at,
+        ]]);
+    }
 }

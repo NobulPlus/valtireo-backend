@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use Carbon\CarbonImmutable;
 use App\Models\AttendanceRecord;
 use App\Models\Employee;
 use App\Models\EmployeeLoan;
 use App\Models\EmployeeStatutoryProfile;
 use App\Models\LeaveRequest;
+use App\Models\LeaveHoliday;
+use App\Models\LeaveWorkDay;
 use App\Models\LoanRepayment;
 use App\Models\PayrollInput;
 use App\Models\PayrollRun;
@@ -58,8 +61,13 @@ class PayrollOperationsService
 
     private function applyUnpaidLeave(PayrollRunItem $item, Employee $employee, PayrollRun $run): void
     {
-        $days = (float) LeaveRequest::query()->where('organization_id',$run->organization_id)->where('employee_id',$employee->id)->where('status','approved')
-            ->whereHas('leaveType', fn($q)=>$q->where('is_paid',false))->whereDate('starts_on','<=',$run->period_end)->whereDate('ends_on','>=',$run->period_start)->sum('total_days');
+        $days = LeaveRequest::query()->where('organization_id',$run->organization_id)->where('employee_id',$employee->id)->where('status','approved')
+            ->whereHas('leaveType', fn($q)=>$q->where('is_paid',false))->whereDate('starts_on','<=',$run->period_end)->whereDate('ends_on','>=',$run->period_start)->get()
+            ->sum(function (LeaveRequest $leave) use ($run): int {
+                $start = CarbonImmutable::parse($leave->starts_on)->max(CarbonImmutable::parse($run->period_start));
+                $end = CarbonImmutable::parse($leave->ends_on)->min(CarbonImmutable::parse($run->period_end));
+                return $end->lessThan($start) ? 0 : $this->workingDays($leave->employee, $start, $end);
+            });
         if ($days <= 0 || $item->period_days <= 0) return;
         $dailyRate = (float) $item->base_pay / $item->period_days;
         $this->line($item, 'UNPAID_LEAVE', 'Unpaid leave', 'deduction', round($dailyRate*$days,2), $days, $dailyRate, ['source'=>'leave','days'=>$days]);
@@ -69,12 +77,18 @@ class PayrollOperationsService
     {
         $rules = $settings->statutory_rules ?? [];
         if (! data_get($rules, 'overtime.enabled', false)) return;
+        $eligibleStatuses = data_get($rules, 'overtime.eligible_attendance_statuses', ['present', 'late', 'corrected']);
+        $minimumMinutes = max(0, (int) data_get($rules, 'overtime.minimum_minutes_per_day', 0));
         $minutes = AttendanceRecord::query()->with('workShift')->where('organization_id',$run->organization_id)->where('employee_id',$employee->id)
-            ->whereBetween('attendance_date',[$run->period_start,$run->period_end])->get()->sum(function($record){
+            ->whereNotNull('work_shift_id')->whereNotNull('check_out_at')->whereIn('status', $eligibleStatuses)
+            ->whereBetween('attendance_date',[$run->period_start,$run->period_end])->get()->sum(function($record) use ($minimumMinutes){
                 $expected = $this->expectedShiftMinutes($record->workShift);
-                return max(0, ($record->duration_minutes ?? 0)-$expected);
+                $overtime = max(0, ($record->duration_minutes ?? 0)-$expected);
+                return $overtime >= $minimumMinutes ? $overtime : 0;
             });
         if ($minutes <= 0) return;
+        $maximumHours = data_get($rules, 'overtime.maximum_hours_per_period');
+        if ($maximumHours !== null) $minutes = min($minutes, max(0, (float) $maximumHours) * 60);
         $hours = $minutes/60; $monthlyHours=(float)data_get($rules,'overtime.standard_monthly_hours',173.33); $multiplier=(float)data_get($rules,'overtime.multiplier',1.5);
         $rate=$monthlyHours>0 ? ((float)$item->base_pay/$monthlyHours)*$multiplier : 0;
         $this->line($item,'OVERTIME','Overtime','earning',round($hours*$rate,2),$hours,$rate,['source'=>'attendance','minutes'=>$minutes,'multiplier'=>$multiplier]);
@@ -131,6 +145,20 @@ class PayrollOperationsService
         $start=\Carbon\CarbonImmutable::parse($shift->starts_at);$end=\Carbon\CarbonImmutable::parse($shift->ends_at);
         if($shift->is_overnight || $end->lessThanOrEqualTo($start))$end=$end->addDay();
         return max(0,$start->diffInMinutes($end)-($shift->break_minutes ?? 0));
+    }
+
+    private function workingDays(Employee $employee, CarbonImmutable $start, CarbonImmutable $end): int
+    {
+        $days = LeaveWorkDay::query()->where('organization_id', $employee->organization_id)->where('is_working_day', true)->pluck('day_of_week')->map(fn ($day) => (int) $day)->all();
+        if ($days === []) $days = [1, 2, 3, 4, 5];
+        $holidays = LeaveHoliday::query()->where('organization_id', $employee->organization_id)->where('is_active', true)
+            ->where(fn ($query) => $query->whereNull('organization_location_id')->orWhere('organization_location_id', $employee->organization_location_id))
+            ->whereBetween('date', [$start, $end])->pluck('date')->map(fn ($date) => CarbonImmutable::parse($date)->toDateString())->all();
+        $count = 0;
+        for ($date = $start; $date->lessThanOrEqualTo($end); $date = $date->addDay()) {
+            if (in_array($date->dayOfWeek, $days, true) && ! in_array($date->toDateString(), $holidays, true)) $count++;
+        }
+        return $count;
     }
 
     private function line(PayrollRunItem $item,string $code,string $name,string $type,float $amount,float $quantity,float $rate,array $snapshot=[],bool $statutory=false): void

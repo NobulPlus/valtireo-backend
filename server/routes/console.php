@@ -3,6 +3,7 @@
 use App\Models\Employee;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\OperationalAutomationScanner;
 use App\Services\ReminderNotificationService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -30,6 +31,16 @@ Artisan::command('valtireo:send-reminders {--document-days=30} {--onboarding-day
 
     return self::SUCCESS;
 })->purpose('Send Valtireo reminder and expiry notifications');
+
+Artisan::command('valtireo:run-operational-automations {--window=30}', function (OperationalAutomationScanner $scanner): int {
+    $summary = $scanner->scan(max(1, (int) $this->option('window')));
+    $this->info('Operational automations processed.');
+    foreach ($summary as $key => $count) {
+        $this->line("{$key}: {$count}");
+    }
+
+    return self::SUCCESS;
+})->purpose('Dispatch deadline and risk-based operational automation triggers');
 
 Artisan::command('valtireo:grant-login {employee} {--role=}', function (int $employee, ?string $role = null): int {
     $employeeModel = Employee::query()->find($employee);

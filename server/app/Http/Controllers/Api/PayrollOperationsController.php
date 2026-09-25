@@ -12,6 +12,7 @@ use App\Models\PayrollJournalBatch;
 use App\Models\PayrollPaymentBatch;
 use App\Models\PayrollRun;
 use App\Models\PayrollRunItem;
+use App\Models\LoanRepayment;
 use App\Services\PayrollOutputService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,20 @@ class PayrollOperationsController extends Controller
         return response()->json(['payroll_input'=>$input],201);
     }
 
+    public function updateInput(Request $request, PayrollInput $payrollInput): JsonResponse
+    {
+        abort_unless($payrollInput->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('payroll.runs.manage'), 403);
+        abort_unless($payrollInput->status === 'approved' && $payrollInput->payroll_run_id === null, 422, 'Only an unused payroll input can be changed.');
+        $data = $request->validate([
+            'description' => ['sometimes', 'string', 'max:255'], 'effective_date' => ['sometimes', 'date'],
+            'quantity' => ['sometimes', 'numeric', 'min:0'], 'rate' => ['sometimes', 'numeric', 'min:0'],
+            'amount' => ['sometimes', 'numeric', 'min:0'], 'status' => ['sometimes', Rule::in(['approved', 'cancelled'])],
+        ]);
+        $payrollInput->update($data);
+        return response()->json(['payroll_input' => $payrollInput->refresh()]);
+    }
+
     public function statutoryProfile(Request $request, Employee $employee): JsonResponse
     {
         abort_unless($employee->organization_id===$request->user()->organization_id,404);abort_unless($request->user()->can('payroll.compensation.view'),403);
@@ -65,6 +80,37 @@ class PayrollOperationsController extends Controller
         abort_unless(Employee::query()->where('organization_id',$request->user()->organization_id)->whereKey($data['employee_id'])->exists(),422,'The selected employee is invalid.');
         $total=(float)$data['principal']+(float)($data['interest_amount']??0);$loan=EmployeeLoan::query()->create([...$data,'organization_id'=>$request->user()->organization_id,'total_repayable'=>$total,'outstanding_balance'=>$total,'created_by_id'=>$request->user()->id]);
         return response()->json(['loan'=>$loan],201);
+    }
+
+    public function loanAction(Request $request, EmployeeLoan $loan): JsonResponse
+    {
+        abort_unless($loan->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('payroll.compensation.manage'), 403);
+        $data = $request->validate(['action' => ['required', Rule::in(['pause', 'resume', 'cancel', 'write_off', 'record_repayment'])], 'amount' => ['required_if:action,record_repayment', 'numeric', 'gt:0'], 'reference' => ['nullable', 'string', 'max:100']]);
+        DB::transaction(function () use ($loan, $data): void {
+            $locked = EmployeeLoan::query()->whereKey($loan->id)->lockForUpdate()->firstOrFail();
+            if ($data['action'] === 'pause') { abort_unless($locked->status === 'active', 422, 'Only an active loan can be paused.'); $locked->update(['status' => 'paused']); }
+            if ($data['action'] === 'resume') { abort_unless($locked->status === 'paused', 422, 'Only a paused loan can be resumed.'); $locked->update(['status' => 'active']); }
+            if ($data['action'] === 'cancel') { abort_unless((float) $locked->outstanding_balance === (float) $locked->total_repayable, 422, 'A loan with repayments cannot be cancelled.'); $locked->update(['status' => 'cancelled']); }
+            if ($data['action'] === 'write_off') { abort_unless(in_array($locked->status, ['active', 'paused'], true), 422, 'This loan cannot be written off.'); $locked->update(['status' => 'written_off']); }
+            if ($data['action'] === 'record_repayment') {
+                abort_unless(in_array($locked->status, ['active', 'paused'], true), 422, 'This loan cannot receive repayments.');
+                $amount = min((float) $data['amount'], (float) $locked->outstanding_balance);
+                LoanRepayment::query()->create(['organization_id' => $locked->organization_id, 'employee_loan_id' => $locked->id, 'amount' => $amount, 'paid_on' => now()->toDateString(), 'reference' => $data['reference'] ?? null]);
+                $balance = max(0, (float) $locked->outstanding_balance - $amount);
+                $locked->update(['outstanding_balance' => $balance, 'status' => $balance <= 0 ? 'repaid' : $locked->status]);
+            }
+        });
+        return response()->json(['loan' => $loan->refresh()->load('repayments')]);
+    }
+
+    public function markPaymentBatchPaid(Request $request, PayrollPaymentBatch $paymentBatch): JsonResponse
+    {
+        abort_unless($paymentBatch->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('payroll.runs.finalize'), 403);
+        abort_unless($paymentBatch->status === 'generated', 422, 'Only a generated payment batch can be marked as paid.');
+        $paymentBatch->update(['status' => 'paid', 'marked_paid_at' => now()]);
+        return response()->json(['payment_batch' => $paymentBatch->refresh()]);
     }
 
     public function paymentExport(Request $request, PayrollRun $payrollRun, PayrollOutputService $outputs): JsonResponse

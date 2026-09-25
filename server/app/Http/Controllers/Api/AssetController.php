@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Assets\AssignAssetRequest;
 use App\Http\Requests\Assets\AssetIncidentNoteRequest;
+use App\Http\Requests\Assets\AssignAssetRequest;
 use App\Http\Requests\Assets\ReturnAssetRequest;
 use App\Http\Requests\Assets\StoreAssetRequest;
 use App\Http\Requests\Assets\UpdateAssetRequest;
@@ -12,6 +12,7 @@ use App\Http\Resources\AssetResource;
 use App\Models\Asset;
 use App\Services\AssetReportingService;
 use App\Services\AssetService;
+use App\Services\OperationAutomationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,18 +78,33 @@ class AssetController extends Controller
         return new AssetResource($assets->update($request->user(), $asset, $request->validated()));
     }
 
-    public function assign(AssignAssetRequest $request, Asset $asset, AssetService $assets): AssetResource
+    public function assign(AssignAssetRequest $request, Asset $asset, AssetService $assets, OperationAutomationService $automations): AssetResource
     {
         abort_unless($asset->organization_id === $request->user()->organization_id, 404);
 
-        return new AssetResource($assets->assign($request->user(), $asset, $request->validated()));
+        $asset = $assets->assign($request->user(), $asset, $request->validated());
+        $automations->dispatch('asset.assigned', $asset, [
+            'event_id' => "assigned:{$asset->assigned_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $asset->assigned_to_employee_id,
+        ]);
+
+        return new AssetResource($asset);
     }
 
-    public function returnAsset(ReturnAssetRequest $request, Asset $asset, AssetService $assets): AssetResource
+    public function returnAsset(ReturnAssetRequest $request, Asset $asset, AssetService $assets, OperationAutomationService $automations): AssetResource
     {
         abort_unless($asset->organization_id === $request->user()->organization_id, 404);
 
-        return new AssetResource($assets->returnFromEmployee($request->user(), $asset, $request->validated()));
+        $previousEmployeeId = $asset->assigned_to_employee_id;
+        $asset = $assets->returnFromEmployee($request->user(), $asset, $request->validated());
+        $automations->dispatch('asset.returned', $asset, [
+            'event_id' => "returned:{$asset->updated_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $previousEmployeeId,
+        ]);
+
+        return new AssetResource($asset);
     }
 
     public function reportFault(AssetIncidentNoteRequest $request, Asset $asset, AssetService $assets): AssetResource

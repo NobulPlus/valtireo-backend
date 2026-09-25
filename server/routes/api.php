@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\LeaveTypeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrganizationVerificationController;
+use App\Http\Controllers\Api\OperationsCenterController;
 use App\Http\Controllers\Api\PlatformModuleController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\PayrollConfigurationController;
@@ -104,6 +105,19 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/organization', [DashboardController::class, 'organization']);
         Route::get('/manager', [DashboardController::class, 'manager']);
         Route::get('/me', [DashboardController::class, 'me']);
+    });
+
+    Route::prefix('operations')->group(function () {
+        Route::get('/center', [OperationsCenterController::class, 'index']);
+        Route::get('/lookups', [OperationsCenterController::class, 'lookups']);
+        Route::post('/tasks', [OperationsCenterController::class, 'storeTask']);
+        Route::patch('/tasks/{operationTask}', [OperationsCenterController::class, 'updateTask']);
+        Route::post('/tasks/{operationTask}/actions', [OperationsCenterController::class, 'taskAction']);
+        Route::get('/automation-catalog', [OperationsCenterController::class, 'automationCatalog']);
+        Route::get('/automation-rules', [OperationsCenterController::class, 'rules']);
+        Route::post('/automation-rules', [OperationsCenterController::class, 'storeRule']);
+        Route::patch('/automation-rules/{operationAutomationRule}', [OperationsCenterController::class, 'updateRule']);
+        Route::get('/automation-runs', [OperationsCenterController::class, 'runs']);
     });
 
     Route::get('/templates', [TemplateController::class, 'index']);
@@ -299,11 +313,13 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/employees/{employee}', [EmployeePayrollController::class, 'show']);
         Route::post('/employees/{employee}/compensations', [EmployeePayrollController::class, 'storeCompensation']);
         Route::post('/employees/{employee}/bank-accounts', [EmployeePayrollController::class, 'storeBankAccount']);
+        Route::patch('/bank-accounts/{bankAccount}', [EmployeePayrollController::class, 'updateBankAccount']);
         Route::get('/me/payslips', [EmployeePayrollController::class, 'myPayslips']);
         Route::get('/me/payslips/{payrollRunItem}', [EmployeePayrollController::class, 'myPayslip']);
         Route::get('/runs', [PayrollRunController::class, 'index']);
         Route::post('/runs', [PayrollRunController::class, 'store']);
         Route::get('/runs/{payrollRun}', [PayrollRunController::class, 'show']);
+        Route::get('/runs/{payrollRun}/readiness', [PayrollRunController::class, 'readiness']);
         Route::post('/runs/{payrollRun}/calculate', [PayrollRunController::class, 'calculate']);
         Route::post('/runs/{payrollRun}/submit', [PayrollRunController::class, 'submit']);
         Route::post('/runs/{payrollRun}/finalize', [PayrollRunController::class, 'finalize']);
@@ -311,12 +327,15 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/runs/{payrollRun}/void', [PayrollRunController::class, 'void']);
         Route::get('/inputs', [PayrollOperationsController::class, 'inputs']);
         Route::post('/inputs', [PayrollOperationsController::class, 'storeInput']);
+        Route::patch('/inputs/{payrollInput}', [PayrollOperationsController::class, 'updateInput']);
         Route::get('/employees/{employee}/statutory-profile', [PayrollOperationsController::class, 'statutoryProfile']);
         Route::put('/employees/{employee}/statutory-profile', [PayrollOperationsController::class, 'updateStatutoryProfile']);
         Route::get('/loans', [PayrollOperationsController::class, 'loans']);
         Route::post('/loans', [PayrollOperationsController::class, 'storeLoan']);
+        Route::post('/loans/{loan}/actions', [PayrollOperationsController::class, 'loanAction']);
         Route::post('/runs/{payrollRun}/payment-export', [PayrollOperationsController::class, 'paymentExport']);
         Route::get('/payment-batches/{paymentBatch}/download', [PayrollOperationsController::class, 'downloadPayment']);
+        Route::post('/payment-batches/{paymentBatch}/mark-paid', [PayrollOperationsController::class, 'markPaymentBatchPaid']);
         Route::post('/runs/{payrollRun}/journal', [PayrollOperationsController::class, 'journal']);
         Route::post('/run-items/{payrollRunItem}/payslip', [PayrollOperationsController::class, 'payslip']);
         Route::get('/run-items/{payrollRunItem}/payslip/download', [PayrollOperationsController::class, 'downloadPayslip']);

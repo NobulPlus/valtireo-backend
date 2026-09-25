@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
@@ -19,5 +20,7 @@ class PayrollRun extends Model implements AuditableContract
     public function finalizedBy(): BelongsTo { return $this->belongsTo(User::class, 'finalized_by_id'); }
     public function publishedBy(): BelongsTo { return $this->belongsTo(User::class, 'published_by_id'); }
     public function items(): HasMany { return $this->hasMany(PayrollRunItem::class); }
+    public function paymentBatches(): HasMany { return $this->hasMany(PayrollPaymentBatch::class); }
+    public function journalBatch(): HasOne { return $this->hasOne(PayrollJournalBatch::class); }
     protected function casts(): array { return ['period_start' => 'date', 'period_end' => 'date', 'payment_date' => 'date', 'calculation_context' => 'array', 'calculated_at' => 'datetime', 'submitted_at' => 'datetime', 'approved_at' => 'datetime', 'finalized_at' => 'datetime', 'published_at' => 'datetime', 'voided_at' => 'datetime']; }
 }

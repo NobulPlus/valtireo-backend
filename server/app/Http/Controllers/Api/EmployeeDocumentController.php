@@ -9,6 +9,7 @@ use App\Http\Requests\Documents\SubmitSignedCopyRequest;
 use App\Http\Resources\EmployeeDocumentResource;
 use App\Models\EmployeeDocument;
 use App\Services\DocumentComplianceService;
+use App\Services\OperationAutomationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -37,7 +38,7 @@ class EmployeeDocumentController extends Controller
         return EmployeeDocumentResource::collection($documents);
     }
 
-    public function store(SubmitEmployeeDocumentRequest $request, DocumentComplianceService $documents): JsonResponse
+    public function store(SubmitEmployeeDocumentRequest $request, DocumentComplianceService $documents, OperationAutomationService $automations): JsonResponse
     {
         $data = $request->validated();
 
@@ -62,6 +63,12 @@ class EmployeeDocumentController extends Controller
 
             throw $exception;
         }
+
+        $automations->dispatch('document.submitted', $document, [
+            'event_id' => "submitted:{$document->submitted_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $document->employee_id,
+        ]);
 
         return response()->json([
             'document' => new EmployeeDocumentResource($document),
@@ -99,7 +106,8 @@ class EmployeeDocumentController extends Controller
     public function review(
         ReviewEmployeeDocumentRequest $request,
         EmployeeDocument $employeeDocument,
-        DocumentComplianceService $documents
+        DocumentComplianceService $documents,
+        OperationAutomationService $automations
     ): JsonResponse {
         $document = $documents->review(
             $request->user(),
@@ -107,6 +115,12 @@ class EmployeeDocumentController extends Controller
             $request->string('action')->toString(),
             $request->string('note')->toString() ?: null
         );
+        $automations->dispatch('document.reviewed', $document, [
+            'event_id' => "reviewed:{$document->reviewed_at?->timestamp}",
+            'actor_user_id' => $request->user()->id,
+            'subject_employee_id' => $document->employee_id,
+            'review_status' => $document->status,
+        ]);
 
         return response()->json([
             'document' => new EmployeeDocumentResource($document),
