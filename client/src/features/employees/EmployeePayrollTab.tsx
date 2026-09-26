@@ -485,7 +485,7 @@ export function EmployeePayrollTab({ employeeId }: { employeeId: number }) {
                   .map((c) => `${componentNameById.get(c.component_id) ?? `Component #${c.component_id}`}${c.value !== null ? `: ${formatCurrency(c.value, comp.currency)}` : ''}`)
                   .join(', ');
                 return (
-                  <li key={comp.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                  <li key={comp.id} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="font-medium text-strong">{formatCurrency(comp.base_salary, comp.currency)} · {comp.pay_frequency}</p>
                       <p className="text-xs text-muted">
@@ -517,7 +517,7 @@ export function EmployeePayrollTab({ employeeId }: { employeeId: number }) {
           {bankAccounts.length > 0 && (
             <ul className="divide-y divide-border">
               {bankAccounts.map((account) => (
-                <li key={account.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                <li key={account.id} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="font-medium text-strong">
                       {account.bank_name} · ****{account.account_number_last_four}
