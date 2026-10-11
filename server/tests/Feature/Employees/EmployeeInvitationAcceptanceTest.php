@@ -71,6 +71,21 @@ class EmployeeInvitationAcceptanceTest extends TestCase
         $this->assertNotNull($acceptResponse->json('token'));
     }
 
+    public function test_the_invitation_notification_links_to_the_real_frontend_accept_page(): void
+    {
+        $token = $this->createInvitedEmployeeAndReturnToken();
+
+        $invitee = User::query()->where('email', 'invitee@valtireo.test')->firstOrFail();
+        $notification = $invitee->notifications()->where('type', \App\Notifications\ValtireoNotification::class)->firstOrFail();
+
+        // Regression guard: this action_url is rendered as both the in-app
+        // notification link and the actual invitation email button, and
+        // must match a route App.tsx actually registers (/accept-invitation/:token),
+        // not the backend API path shape (/employee-invitations/{token}/accept) —
+        // those previously diverged and silently 404'd every invite email.
+        $this->assertSame("/accept-invitation/{$token}", $notification->data['action_url']);
+    }
+
     public function test_expired_invitation_cannot_be_accepted(): void
     {
         $token = $this->createInvitedEmployeeAndReturnToken();

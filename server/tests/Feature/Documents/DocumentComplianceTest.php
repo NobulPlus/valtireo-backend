@@ -198,6 +198,53 @@ class DocumentComplianceTest extends TestCase
         $this->assertDatabaseMissing('employee_documents', ['title' => 'Already Approved Contract (signed)']);
     }
 
+    public function test_signed_copy_inherits_the_original_documents_expiry_date(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employeeUser = User::query()->where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $type = DocumentType::query()->create([
+            'organization_id' => $admin->organization_id,
+            'name' => 'Employment Letter',
+            'code' => 'EMP-LETTER-EXPIRY',
+            'requires_expiry_date' => true,
+            'signature_method' => 'signed_copy',
+            'employee_upload_allowed' => true,
+            'approval_required' => true,
+            'is_active' => true,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        // HR uploads the letter and supplies the required expiry date.
+        $originalId = $this->post('/api/documents', [
+            'employee_id' => $employeeUser->employee->id,
+            'document_type_id' => $type->id,
+            'title' => 'Employment Letter',
+            'expires_at' => now()->addYear()->toDateString(),
+            'file' => UploadedFile::fake()->create('employment-letter.pdf', 64, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('document.status', 'awaiting_signature')
+            ->json('document.id');
+
+        // The employee replies with a signed copy — the modal only ever
+        // collects a file, never an expiry date, so this must succeed by
+        // inheriting the original's expiry rather than demanding a new one.
+        Sanctum::actingAs($employeeUser);
+        $this->post("/api/documents/{$originalId}/signed-copy", [
+            'file' => UploadedFile::fake()->create('employment-letter-signed.pdf', 64, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('document.status', 'submitted');
+
+        $original = EmployeeDocument::query()->findOrFail($originalId);
+        $signed = EmployeeDocument::query()->where('replaces_document_id', $originalId)->firstOrFail();
+        $this->assertSame($original->expires_at->toDateString(), $signed->expires_at->toDateString());
+    }
+
     public function test_employee_can_upload_and_download_own_document_file(): void
     {
         Storage::fake('local');
@@ -427,7 +474,7 @@ class DocumentComplianceTest extends TestCase
         Sanctum::actingAs($otherEmployeeUser);
         $this->post("/api/documents/{$originalId}/signed-copy", [
             'file' => UploadedFile::fake()->create('not-mine.pdf', 64, 'application/pdf'),
-        ], ['Accept' => 'application/json'])->assertForbidden();
+        ], ['Accept' => 'application/json'])->assertNotFound();
 
         // HR can see the actual signed file from the approval request itself,
         // not just its title — not blind-approving a signature.
@@ -542,7 +589,7 @@ class DocumentComplianceTest extends TestCase
 
         Sanctum::actingAs($otherEmployeeUser);
 
-        $this->patchJson("/api/documents/{$documentId}/acknowledge")->assertForbidden();
+        $this->patchJson("/api/documents/{$documentId}/acknowledge")->assertNotFound();
     }
 
     public function test_employee_cannot_create_document_type(): void

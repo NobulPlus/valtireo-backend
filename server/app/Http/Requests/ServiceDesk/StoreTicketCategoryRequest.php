@@ -9,7 +9,7 @@ class StoreTicketCategoryRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('service_desk.view') === true;
+        return $this->user()?->can('service_desk.manage_categories') === true;
     }
 
     protected function prepareForValidation(): void

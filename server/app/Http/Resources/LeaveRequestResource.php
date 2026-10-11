@@ -10,7 +10,8 @@ class LeaveRequestResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $canViewEvidence = $request->user()?->can('leave_requests.view')
+        $canViewEvidence = ($request->user()?->can('leave_requests.view')
+                && app(\App\Services\EmployeeVisibility::class)->allows($request->user(), $this->employee_id))
             || $request->user()?->employee?->id === $this->employee_id;
 
         return [
@@ -57,7 +58,10 @@ class LeaveRequestResource extends JsonResource
                 'work_email' => $this->handoverTo->work_email,
             ] : null),
             'comments' => LeaveRequestCommentResource::collection($this->whenLoaded('comments')),
-            'approval_requests' => ApprovalRequestResource::collection($this->whenLoaded('approvalRequests')),
+            'approval_requests' => $this->whenLoaded('approvalRequests', fn () => ApprovalRequestResource::collection(
+                $this->approvalRequests->whereIn('id', app(\App\Services\ApprovalVisibility::class)
+                    ->query($request->user())->whereKey($this->approvalRequests->modelKeys())->pluck('id'))
+            )),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

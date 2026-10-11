@@ -62,6 +62,34 @@ class EmployeeOnboardingService
     }
 
     /**
+     * Re-issues an invitation for an employee still waiting to accept their
+     * first one — the only self-service recovery path when the original
+     * email was lost, never arrived, or its 7-day window lapsed. Expires
+     * any still-pending invitation rows first so an old, possibly-leaked
+     * link stops working the moment a new one is sent.
+     *
+     * @return array{invitation: EmployeeInvitation, token: string}
+     */
+    public function resendInvitation(User $actor, Employee $employee): array
+    {
+        if ($employee->organization_id !== $actor->organization_id) {
+            abort(404);
+        }
+
+        if ($employee->status !== 'invited') {
+            throw ValidationException::withMessages([
+                'employee' => ['Only an employee still awaiting their first invitation can be re-invited.'],
+            ]);
+        }
+
+        return DB::transaction(function () use ($actor, $employee): array {
+            $employee->invitations()->where('status', 'pending')->update(['status' => 'expired']);
+
+            return $this->inviteExistingEmployee($actor, $employee);
+        });
+    }
+
+    /**
      * @return array{invitation: EmployeeInvitation, token: string}
      */
     public function inviteExistingEmployee(User $actor, Employee $employee): array

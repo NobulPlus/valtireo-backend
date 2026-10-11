@@ -25,6 +25,7 @@ class EmployeeDocumentController extends Controller
         abort_unless($request->user()->can('employee_documents.view'), 403);
 
         $documents = EmployeeDocument::query()
+            ->whereIn('employee_id', app(\App\Services\EmployeeVisibility::class)->ids($request->user()))
             ->with(['employee', 'documentType', 'requirement', 'uploadedBy', 'reviewedBy', 'approvalRequests.workflow.steps', 'approvalRequests.decisions.actor'])
             ->where('organization_id', $request->user()->organization_id)
             ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employee_id', $id))
@@ -159,6 +160,12 @@ class EmployeeDocumentController extends Controller
                 'file_size' => $file->getSize(),
                 'file_path' => $filePath,
                 'notes' => $request->string('notes')->toString() ?: null,
+                // The signed copy is the same document continuing its
+                // lifecycle, not a new original — if the type requires an
+                // expiry date, HR already supplied it on the original
+                // upload, so the employee signing it back isn't asked again.
+                'issued_at' => $employeeDocument->issued_at,
+                'expires_at' => $employeeDocument->expires_at,
             ]);
         } catch (\Throwable $exception) {
             Storage::disk('local')->delete($filePath);

@@ -86,6 +86,16 @@ class OrganizationVerificationService
             ]);
         }
 
+        $existing = $this->latestDocuments($organization)->get($data['document_type']);
+
+        if ($existing && in_array($existing->status, ['submitted', 'approved'], true)) {
+            throw ValidationException::withMessages([
+                'document_type' => [$existing->status === 'approved'
+                    ? 'This document has already been approved and cannot be replaced.'
+                    : 'This document is already submitted and awaiting review.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($actor, $organization, $data): OrganizationVerificationDocument {
             $document = OrganizationVerificationDocument::query()->create([
                 'organization_id' => $organization->id,
@@ -140,6 +150,12 @@ class OrganizationVerificationService
 
     public function reviewDocument(User $actor, OrganizationVerificationDocument $document, string $action, ?string $note = null): OrganizationVerificationDocument
     {
+        if ($document->status !== 'submitted') {
+            throw ValidationException::withMessages([
+                'action' => ['This document has already been reviewed. Ask the organization to resubmit it for another decision.'],
+            ]);
+        }
+
         $status = match ($action) {
             'approve' => 'approved',
             'reject' => 'rejected',

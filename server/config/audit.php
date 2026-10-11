@@ -51,7 +51,7 @@ return [
     'resolvers' => [
         'ip_address' => OwenIt\Auditing\Resolvers\IpAddressResolver::class,
         'user_agent' => OwenIt\Auditing\Resolvers\UserAgentResolver::class,
-        'url' => OwenIt\Auditing\Resolvers\UrlResolver::class,
+        'url' => App\Support\SafeAuditUrl::class,
     ],
 
     /*
@@ -79,7 +79,7 @@ return [
     |
     */
 
-    'strict' => false,
+    'strict' => true,
 
     /*
     |--------------------------------------------------------------------------

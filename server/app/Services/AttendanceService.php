@@ -100,6 +100,8 @@ class AttendanceService
                 abort(403);
             }
 
+            abort_unless(app(EmployeeVisibility::class)->allows($actor, $record->employee_id), 404);
+
             $settings = $this->settingsFor($actor);
             if (! $actor->can('attendance.update') && ! $settings->allow_employee_corrections) {
                 throw ValidationException::withMessages([
@@ -181,8 +183,7 @@ class AttendanceService
     private function targetEmployee(User $actor, ?int $employeeId): Employee
     {
         if ($actor->can('attendance.update') && $employeeId) {
-            return Employee::query()
-                ->where('organization_id', $actor->organization_id)
+            return app(EmployeeVisibility::class)->query($actor)
                 ->findOrFail($employeeId);
         }
 

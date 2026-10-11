@@ -83,7 +83,7 @@ class OperationalAutomationScanner
                         $task->due_at->toISOString(),
                         [
                             'subject_employee_id' => $task->subject_employee_id,
-                            'assigned_user_id' => $task->assigned_to_user_id,
+                            'assigned_user_id' => $task->assigned_user_id,
                         ],
                     ));
                     $counts['overdue_tasks']++;

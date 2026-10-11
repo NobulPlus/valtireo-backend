@@ -23,6 +23,7 @@ class LeaveEntitlementController extends Controller
         $employeeId = $request->integer('employee_id') ?: $request->user()->employee?->id;
 
         $query = LeaveEntitlement::query()
+            ->whereIn('employee_id', app(\App\Services\EmployeeVisibility::class)->ids($request->user()))
             ->with(['employee', 'leaveType', 'leavePeriod'])
             ->where('organization_id', $request->user()->organization_id);
 
@@ -37,6 +38,7 @@ class LeaveEntitlementController extends Controller
 
     public function store(StoreLeaveEntitlementRequest $request): JsonResponse
     {
+        abort_unless(app(\App\Services\EmployeeVisibility::class)->allows($request->user(), $request->integer('employee_id')), 404);
         $entitlement = LeaveEntitlement::query()->updateOrCreate(
             [
                 'employee_id' => $request->integer('employee_id'),
@@ -85,8 +87,7 @@ class LeaveEntitlementController extends Controller
 
         $leavePeriodId = $request->integer('leave_period_id');
 
-        $employeeIds = Employee::query()
-            ->where('organization_id', $organizationId)
+        $employeeIds = app(\App\Services\EmployeeVisibility::class)->query($request->user())
             ->where('status', 'active')
             ->pluck('id');
 

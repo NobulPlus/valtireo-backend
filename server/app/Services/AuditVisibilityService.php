@@ -254,9 +254,10 @@ class AuditVisibilityService
                 'name' => $audit->user->name,
                 'email' => $audit->user->email,
             ] : null,
-            'old_values' => $this->decodedValues($audit->old_values),
-            'new_values' => $this->decodedValues($audit->new_values),
-            'url' => $audit->url,
+            'old_values' => \App\Support\AuditRedactor::values($this->decodedValues($audit->old_values)),
+            'new_values' => \App\Support\AuditRedactor::values($this->decodedValues($audit->new_values)),
+            // Historical URLs may contain invitation tokens or personal query values.
+            'url' => null,
             'ip_address' => $audit->ip_address,
             'user_agent' => $audit->user_agent,
             'tags' => $audit->tags,

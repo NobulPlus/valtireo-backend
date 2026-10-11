@@ -242,6 +242,23 @@ class EmployeeController extends Controller
         ], 201);
     }
 
+    public function resendInvitation(Request $request, Employee $employee, EmployeeOnboardingService $onboarding): JsonResponse
+    {
+        abort_unless($employee->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('employees.update'), 403, 'You do not have permission to update employees.');
+
+        $result = $onboarding->resendInvitation($request->user(), $employee);
+
+        return response()->json([
+            'invitation' => [
+                'id' => $result['invitation']->id,
+                'email' => $result['invitation']->email,
+                'status' => $result['invitation']->status,
+                'expires_at' => $result['invitation']->expires_at,
+            ],
+        ]);
+    }
+
     public function show(Request $request, Employee $employee): EmployeeResource
     {
         abort_unless($request->user()->can('employees.view'), 403, 'You do not have permission to view employees.');
@@ -537,7 +554,7 @@ class EmployeeController extends Controller
             'created_at'
         );
 
-        return Employee::query()
+        return app(\App\Services\EmployeeVisibility::class)->query($request->user())
             ->with([
                 'user.roles' => fn ($query) => $query->withCount('permissions'),
                 'department',

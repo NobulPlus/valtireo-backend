@@ -26,8 +26,12 @@ class ModuleEntitlementTest extends TestCase
         $modules = collect($response->json('modules'));
 
         $this->assertSame('enabled', $modules->firstWhere('key', 'employees')['visibility']);
-        $this->assertSame('locked', $modules->firstWhere('key', 'payroll')['visibility']);
-        $this->assertFalse($modules->firstWhere('key', 'payroll')['is_subscribed']);
+        $this->assertSame('enabled', $modules->firstWhere('key', 'payroll')['visibility']);
+        // 'recruitment' is seeded into the catalog but never subscribed for
+        // the VALTIREO demo org — it's the still-locked module now that
+        // payroll has been subscribed (see PlatformModuleSeeder::subscribedModuleKeys).
+        $this->assertSame('locked', $modules->firstWhere('key', 'recruitment')['visibility']);
+        $this->assertFalse($modules->firstWhere('key', 'recruitment')['is_subscribed']);
     }
 
     public function test_employee_login_only_receives_accessible_subscribed_modules(): void

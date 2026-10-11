@@ -49,6 +49,7 @@ use App\Http\Controllers\Api\WorkShiftController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Middleware\EnsureOrganizationIsActive;
+use App\Http\Middleware\EnsureEmployeeVisibility;
 use App\Http\Middleware\EnsureModuleIsSubscribed;
 use App\Http\Middleware\SetPermissionsTeamId;
 use Illuminate\Support\Facades\Route;
@@ -61,16 +62,16 @@ Route::get('/health', function () {
 });
 
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
-    Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class])->group(function () {
+    Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class, EnsureEmployeeVisibility::class])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
     });
 });
 
-Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class])->group(function () {
+Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class, EnsureEmployeeVisibility::class])->group(function () {
     Route::prefix('platform')->group(function () {
         Route::get('/dashboard', [PlatformOrganizationController::class, 'dashboard']);
         Route::get('/modules', [PlatformModuleController::class, 'index']);
@@ -79,6 +80,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/organizations', [PlatformOrganizationController::class, 'store']);
         Route::get('/organizations/{organization}', [PlatformOrganizationController::class, 'show']);
         Route::patch('/organizations/{organization}/status', [PlatformOrganizationController::class, 'updateStatus']);
+        Route::post('/organizations/{organization}/resend-admin-invitation', [PlatformOrganizationController::class, 'resendAdminInvitation']);
         Route::get('/organizations/{organization}/verification-documents', [OrganizationVerificationController::class, 'platformIndex']);
         Route::patch('/organizations/{organization}/verification-documents/{document}', [OrganizationVerificationController::class, 'platformReview']);
         Route::patch('/organizations/{organization}/modules/{platformModule}', [PlatformOrganizationController::class, 'updateModule']);
@@ -316,6 +318,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::patch('/bank-accounts/{bankAccount}', [EmployeePayrollController::class, 'updateBankAccount']);
         Route::get('/me/payslips', [EmployeePayrollController::class, 'myPayslips']);
         Route::get('/me/payslips/{payrollRunItem}', [EmployeePayrollController::class, 'myPayslip']);
+        Route::get('/me/compensation', [EmployeePayrollController::class, 'myCompensation']);
         Route::get('/runs', [PayrollRunController::class, 'index']);
         Route::post('/runs', [PayrollRunController::class, 'store']);
         Route::get('/runs/{payrollRun}', [PayrollRunController::class, 'show']);
@@ -353,6 +356,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/employees/{employee}/export', [EmployeeController::class, 'exportOne']);
         Route::post('/employees/{employee}/correction-requests', [EmployeeController::class, 'requestCorrection']);
         Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
+        Route::post('/employees/{employee}/resend-invitation', [EmployeeController::class, 'resendInvitation']);
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
         Route::get('/employees/{employee}/profile-overview', [EmployeeProfileOverviewController::class, 'show']);
         Route::get('/employees/{employee}/profile-activities', [EmployeeProfileActivityController::class, 'index']);
@@ -392,5 +396,5 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     });
 });
 
-Route::post('/employee-invitations/{token}/accept', [EmployeeController::class, 'acceptInvitation']);
-Route::post('/organization-admin-invitations/{token}/accept', [AuthController::class, 'acceptOrganizationAdminInvitation']);
+Route::post('/employee-invitations/{token}/accept', [EmployeeController::class, 'acceptInvitation'])->middleware('throttle:invitation-accept');
+Route::post('/organization-admin-invitations/{token}/accept', [AuthController::class, 'acceptOrganizationAdminInvitation'])->middleware('throttle:invitation-accept');

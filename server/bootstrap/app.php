@@ -38,28 +38,25 @@ return Application::configure(basePath: dirname(__DIR__))
                     : null;
 
                 if ($statusCode !== null && $statusCode < 500) {
-                    return;
+                    // Still suppress Laravel's own (unsanitized) default reporting for
+                    // these — we just don't want a SystemErrorLog row for routine 4xx
+                    // responses. A bare `return;` here does NOT count as "handled" to
+                    // the exception handler, so it would fall through to the default
+                    // reporter and log the raw, unsanitized exception anyway.
+                    return false;
                 }
 
-                $safeInput = collect($request?->except([
-                    'password',
-                    'password_confirmation',
-                    'current_password',
-                    'token',
-                    'auth_token',
-                    'api_token',
-                    'file',
-                    'logo',
-                    'attachment',
-                    'passport_photo',
-                ]) ?? [])->take(25)->all();
+                $safeContext = [
+                    'privacy_version' => 2,
+                    'input_count' => count($request?->all() ?? []),
+                    'query_count' => count($request?->query() ?? []),
+                ];
 
                 $file = Str::after($exception->getFile(), base_path().DIRECTORY_SEPARATOR);
                 $fingerprint = hash('sha256', implode('|', [
                     get_class($exception),
                     $file,
                     $exception->getLine(),
-                    Str::limit($exception->getMessage(), 180, ''),
                 ]));
 
                 \App\Models\SystemErrorLog::query()->create([
@@ -69,20 +66,17 @@ return Application::configure(basePath: dirname(__DIR__))
                     'level' => 'error',
                     'status_code' => $statusCode,
                     'exception_class' => get_class($exception),
-                    'message' => Str::limit($exception->getMessage() ?: 'Unhandled exception', 2000, '...'),
+                    'message' => 'Unhandled '.get_class($exception),
                     'file' => $file,
                     'line' => $exception->getLine(),
                     'method' => $request?->method(),
-                    'url' => $request?->fullUrl(),
-                    'route' => $request?->route()?->getName() ?? $request?->path(),
+                    'url' => null,
+                    'route' => $request?->route()?->getName() ?? $request?->route()?->uri(),
                     'ip_address' => $request?->ip(),
-                    'user_agent' => Str::limit((string) $request?->userAgent(), 1000, ''),
-                    'request_id' => $request?->headers->get('X-Request-Id'),
+                    'user_agent' => null,
+                    'request_id' => null,
                     'fingerprint' => $fingerprint,
-                    'context' => [
-                        'input' => $safeInput,
-                        'query' => $request?->query() ?? [],
-                    ],
+                    'context' => $safeContext,
                     'trace_excerpt' => collect($exception->getTrace())
                         ->take(8)
                         ->map(fn (array $frame) => [
@@ -97,6 +91,20 @@ return Application::configure(basePath: dirname(__DIR__))
             } catch (\Throwable) {
                 // Never let monitoring create a second exception.
             }
+
+            // Do not let the default reporter write the raw exception message,
+            // SQL bindings, or exception context to another log channel.
+            try {
+                \Illuminate\Support\Facades\Log::error('Unhandled application exception', [
+                    'exception_class' => get_class($exception),
+                    'file' => Str::after($exception->getFile(), base_path().DIRECTORY_SEPARATOR),
+                    'line' => $exception->getLine(),
+                ]);
+            } catch (\Throwable) {
+                // Reporting must not interrupt the original response.
+            }
+
+            return false;
         });
 
         $exceptions->shouldRenderJsonWhen(

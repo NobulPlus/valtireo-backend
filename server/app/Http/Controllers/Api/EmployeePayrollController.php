@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeBankAccount;
+use App\Models\EmployeeStatutoryProfile;
 use App\Models\PayGroup;
 use App\Models\PayrollComponent;
 use App\Models\PayrollRunItem;
@@ -35,13 +36,64 @@ class EmployeePayrollController extends Controller
         return response()->json(['payslip' => $payrollRunItem->load(['payrollRun', 'lines'])]);
     }
 
+    public function myCompensation(Request $request): JsonResponse
+    {
+        abort_unless($request->user()->can('payroll.compensation.view_own'), 403);
+        $employee = $request->user()->employee;
+        abort_unless($employee, 403);
+
+        $today = today();
+        $compensations = $employee->compensations()->with('payGroup')->latest('effective_from')->get()
+            ->each(function ($compensation) use ($today): void {
+                $compensation->status = $compensation->effective_from->greaterThan($today)
+                    ? 'scheduled'
+                    : ($compensation->effective_to?->lessThan($today) ? 'superseded' : 'active');
+            });
+
+        $bankAccounts = $employee->bankAccounts()->get()->map(fn ($account) => [
+            'id' => $account->id, 'bank_name' => $account->bank_name, 'bank_code' => $account->bank_code,
+            'account_name' => $account->account_name, 'account_number_last_four' => substr($account->account_number, -4),
+            'is_primary' => $account->is_primary, 'verification_status' => $account->verification_status,
+        ]);
+
+        $profile = EmployeeStatutoryProfile::query()->firstOrCreate(['employee_id' => $employee->id], ['organization_id' => $employee->organization_id]);
+
+        return response()->json([
+            'compensations' => $compensations,
+            'bank_accounts' => $bankAccounts,
+            // Same masking as the admin-facing statutory profile endpoint —
+            // self-service is read-only and never exposes the full numbers.
+            'statutory_profile' => [
+                'id' => $profile->id,
+                'paye_enabled' => $profile->paye_enabled,
+                'tax_state' => $profile->tax_state,
+                'tax_id_last_four' => $profile->tax_id ? substr($profile->tax_id, -4) : null,
+                'pension_enabled' => $profile->pension_enabled,
+                'pfa_name' => $profile->pfa_name,
+                'rsa_pin_last_four' => $profile->rsa_pin ? substr($profile->rsa_pin, -4) : null,
+                'nhf_enabled' => $profile->nhf_enabled,
+                'nhf_number_last_four' => $profile->nhf_number ? substr($profile->nhf_number, -4) : null,
+                'reliefs' => $profile->reliefs,
+                'exemptions' => $profile->exemptions,
+            ],
+        ]);
+    }
+
     public function show(Request $request, Employee $employee): JsonResponse
     {
         abort_unless($employee->organization_id === $request->user()->organization_id, 404);
         abort_unless($request->user()->can('payroll.compensation.view'), 403);
+        $today = today();
+        $compensations = $employee->compensations()->with(['payGroup', 'createdBy'])->latest('effective_from')->get()
+            ->each(function ($compensation) use ($today): void {
+                $compensation->status = $compensation->effective_from->greaterThan($today)
+                    ? 'scheduled'
+                    : ($compensation->effective_to?->lessThan($today) ? 'superseded' : 'active');
+            });
+
         return response()->json([
             'employee' => ['id' => $employee->id, 'employee_number' => $employee->employee_number, 'full_name' => trim(implode(' ', array_filter([$employee->first_name, $employee->middle_name, $employee->last_name])))],
-            'compensations' => $employee->compensations()->with(['payGroup', 'createdBy'])->latest('effective_from')->get(),
+            'compensations' => $compensations,
             'bank_accounts' => $employee->bankAccounts()->get()->map(fn ($account) => [
                 'id' => $account->id, 'bank_name' => $account->bank_name, 'bank_code' => $account->bank_code,
                 'account_name' => $account->account_name, 'account_number_last_four' => substr($account->account_number, -4),
@@ -59,7 +111,11 @@ class EmployeePayrollController extends Controller
             'pay_frequency' => ['required', Rule::in(['weekly', 'biweekly', 'monthly'])], 'effective_from' => ['required', 'date'],
             'recurring_components' => ['sometimes', 'array'], 'recurring_components.*.component_id' => ['required', 'integer', 'distinct'], 'recurring_components.*.value' => ['nullable', 'numeric', 'min:0'],
         ]);
-        if (! empty($data['pay_group_id'])) abort_unless(PayGroup::query()->where('organization_id', $request->user()->organization_id)->whereKey($data['pay_group_id'])->exists(), 422, 'The selected pay group is invalid.');
+        if (! empty($data['pay_group_id'])) {
+            $payGroup = PayGroup::query()->where('organization_id', $request->user()->organization_id)->find($data['pay_group_id']);
+            abort_unless($payGroup, 422, 'The selected pay group is invalid.');
+            abort_if($payGroup->frequency !== $data['pay_frequency'], 422, 'The compensation frequency must match the selected pay group.');
+        }
         foreach (($data['recurring_components'] ?? []) as $entry) abort_unless(PayrollComponent::query()->where('organization_id', $request->user()->organization_id)->whereKey($entry['component_id'])->exists(), 422, 'A payroll component is invalid.');
         return response()->json(['compensation' => $payroll->setCompensation($request->user(), $employee, $data)], 201);
     }

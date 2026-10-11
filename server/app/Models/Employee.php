@@ -43,6 +43,15 @@ class Employee extends Model implements AuditableContract
     /** @use HasFactory<EmployeeFactory> */
     use Auditable, HasFactory;
 
+    protected static function booted(): void
+    {
+        static::saved(function (Employee $employee): void {
+            if (in_array($employee->status, ['suspended', 'exited'], true)) {
+                $employee->user()->first()?->tokens()->delete();
+            }
+        });
+    }
+
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);

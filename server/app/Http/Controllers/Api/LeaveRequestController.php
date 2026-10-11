@@ -35,6 +35,13 @@ class LeaveRequestController extends Controller
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('starts_on', '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('ends_on', '<=', $date->toDateString()));
 
+        $query->where(function (Builder $visible) use ($request): void {
+            $visible->whereIn('employee_id', app(\App\Services\EmployeeVisibility::class)->ids($request->user()));
+            if ($request->user()->employee) {
+                $visible->orWhere('handover_to_employee_id', $request->user()->employee->id);
+            }
+        });
+
         if (! $request->user()->can('leave_requests.view')) {
             $employeeId = $request->user()->employee?->id;
             abort_unless($employeeId, 403);
@@ -82,7 +89,7 @@ class LeaveRequestController extends Controller
     public function downloadEvidence(Request $request, LeaveRequest $leaveRequest): StreamedResponse
     {
         abort_unless($leaveRequest->organization_id === $request->user()->organization_id, 404);
-        abort_unless($request->user()->can('leave_requests.view') || $request->user()->employee?->id === $leaveRequest->employee_id, 403);
+        abort_unless(($request->user()->can('leave_requests.view') && app(\App\Services\EmployeeVisibility::class)->allows($request->user(), $leaveRequest->employee_id)) || $request->user()->employee?->id === $leaveRequest->employee_id, 403);
         abort_unless(filled($leaveRequest->evidence_file_path) && Storage::disk('local')->exists($leaveRequest->evidence_file_path), 404);
 
         return Storage::disk('local')->download($leaveRequest->evidence_file_path, $leaveRequest->evidence_file_name);

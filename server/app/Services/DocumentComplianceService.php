@@ -309,8 +309,7 @@ class DocumentComplianceService
 
     public function compliance(User $actor, array $filters = []): array
     {
-        $employees = Employee::query()
-            ->where('organization_id', $actor->organization_id)
+        $employees = app(EmployeeVisibility::class)->query($actor)
             ->when($filters['department_id'] ?? null, fn (Builder $query, int $id) => $query->where('department_id', $id))
             ->when($filters['employment_type_id'] ?? null, fn (Builder $query, int $id) => $query->where('employment_type_id', $id))
             ->when($filters['organization_location_id'] ?? null, fn (Builder $query, int $id) => $query->where('organization_location_id', $id))
@@ -394,8 +393,7 @@ class DocumentComplianceService
     private function targetEmployee(User $actor, ?int $employeeId): Employee
     {
         if ($actor->can('employee_documents.create') && $employeeId) {
-            return Employee::query()
-                ->where('organization_id', $actor->organization_id)
+            return app(EmployeeVisibility::class)->query($actor)
                 ->findOrFail($employeeId);
         }
 

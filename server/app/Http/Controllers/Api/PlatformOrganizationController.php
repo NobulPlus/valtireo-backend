@@ -164,6 +164,18 @@ class PlatformOrganizationController extends Controller
         ]);
     }
 
+    public function resendAdminInvitation(
+        Request $request,
+        Organization $organization,
+        OrganizationProvisioningService $provisioning
+    ): JsonResponse {
+        abort_unless($request->user()->is_platform_admin, 403);
+
+        $invitation = $provisioning->resendAdminInvitation($request->user(), $organization);
+
+        return response()->json(['invitation' => $invitation]);
+    }
+
     public function store(
         ProvisionOrganizationRequest $request,
         OrganizationProvisioningService $provisioning

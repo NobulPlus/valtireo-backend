@@ -79,8 +79,7 @@ class EmployeeEmergencyContactController extends Controller
     private function targetEmployee(Request $request, ?int $employeeId, string $permission): Employee
     {
         if ($request->user()->can($permission) && $employeeId) {
-            return Employee::query()
-                ->where('organization_id', $request->user()->organization_id)
+            return app(\App\Services\EmployeeVisibility::class)->query($request->user())
                 ->findOrFail($employeeId);
         }
 

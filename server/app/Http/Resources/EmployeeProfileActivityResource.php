@@ -27,7 +27,7 @@ class EmployeeProfileActivityResource extends JsonResource
             'subject_id' => $this->subject_id,
             'title' => $this->title,
             'description' => $this->description,
-            'metadata' => $this->metadata ?? [],
+            'metadata' => $this->event === 'custom_fields_updated' ? [] : ($this->metadata ?? []),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -18,7 +18,7 @@ class ApprovalRequestController extends Controller
     {
         abort_unless($request->user()->can('approvals.view'), 403);
 
-        $approvals = ApprovalRequest::query()
+        $approvals = app(\App\Services\ApprovalVisibility::class)->query($request->user())
             ->where('organization_id', $request->user()->organization_id)
             ->with(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor', 'approvable'])
             ->when($request->string('module')->toString(), fn (Builder $query, string $module) => $query->where('module', $module))
@@ -34,6 +34,8 @@ class ApprovalRequestController extends Controller
     {
         abort_unless($request->user()->can('approvals.view'), 403);
         abort_unless($approvalRequest->organization_id === $request->user()->organization_id, 404);
+
+        abort_unless(app(\App\Services\ApprovalVisibility::class)->query($request->user())->whereKey($approvalRequest->id)->exists(), 404);
 
         return new ApprovalRequestResource($approvalRequest->load(['workflow.steps', 'requester', 'subjectEmployee', 'decisions.actor', 'approvable']));
     }

@@ -19,6 +19,7 @@ class AttendanceRecordController extends Controller
         abort_unless($request->user()->can('attendance.view') || $request->user()->can('attendance.create'), 403);
 
         $query = AttendanceRecord::query()
+            ->whereIn('employee_id', app(\App\Services\EmployeeVisibility::class)->ids($request->user()))
             ->with($attendance->recordRelations())
             ->where('organization_id', $request->user()->organization_id)
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))

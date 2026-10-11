@@ -57,7 +57,7 @@ class PayrollService
             if ($previous && (! $previous->effective_to || $previous->effective_to->greaterThanOrEqualTo($effectiveFrom))) {
                 $previous->update([
                     'effective_to' => $effectiveFrom->subDay()->toDateString(),
-                    'status' => 'superseded',
+                    'status' => $effectiveFrom->isFuture() ? 'active' : 'superseded',
                 ]);
             }
 
@@ -67,7 +67,7 @@ class PayrollService
                 'employee_id' => $employee->id,
                 'created_by_id' => $actor->id,
                 'effective_to' => $next ? CarbonImmutable::parse($next->effective_from)->subDay()->toDateString() : null,
-                'status' => $next ? 'superseded' : 'active',
+                'status' => $next ? 'superseded' : ($effectiveFrom->isFuture() ? 'scheduled' : 'active'),
             ])->load(['payGroup', 'createdBy']);
         });
     }
@@ -103,16 +103,27 @@ class PayrollService
                             ->where('previous_status', 'active')
                             ->whereDate('effective_date', '>=', $periodStart));
                 })
-                ->when($lockedRun->pay_group_id, fn ($query, $groupId) => $query->whereHas('compensations', fn ($q) => $q->where('pay_group_id', $groupId)))
+                ->when($lockedRun->pay_group_id, fn ($query, $groupId) => $query->whereHas('compensations', fn ($q) => $q
+                    ->where('pay_group_id', $groupId)
+                    ->whereDate('effective_from', '<=', $periodEnd)
+                    ->where(fn ($dates) => $dates->whereNull('effective_to')->orWhereDate('effective_to', '>=', $periodStart))))
                 ->orderBy('id')
                 ->get();
 
             $totals = ['gross' => 0.0, 'deductions' => 0.0, 'net' => 0.0, 'employer' => 0.0];
             foreach ($employees as $employee) {
-                $compensation = $this->effectiveCompensation($employee, $lockedRun);
+                $compensations = $this->effectiveCompensations($employee, $lockedRun);
+                $compensation = $compensations->last();
                 $exceptions = [];
                 if (! $compensation) {
                     $exceptions[] = ['code' => 'missing_compensation', 'message' => 'No effective compensation record exists for this period.'];
+                }
+                if ($compensations->contains(fn ($record) => $record->currency !== $lockedRun->currency)) {
+                    $exceptions[] = ['code' => 'currency_mismatch', 'message' => "Compensation currency must match payroll currency {$lockedRun->currency}."];
+                }
+                $expectedFrequency = $lockedRun->payGroup?->frequency ?? $settings->default_pay_frequency;
+                if ($compensations->contains(fn ($record) => $record->pay_frequency !== $expectedFrequency)) {
+                    $exceptions[] = ['code' => 'pay_frequency_mismatch', 'message' => "Compensation frequency must match payroll frequency {$expectedFrequency}."];
                 }
                 if (! $employee->start_date) {
                     $exceptions[] = ['code' => 'missing_start_date', 'message' => 'No employment start date is configured.'];
@@ -145,7 +156,21 @@ class PayrollService
                     ? 0
                     : $this->payrollDays($lockedRun->organization_id, $employee, $payableStart, $payableEnd, $settings->proration_basis);
                 $ratio = $periodDays > 0 ? min(1, $payableDays / $periodDays) : 0;
-                $basePay = round(((float) ($compensation?->base_salary ?? 0)) * $ratio, $settings->decimal_places);
+                $baseSegments = [];
+                $basePay = 0.0;
+                foreach ($compensations as $record) {
+                    $segmentStart = CarbonImmutable::parse($record->effective_from)->max($payableStart);
+                    $segmentEnd = $record->effective_to
+                        ? CarbonImmutable::parse($record->effective_to)->min($payableEnd)
+                        : $payableEnd;
+                    if ($segmentEnd->lessThan($segmentStart)) continue;
+                    $segmentDays = $this->payrollDays($lockedRun->organization_id, $employee, $segmentStart, $segmentEnd, $settings->proration_basis);
+                    $segmentRatio = $periodDays > 0 ? $segmentDays / $periodDays : 0;
+                    $segmentAmount = round((float) $record->base_salary * $segmentRatio, $settings->decimal_places);
+                    $basePay += $segmentAmount;
+                    $baseSegments[] = ['compensation_id' => $record->id, 'from' => $segmentStart->toDateString(), 'to' => $segmentEnd->toDateString(), 'days' => $segmentDays, 'rate' => $record->base_salary, 'amount' => $segmentAmount];
+                }
+                $basePay = round($basePay, $settings->decimal_places);
 
                 $item = $lockedRun->items()->create([
                     'organization_id' => $lockedRun->organization_id,
@@ -183,19 +208,27 @@ class PayrollService
                     'rate' => $compensation?->base_salary ?? 0,
                     'amount' => $basePay,
                     'is_taxable' => true,
-                    'calculation_snapshot' => ['proration_ratio' => $ratio, 'period_days' => $periodDays, 'payable_days' => $payableDays],
+                    'calculation_snapshot' => ['proration_ratio' => $ratio, 'period_days' => $periodDays, 'payable_days' => $payableDays, 'segments' => $baseSegments],
                 ]);
 
                 $amounts = ['BASIC' => $basePay];
-                foreach (($compensation?->recurring_components ?? []) as $entry) {
-                    $component = $components->get($entry['component_id'] ?? null);
-                    if (! $component) {
-                        continue;
+                $componentTotals = [];
+                foreach ($compensations as $record) {
+                    $segment = collect($baseSegments)->firstWhere('compensation_id', $record->id);
+                    if (! $segment) continue;
+                    $segmentRatio = $periodDays > 0 ? $segment['days'] / $periodDays : 0;
+                    foreach (($record->recurring_components ?? []) as $entry) {
+                        $component = $components->get($entry['component_id'] ?? null);
+                        if (! $component) continue;
+                        $value = (float) ($entry['value'] ?? $component->default_value);
+                        $base = $component->percentageBase ? ($amounts[$component->percentageBase->code] ?? $segment['amount']) : $segment['amount'];
+                        $amount = $component->calculation_type === 'percentage' ? $base * ($value / 100) : $value * $segmentRatio;
+                        $componentTotals[$component->id] = ($componentTotals[$component->id] ?? 0) + $amount;
                     }
-                    $value = (float) ($entry['value'] ?? $component->default_value);
-                    $base = $component->percentageBase ? ($amounts[$component->percentageBase->code] ?? $basePay) : $basePay;
-                    $amount = $component->calculation_type === 'percentage' ? $base * ($value / 100) : $value * $ratio;
-                    $amount = round($amount, $settings->decimal_places);
+                }
+                foreach ($componentTotals as $componentId => $total) {
+                    $component = $components->get($componentId);
+                    $amount = round($total, $settings->decimal_places);
                     $amounts[$component->code] = $amount;
                     $item->lines()->create([
                         'organization_id' => $lockedRun->organization_id,
@@ -203,11 +236,11 @@ class PayrollService
                         'component_code' => $component->code,
                         'component_name' => $component->name,
                         'type' => $component->type,
-                        'rate' => $value,
+                        'rate' => $amount,
                         'amount' => $amount,
                         'is_taxable' => $component->is_taxable,
                         'is_statutory' => $component->is_statutory,
-                        'calculation_snapshot' => ['calculation_type' => $component->calculation_type, 'base_amount' => $base],
+                        'calculation_snapshot' => ['calculation_type' => $component->calculation_type, 'effective_dated' => true],
                     ]);
                 }
 
@@ -270,7 +303,7 @@ class PayrollService
         return $run->refresh();
     }
 
-    private function effectiveCompensation(Employee $employee, PayrollRun $run): ?EmployeeCompensation
+    private function effectiveCompensations(Employee $employee, PayrollRun $run)
     {
         return EmployeeCompensation::query()
             ->with('payGroup')
@@ -278,24 +311,33 @@ class PayrollService
             ->where('employee_id', $employee->id)
             ->whereDate('effective_from', '<=', $run->period_end)
             ->where(fn ($query) => $query->whereNull('effective_to')->orWhereDate('effective_to', '>=', $run->period_start))
-            ->latest('effective_from')
-            ->first();
+            ->oldest('effective_from')
+            ->get();
     }
 
     /** @return array<string, mixed> */
     public function readiness(User $actor, PayrollRun $run): array
     {
         $this->ensureTenant($actor, $run->organization_id);
+        $run->loadMissing('payGroup');
+        $settings = $this->settingsFor($run->organization_id);
+        $expectedFrequency = $run->payGroup?->frequency ?? $settings->default_pay_frequency;
         $employees = Employee::query()
             ->where('organization_id', $run->organization_id)
             ->where('status', 'active')
             ->where(fn ($query) => $query->whereNull('start_date')->orWhereDate('start_date', '<=', $run->period_end))
-            ->when($run->pay_group_id, fn ($query, $groupId) => $query->whereHas('compensations', fn ($q) => $q->where('pay_group_id', $groupId)))
+            ->when($run->pay_group_id, fn ($query, $groupId) => $query->whereHas('compensations', fn ($q) => $q
+                ->where('pay_group_id', $groupId)
+                ->whereDate('effective_from', '<=', $run->period_end)
+                ->where(fn ($dates) => $dates->whereNull('effective_to')->orWhereDate('effective_to', '>=', $run->period_start))))
             ->get();
         $issues = [];
         foreach ($employees as $employee) {
             $employeeIssues = [];
-            if (! $this->effectiveCompensation($employee, $run)) $employeeIssues[] = 'missing_compensation';
+            $compensations = $this->effectiveCompensations($employee, $run);
+            if ($compensations->isEmpty()) $employeeIssues[] = 'missing_compensation';
+            if ($compensations->contains(fn ($record) => $record->currency !== $run->currency)) $employeeIssues[] = 'currency_mismatch';
+            if ($compensations->contains(fn ($record) => $record->pay_frequency !== $expectedFrequency)) $employeeIssues[] = 'pay_frequency_mismatch';
             if (! $employee->start_date) $employeeIssues[] = 'missing_start_date';
             $bank = $employee->bankAccounts()->where('is_primary', true)->first();
             if (! $bank) $employeeIssues[] = 'missing_bank_account';
