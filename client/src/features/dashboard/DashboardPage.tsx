@@ -20,7 +20,7 @@ export function DashboardPage() {
   const { hasPermission, hasManagerScope, session } = useAuth();
 
   const availableTabs: Tab[] = [
-    ...(hasPermission('reports.view') ? (['organization'] as Tab[]) : []),
+    ...(hasPermission('reports.view') && (hasPermission('employees.view_all') || hasPermission('organizations.administer')) ? (['organization'] as Tab[]) : []),
     ...(hasManagerScope || hasPermission('reports.view') ? (['manager'] as Tab[]) : []),
     'me',
   ];

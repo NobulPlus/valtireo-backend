@@ -13,6 +13,7 @@ import {
   MessageSquareWarning,
   Pencil,
   Power,
+  Send,
   Settings2,
   Users,
 } from 'lucide-react';
@@ -29,16 +30,19 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
+import { useToast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/apiClient';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { isValidEmail } from '@/lib/validation';
 import {
   usePlatformOrganization,
   usePlatformOrganizationVerificationDocuments,
+  useResendAdminInvitation,
   useReviewOrganizationVerificationDocument,
   useUpdateOrganizationModule,
   useUpdateOrganizationStatus,
   useUpdateOrganizationWorkspace,
+  viewVerificationDocument,
 } from '@/features/platform/api';
 import type { OrganizationVerificationDocument, PlatformOrganizationDetail } from '@/types/api';
 
@@ -64,6 +68,8 @@ function fallback(value: string | null | undefined): string {
 
 function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganizationDetail; id: string | undefined }) {
   const { formatDate } = useDateFormatter();
+  const toast = useToast();
+  const resendAdminInvitationMutation = useResendAdminInvitation(id);
   const [statusAction, setStatusAction] = useState<'active' | 'suspended' | null>(null);
   const [reason, setReason] = useState('');
   const [managingModule, setManagingModule] = useState<ModuleRow | null>(null);
@@ -85,7 +91,12 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
 
   const org = data.organization;
   const isSuspended = org.status === 'suspended';
-  const actionLabel = statusAction === 'suspended' ? 'Suspend organization' : 'Reactivate organization';
+  const isActive = org.status === 'active';
+  const actionLabel = statusAction === 'suspended'
+    ? 'Suspend organization'
+    : isSuspended
+      ? 'Reactivate organization'
+      : 'Activate organization';
   const mutationError = statusMutation.error instanceof ApiError ? statusMutation.error.message : null;
 
   async function submitStatusAction() {
@@ -162,7 +173,8 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
   }
 
   const verification = verificationDocuments.data?.verification ?? data.verification;
-  const verificationRows = verificationDocuments.data?.documents.data ?? [];
+  const documentPayload = verificationDocuments.data?.documents;
+  const verificationRows = Array.isArray(documentPayload) ? documentPayload : documentPayload?.data ?? [];
   const verificationError = reviewVerificationDocument.error instanceof ApiError ? reviewVerificationDocument.error.message : null;
   const reviewTitle = reviewAction === 'approve'
     ? 'Approve document'
@@ -179,16 +191,35 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
         status={<StatusBadge status={org.status} />}
         actions={
           <>
+            {org.status === 'invited' && (
+              <Button
+                variant="secondary"
+                size="icon"
+                title="Resend admin invitation"
+                aria-label="Resend admin invitation"
+                isLoading={resendAdminInvitationMutation.isPending}
+                onClick={() => {
+                  resendAdminInvitationMutation.mutate(undefined, {
+                    onSuccess: (result) => toast.success('Invitation resent', `A new setup link was sent to ${result.invitation.email}.`),
+                    onError: (error) => toast.error('Could not resend invitation', error instanceof ApiError ? error.message : 'Could not resend this invitation.'),
+                  });
+                }}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            )}
             <Button
-              variant={isSuspended ? 'primary' : 'danger'}
+              variant={isActive ? 'danger' : 'primary'}
+              size="icon"
+              title={isActive ? 'Suspend' : isSuspended ? 'Reactivate' : 'Activate'}
+              aria-label={isActive ? 'Suspend organization' : isSuspended ? 'Reactivate organization' : 'Activate organization'}
               onClick={() => {
                 statusMutation.reset();
                 setReason('');
-                setStatusAction(isSuspended ? 'active' : 'suspended');
+                setStatusAction(isActive ? 'suspended' : 'active');
               }}
             >
-              {isSuspended ? <Power className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-              {isSuspended ? 'Reactivate' : 'Suspend'}
+              {isActive ? <Ban className="h-4 w-4" /> : <Power className="h-4 w-4" />}
             </Button>
             <Link
               to="/platform"
@@ -301,22 +332,22 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button type="button" variant="secondary" size="sm" onClick={() => window.open(document.download_url, '_blank', 'noopener,noreferrer')}>
+                      <Button type="button" variant="secondary" size="icon" title="View" aria-label={`View ${document.title}`} onClick={() => viewVerificationDocument(document.id)}>
                         <FileText className="h-4 w-4" />
-                        View
                       </Button>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => openReview(document, 'approve')}>
-                        <CheckCircle2 className="h-4 w-4" />
-                        Approve
-                      </Button>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => openReview(document, 'request_changes')}>
-                        <MessageSquareWarning className="h-4 w-4" />
-                        Changes
-                      </Button>
-                      <Button type="button" variant="danger" size="sm" onClick={() => openReview(document, 'reject')}>
-                        <Ban className="h-4 w-4" />
-                        Reject
-                      </Button>
+                      {document.status === 'submitted' && (
+                        <>
+                          <Button type="button" variant="secondary" size="icon" title="Approve" aria-label={`Approve ${document.title}`} onClick={() => openReview(document, 'approve')}>
+                            <CheckCircle2 className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="secondary" size="icon" title="Request changes" aria-label={`Request changes for ${document.title}`} onClick={() => openReview(document, 'request_changes')}>
+                            <MessageSquareWarning className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="danger" size="icon" title="Reject" aria-label={`Reject ${document.title}`} onClick={() => openReview(document, 'reject')}>
+                            <Ban className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -421,7 +452,9 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
           <p className="leading-6 text-muted">
             {statusAction === 'suspended'
               ? `This will immediately cut off ${org.name}'s users from login and protected API access.`
-              : `This will restore access for ${org.name}'s users.`}
+              : isSuspended
+                ? `This will restore access for ${org.name}'s users.`
+                : `This activates ${org.name}'s workspace, letting their admin sign in and begin setup. All required verification documents must be approved first.`}
           </p>
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium text-muted">Reason</span>

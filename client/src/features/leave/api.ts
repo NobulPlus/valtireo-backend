@@ -1,11 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiClient } from '@/lib/apiClient';
-import type { LeaveHoliday, LeaveRequest, LeaveType, Paginated } from '@/types/api';
+import type { LeaveHoliday, LeavePeriod, LeaveRequest, LeaveType, Paginated } from '@/types/api';
 
 export function useLeaveTypes() {
   return useQuery({
     queryKey: ['leave', 'types', 'mine'],
     queryFn: () => api.get<{ data: LeaveType[] }>('/leave/types'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useLeavePeriods() {
+  return useQuery({
+    queryKey: ['leave', 'periods'],
+    queryFn: () => api.get<{ data: LeavePeriod[] }>('/leave/periods'),
     staleTime: 5 * 60_000,
   });
 }

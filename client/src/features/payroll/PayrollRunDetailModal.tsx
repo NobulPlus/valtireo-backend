@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Receipt } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, FileSpreadsheet, Receipt } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction } from '@/components/ui/ModalActions';
 import { Button } from '@/components/ui/Button';
@@ -56,6 +56,16 @@ export function PayrollRunDetailModal({ runId, onClose }: { runId: number | null
   const [downloadingItemId, setDownloadingItemId] = useState<number | null>(null);
   const [showOnlyExceptions, setShowOnlyExceptions] = useState(false);
   const [paymentBatch, setPaymentBatch] = useState<PayrollPaymentBatch | null>(null);
+  const [expandedItemIds, setExpandedItemIds] = useState<Set<number>>(new Set());
+
+  function toggleExpanded(itemId: number) {
+    setExpandedItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
 
   const canManage = hasPermission('payroll.runs.manage');
   const canSubmit = hasPermission('payroll.runs.submit');
@@ -271,40 +281,115 @@ export function PayrollRunDetailModal({ runId, onClose }: { runId: number | null
               {items.length === 0 && <p className="text-sm text-muted">Run this payroll's calculation to see per-employee results.</p>}
               {items.length > 0 && (
                 <ul className="divide-y divide-border rounded-md border border-border">
-                  {visibleItems.map((item) => (
-                    <li key={item.id} className="flex flex-col gap-2 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-strong">
-                          {item.employee_name} <span className="text-xs font-normal text-muted">· {item.employee_number}</span>
-                        </p>
-                        {item.status === 'exception' && item.exceptions && item.exceptions.length > 0 && (
-                          <p className="mt-0.5 text-xs text-danger">
-                            {item.exceptions.map((e) => e.message).join('; ')}{' '}
-                            <a href={`/employees/${item.employee_id}`} target="_blank" rel="noreferrer" className="underline hover:text-danger/80">
-                              Fix →
-                            </a>
-                          </p>
+                  {visibleItems.map((item) => {
+                    const expanded = expandedItemIds.has(item.id);
+                    const lines = item.lines ?? [];
+                    const basicLine = lines.find((line) => line.component_code === 'BASIC');
+                    const proration = basicLine?.calculation_snapshot;
+                    const segments = proration?.segments ?? [];
+                    const isProrated = typeof proration?.proration_ratio === 'number' && proration.proration_ratio < 1;
+                    const hasRateChange = segments.length > 1;
+
+                    return (
+                      <li key={item.id} className="text-sm">
+                        <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 items-start gap-2">
+                            {lines.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleExpanded(item.id)}
+                                className="mt-0.5 flex-shrink-0 rounded p-0.5 text-muted hover:bg-surface-soft"
+                                aria-label={expanded ? 'Hide breakdown' : 'Show breakdown'}
+                                aria-expanded={expanded}
+                              >
+                                {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                              </button>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-strong">
+                                {item.employee_name} <span className="text-xs font-normal text-muted">· {item.employee_number}</span>
+                              </p>
+                              {item.status === 'exception' && item.exceptions && item.exceptions.length > 0 && (
+                                <p className="mt-0.5 text-xs text-danger">
+                                  {item.exceptions.map((e) => e.message).join('; ')}{' '}
+                                  <a href={`/employees/${item.employee_id}`} target="_blank" rel="noreferrer" className="underline hover:text-danger/80">
+                                    Fix →
+                                  </a>
+                                </p>
+                              )}
+                              {(isProrated || hasRateChange) && (
+                                <p className="mt-0.5 text-xs text-muted">
+                                  {hasRateChange ? 'Salary changed mid-period' : 'Prorated'} · {proration?.payable_days}/{proration?.period_days} days
+                                  {isProrated ? ` (${Math.round((proration?.proration_ratio ?? 0) * 100)}%)` : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-shrink-0 items-center gap-3">
+                            <span className="font-medium text-strong">{formatCurrency(item.net_pay, run.currency)}</span>
+                            <StatusBadge status={item.status} />
+                            {isFinalized && item.status !== 'exception' && (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                title="Download payslip"
+                                aria-label="Download payslip"
+                                isLoading={downloadingItemId === item.id}
+                                onClick={() => handleDownloadPayslip(item)}
+                              >
+                                <Receipt className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        {expanded && lines.length > 0 && (
+                          <div className="border-t border-border bg-surface-soft/50 px-4 py-2 sm:pl-11">
+                            {segments.length > 0 && (hasRateChange || isProrated) && (
+                              <div className="mb-2 border-b border-border pb-2">
+                                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                  Basic salary breakdown
+                                </p>
+                                <ul className="space-y-1">
+                                  {segments.map((segment, index) => (
+                                    <li key={`${segment.compensation_id}-${segment.from}`} className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="text-muted">
+                                        {formatDate(segment.from)} → {formatDate(segment.to)} · {segment.days} day{segment.days === 1 ? '' : 's'} @ {formatCurrency(segment.rate, run.currency)}
+                                        {index > 0 && <span className="ml-1.5 text-[11px] text-warning">(rate change)</span>}
+                                      </span>
+                                      <span className="font-medium text-strong">{formatCurrency(segment.amount, run.currency)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            <ul className="space-y-1">
+                              {lines.map((line) => (
+                                <li key={line.id} className="flex items-center justify-between gap-3 text-xs">
+                                  <span className="text-muted">
+                                    {line.component_name}
+                                    <span className="ml-1.5 text-[11px] uppercase tracking-wide text-muted/70">{line.type.replace('_', ' ')}</span>
+                                  </span>
+                                  <span
+                                    className={
+                                      line.type === 'earning'
+                                        ? 'font-medium text-success'
+                                        : line.type === 'deduction'
+                                          ? 'font-medium text-danger'
+                                          : 'font-medium text-muted'
+                                    }
+                                  >
+                                    {line.type === 'earning' ? '+' : line.type === 'deduction' ? '−' : ''}
+                                    {formatCurrency(line.amount, run.currency)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                      </div>
-                      <div className="flex flex-shrink-0 items-center gap-3">
-                        <span className="font-medium text-strong">{formatCurrency(item.net_pay, run.currency)}</span>
-                        <StatusBadge status={item.status} />
-                        {isFinalized && item.status !== 'exception' && (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            title="Download payslip"
-                            aria-label="Download payslip"
-                            isLoading={downloadingItemId === item.id}
-                            onClick={() => handleDownloadPayslip(item)}
-                          >
-                            <Receipt className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

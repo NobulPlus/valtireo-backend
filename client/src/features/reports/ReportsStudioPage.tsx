@@ -16,6 +16,7 @@ import {
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { AsyncSelect, type AsyncOption } from '@/components/ui/AsyncSelect';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -24,11 +25,22 @@ import { StatTile } from '@/components/ui/StatTile';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
+import { searchEmployees, useDocumentRequirementsForType, useDocumentTypesForUpload } from '@/features/employees/api';
+import { useLeavePeriods, useLeaveTypes } from '@/features/leave/api';
+import { useTicketCategories, useTicketResolvers } from '@/features/tickets/api';
+import { useAssetCategories } from '@/features/assets/api';
+import { useSetupLookups } from '@/features/workspace/api';
 import { api, apiClient, ApiError } from '@/lib/apiClient';
 import { cn } from '@/lib/cn';
 import { useDateFormatter } from '@/lib/dateFormat';
+import type { Asset, Paginated } from '@/types/api';
 
 type ReportRow = Record<string, string | number | null | undefined>;
+
+interface ReportSortOption {
+  value: string;
+  label: string;
+}
 
 interface ReportDefinition {
   key: string;
@@ -36,6 +48,7 @@ interface ReportDefinition {
   module: string;
   description: string;
   filters: string[];
+  sort_options: ReportSortOption[];
 }
 
 interface ReportPreview {
@@ -124,6 +137,192 @@ const DATE_RANGE_PAIRS = [
   ['assigned_from', 'assigned_to', 'Assigned range'],
   ['returned_from', 'returned_to', 'Returned range'],
 ] as const;
+
+const ID_FILTER_LABELS: Record<string, string> = {
+  department_id: 'Department',
+  unit_id: 'Unit',
+  cluster_id: 'Cluster',
+  designation_id: 'Designation',
+  grade_level_id: 'Grade level',
+  employment_type_id: 'Employment type',
+  organization_location_id: 'Location',
+  employee_id: 'Employee',
+  reporting_manager_id: 'Reporting manager',
+  handover_to_employee_id: 'Handover to',
+  assigned_to_employee_id: 'Assigned to',
+  leave_type_id: 'Leave type',
+  leave_period_id: 'Leave period',
+  document_type_id: 'Document type',
+  document_requirement_id: 'Document requirement',
+  ticket_category_id: 'Ticket category',
+  assigned_to_user_id: 'Assigned to (agent)',
+  asset_category_id: 'Asset category',
+  asset_id: 'Asset',
+};
+
+const SETUP_LOOKUP_FIELDS: Record<string, 'departments' | 'units' | 'clusters' | 'designations' | 'grade_levels' | 'employment_types' | 'locations'> = {
+  department_id: 'departments',
+  unit_id: 'units',
+  cluster_id: 'clusters',
+  designation_id: 'designations',
+  grade_level_id: 'grade_levels',
+  employment_type_id: 'employment_types',
+  organization_location_id: 'locations',
+};
+
+const EMPLOYEE_SEARCH_FIELDS = new Set(['employee_id', 'reporting_manager_id', 'handover_to_employee_id', 'assigned_to_employee_id']);
+
+function SetupLookupFilter({ lookupKey, value, onChange }: { lookupKey: string; value: string; onChange: (value: string) => void }) {
+  const lookupsQuery = useSetupLookups();
+  const key = SETUP_LOOKUP_FIELDS[lookupKey];
+  const items = ((lookupsQuery.data?.[key] as Array<{ id: number; name: string }> | undefined) ?? []);
+
+  return (
+    <SelectMenu
+      value={value}
+      onChange={onChange}
+      searchable
+      options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]}
+    />
+  );
+}
+
+function EmployeeSearchFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [resolvedLabel, setResolvedLabel] = useState('');
+
+  async function loadOptions(query: string): Promise<AsyncOption[]> {
+    const results = await searchEmployees(query, { status: 'active', per_page: 10 });
+    return results.map((employee) => ({ value: employee.id, label: employee.full_name, description: employee.employee_number }));
+  }
+
+  return (
+    <AsyncSelect
+      value={value ? { value: Number(value), label: resolvedLabel || `#${value}` } : null}
+      onChange={(option) => {
+        onChange(option ? String(option.value) : '');
+        setResolvedLabel(option?.label ?? '');
+      }}
+      loadOptions={loadOptions}
+      placeholder="Search employees…"
+    />
+  );
+}
+
+function AssetSearchFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [resolvedLabel, setResolvedLabel] = useState('');
+
+  async function loadOptions(query: string): Promise<AsyncOption[]> {
+    const response = await api.get<Paginated<Asset>>('/assets', { params: { search: query, per_page: 10 } });
+    return response.data.map((asset) => ({ value: asset.id, label: asset.name, description: asset.asset_tag }));
+  }
+
+  return (
+    <AsyncSelect
+      value={value ? { value: Number(value), label: resolvedLabel || `#${value}` } : null}
+      onChange={(option) => {
+        onChange(option ? String(option.value) : '');
+        setResolvedLabel(option?.label ?? '');
+      }}
+      loadOptions={loadOptions}
+      placeholder="Search assets…"
+    />
+  );
+}
+
+function LeaveTypeFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const query = useLeaveTypes();
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu value={value} onChange={onChange} searchable options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]} />
+  );
+}
+
+function LeavePeriodFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const query = useLeavePeriods();
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu value={value} onChange={onChange} options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]} />
+  );
+}
+
+function DocumentTypeFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const query = useDocumentTypesForUpload();
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu value={value} onChange={onChange} searchable options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]} />
+  );
+}
+
+function DocumentRequirementFilter({ documentTypeId, value, onChange }: { documentTypeId: string; value: string; onChange: (value: string) => void }) {
+  const typeId = documentTypeId ? Number(documentTypeId) : undefined;
+  const query = useDocumentRequirementsForType(typeId);
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu
+      value={value}
+      onChange={onChange}
+      disabled={!typeId}
+      options={[{ value: '', label: typeId ? 'All' : 'Select a document type first' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]}
+    />
+  );
+}
+
+function TicketCategoryFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const query = useTicketCategories();
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu value={value} onChange={onChange} searchable options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]} />
+  );
+}
+
+function TicketResolverFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const query = useTicketResolvers();
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu value={value} onChange={onChange} searchable options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]} />
+  );
+}
+
+function AssetCategoryFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const query = useAssetCategories();
+  const items = query.data?.data ?? [];
+  return (
+    <SelectMenu value={value} onChange={onChange} searchable options={[{ value: '', label: 'All' }, ...items.map((item) => ({ value: String(item.id), label: item.name }))]} />
+  );
+}
+
+/** Renders the right picker for an ID-reference filter instead of a raw numeric text box. */
+function IdFilterField({ filter, filters, onChange }: { filter: string; filters: Record<string, string>; onChange: (filter: string, value: string) => void }) {
+  const value = filters[filter] ?? '';
+  const setValue = (next: string) => onChange(filter, next);
+
+  if (filter in SETUP_LOOKUP_FIELDS) {
+    return <SetupLookupFilter lookupKey={filter} value={value} onChange={setValue} />;
+  }
+  if (EMPLOYEE_SEARCH_FIELDS.has(filter)) {
+    return <EmployeeSearchFilter value={value} onChange={setValue} />;
+  }
+  switch (filter) {
+    case 'leave_type_id':
+      return <LeaveTypeFilter value={value} onChange={setValue} />;
+    case 'leave_period_id':
+      return <LeavePeriodFilter value={value} onChange={setValue} />;
+    case 'document_type_id':
+      return <DocumentTypeFilter value={value} onChange={setValue} />;
+    case 'document_requirement_id':
+      return <DocumentRequirementFilter documentTypeId={filters.document_type_id ?? ''} value={value} onChange={setValue} />;
+    case 'ticket_category_id':
+      return <TicketCategoryFilter value={value} onChange={setValue} />;
+    case 'assigned_to_user_id':
+      return <TicketResolverFilter value={value} onChange={setValue} />;
+    case 'asset_category_id':
+      return <AssetCategoryFilter value={value} onChange={setValue} />;
+    case 'asset_id':
+      return <AssetSearchFilter value={value} onChange={setValue} />;
+    default:
+      return <Input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Enter value" />;
+  }
+}
 
 function titleCase(value: string): string {
   return value
@@ -355,10 +554,7 @@ export function ReportsStudioPage() {
                     onChange={(value) => setFilter('sort_by', value)}
                     placeholder="Sort field"
                     className="w-56"
-                    options={[
-                      { value: '', label: 'Default sort' },
-                      ...columns.slice(0, 10).map((column) => ({ value: column, label: titleCase(column) })),
-                    ]}
+                    options={[{ value: '', label: 'Default sort' }, ...(selected?.sort_options ?? [])]}
                   />
                 )}
                 {reportFilters.includes('sort_direction') && (
@@ -382,12 +578,8 @@ export function ReportsStudioPage() {
               {advancedOpen && advancedFilters.length > 0 && (
                 <div className="mt-4 grid gap-3 rounded-lg border border-border bg-surface-soft p-3 sm:grid-cols-2 xl:grid-cols-3">
                   {advancedFilters.map((filter) => (
-                    <Field key={filter} label={titleCase(filter)}>
-                      <Input
-                        value={filters[filter] ?? ''}
-                        onChange={(event) => setFilter(filter, event.target.value)}
-                        placeholder="Enter value"
-                      />
+                    <Field key={filter} label={ID_FILTER_LABELS[filter] ?? titleCase(filter)}>
+                      <IdFilterField filter={filter} filters={filters} onChange={setFilter} />
                     </Field>
                   ))}
                 </div>

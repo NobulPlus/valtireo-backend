@@ -94,7 +94,7 @@ class EmployeeProfileExtensionTest extends TestCase
         $this->patchJson("/api/employee-profile/emergency-contacts/{$contact->id}", [
             'phone' => '08090000005',
         ])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_employee_detail_includes_profile_extension_records(): void

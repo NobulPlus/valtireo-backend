@@ -164,7 +164,7 @@ class EmployeeOnboardingApprovalTest extends TestCase
         Sanctum::actingAs($employeeUser);
 
         $this->patchJson("/api/employees/{$employee->id}/approve-onboarding", ['confirmation_status' => 'confirmed'])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     public function test_hr_admin_can_activate_onboarding_employee_with_already_approved_profile(): void

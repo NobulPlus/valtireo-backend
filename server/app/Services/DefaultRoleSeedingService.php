@@ -7,7 +7,7 @@ use App\Models\Role;
 use Illuminate\Support\Collection;
 
 /**
- * Seeds every new organization's starter role set — the same 8 roles and
+ * Seeds every new organization's starter role set — standard roles and
  * permission sets that used to be global, now created as this org's own
  * rows. Fully idempotent (firstOrCreate keyed on the internal `key`, never
  * on `name`) so re-running it after an org has renamed one of these roles
@@ -72,7 +72,7 @@ class DefaultRoleSeedingService
                     'designations.view', 'designations.create', 'designations.update',
                     'grade_levels.view', 'grade_levels.create', 'grade_levels.update',
                     'employment_types.view', 'employment_types.create', 'employment_types.update',
-                    'employees.view', 'employees.create', 'employees.update',
+                    'employees.view', 'employees.view_all', 'employees.create', 'employees.update',
                     'employees.view_team', 'employees.view_department', 'employees.assign_role',
                     'employee_documents.view', 'employee_documents.create', 'employee_documents.update',
                     'approval_workflows.view', 'approval_workflows.create', 'approval_workflows.update',
@@ -80,7 +80,7 @@ class DefaultRoleSeedingService
                     'company_events.manage',
                     'leave_requests.view', 'leave_requests.create', 'leave_requests.approve',
                     'attendance.view', 'attendance.create', 'attendance.update', 'attendance.correct',
-                    'service_desk.create', 'service_desk.cancel', 'service_desk.view',
+                    'service_desk.create', 'service_desk.cancel', 'service_desk.view', 'service_desk.manage_categories',
                     'assets.view',
                     'reports.view', 'audit_logs.view',
                     'operations.view', 'operations.manage', 'operations.configure',
@@ -95,15 +95,29 @@ class DefaultRoleSeedingService
                     'organizations.view', 'workspace_settings.view', 'organization_locations.view',
                     'users.view', 'departments.view', 'units.view', 'designations.view',
                     'grade_levels.view', 'employment_types.view',
-                    'employees.view', 'employees.create', 'employees.update', 'employees.view_team',
+                    'employees.view', 'employees.view_all', 'employees.create', 'employees.update', 'employees.view_team',
                     'employee_documents.view', 'employee_documents.create', 'employee_documents.update',
                     'approval_workflows.view', 'approvals.view', 'approvals.action',
                     'leave_requests.view', 'leave_requests.create',
                     'attendance.view', 'attendance.create', 'attendance.update', 'attendance.correct',
-                    'service_desk.create', 'service_desk.cancel', 'service_desk.view',
+                    'service_desk.create', 'service_desk.cancel', 'service_desk.view', 'service_desk.manage_categories',
                     'assets.view',
                     'reports.view', 'operations.view', 'operations.manage',
                     'payroll.view', 'payroll.compensation.view', 'payroll.runs.view',
+                ],
+            ],
+            'payroll_admin' => [
+                'name' => 'Payroll Administrator',
+                'description' => 'Manages compensation, payroll preparation, statutory records, and payment outputs.',
+                'permissions' => [
+                    'organizations.view', 'workspace_settings.view',
+                    'employees.view',
+                    'approvals.view',
+                    'payroll.view', 'payroll.settings.view', 'payroll.settings.update',
+                    'payroll.compensation.view', 'payroll.compensation.manage',
+                    'payroll.bank_accounts.manage',
+                    'payroll.runs.view', 'payroll.runs.manage', 'payroll.runs.submit', 'payroll.runs.finalize',
+                    'payroll.reports.view',
                 ],
             ],
             'compliance_officer' => [
@@ -113,7 +127,7 @@ class DefaultRoleSeedingService
                     'organizations.view', 'workspace_settings.view', 'organization_locations.view',
                     'users.view', 'departments.view', 'units.view', 'designations.view',
                     'grade_levels.view', 'employment_types.view',
-                    'employees.view', 'employees.view_team',
+                    'employees.view', 'employees.view_all', 'employees.view_team',
                     'employee_documents.view', 'employee_documents.create', 'employee_documents.update',
                     'approval_workflows.view', 'approvals.view', 'approvals.action',
                     'leave_requests.view', 'attendance.view', 'attendance.correct',
@@ -129,7 +143,7 @@ class DefaultRoleSeedingService
                     'users.view', 'users.create', 'users.update',
                     'roles.view', 'permissions.view', 'audit_logs.view',
                     'approvals.view', 'approvals.action',
-                    'service_desk.create', 'service_desk.cancel', 'service_desk.view',
+                    'service_desk.create', 'service_desk.cancel', 'service_desk.view', 'service_desk.manage_categories',
                     'assets.view', 'assets.create', 'assets.update',
                     'operations.view',
                 ],
@@ -172,7 +186,7 @@ class DefaultRoleSeedingService
                     'attendance.create', 'attendance.correct',
                     'service_desk.create', 'service_desk.cancel',
                     'operations.view',
-                    'payroll.payslips.view_own',
+                    'payroll.payslips.view_own', 'payroll.compensation.view_own',
                 ],
             ],
         ];

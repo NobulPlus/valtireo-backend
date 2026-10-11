@@ -454,6 +454,17 @@ export interface LeaveType {
   restricted_to_gender?: 'male' | 'female' | null;
 }
 
+export interface LeavePeriod {
+  id: number;
+  organization_id: number;
+  name: string;
+  starts_on: string;
+  ends_on: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LeaveHoliday {
   id: number;
   organization_id: number;
@@ -1506,6 +1517,14 @@ export interface PayrollStatutoryRules {
   paye: { enabled: boolean; version: string | null; effective_from: string | null; brackets: Array<{ amount: number | null; rate: number }> };
   nhf: { enabled: boolean; employee_rate: number; version: string | null };
   overtime: { enabled: boolean; multiplier: number; standard_monthly_hours: number };
+  /** GL account codes used when generating a payroll run's journal entries. */
+  accounting?: {
+    salary_expense: string;
+    employer_cost: string;
+    payroll_bank: string;
+    deductions_payable: string;
+    employer_payable: string;
+  };
 }
 
 export interface PayrollSettings {
@@ -1564,7 +1583,7 @@ export interface EmployeeCompensation {
   recurring_components: Array<{ component_id: number; value: number | null }> | null;
   effective_from: string;
   effective_to: string | null;
-  status: 'active' | 'superseded';
+  status: 'active' | 'scheduled' | 'superseded';
   created_by_id: number;
   pay_group?: PayGroup | null;
   created_by?: { id: number; name: string; email: string } | null;
@@ -1618,6 +1637,12 @@ export interface EmployeePayrollRecord {
   bank_accounts: EmployeeBankAccount[];
 }
 
+export interface MyCompensationResponse {
+  compensations: EmployeeCompensation[];
+  bank_accounts: EmployeeBankAccount[];
+  statutory_profile: EmployeeStatutoryProfile;
+}
+
 export interface PayrollRunItemLine {
   id: number;
   payroll_run_item_id: number;
@@ -1630,6 +1655,14 @@ export interface PayrollRunItemLine {
   amount: string;
   is_taxable: boolean;
   is_statutory: boolean;
+  calculation_snapshot: {
+    proration_ratio?: number;
+    period_days?: number;
+    payable_days?: number;
+    calculation_type?: string;
+    base_amount?: number;
+    segments?: Array<{ compensation_id: number; from: string; to: string; days: number; rate: string | number; amount: number }>;
+  } | null;
 }
 
 export interface PayrollRunItem {

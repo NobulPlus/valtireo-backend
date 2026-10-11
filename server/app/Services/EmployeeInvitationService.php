@@ -21,6 +21,7 @@ class EmployeeInvitationService
             $invitation = EmployeeInvitation::query()
                 ->with('employee.user')
                 ->where('token_hash', hash('sha256', $plainToken))
+                ->lockForUpdate()
                 ->first();
 
             if (! $invitation) {
@@ -43,10 +44,10 @@ class EmployeeInvitationService
                 ]);
             }
 
-            $employee = $invitation->employee;
+            $employee = $invitation->employee()->lockForUpdate()->firstOrFail();
             $user = $employee->user;
 
-            if (! $user) {
+            if (! $user || $user->accessIsBlocked() || ! in_array($employee->status, ['invited', 'onboarding'], true)) {
                 throw ValidationException::withMessages([
                     'token' => ['This invitation is not linked to a user account.'],
                 ]);

@@ -286,8 +286,7 @@ class LeaveRequestService
     private function targetEmployee(User $actor, ?int $employeeId): Employee
     {
         if ($actor->can('leave_requests.approve') && $employeeId) {
-            return Employee::query()
-                ->where('organization_id', $actor->organization_id)
+            return app(EmployeeVisibility::class)->query($actor)
                 ->findOrFail($employeeId);
         }
 

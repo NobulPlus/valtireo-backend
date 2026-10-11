@@ -366,6 +366,6 @@ class EmployeeListingTest extends TestCase
         Sanctum::actingAs($employeeUser);
 
         $this->getJson("/api/employees/{$employee->id}")
-            ->assertForbidden();
+            ->assertNotFound();
     }
 }

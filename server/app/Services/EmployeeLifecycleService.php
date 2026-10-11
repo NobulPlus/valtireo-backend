@@ -38,6 +38,8 @@ class EmployeeLifecycleService
         }
 
         $history = DB::transaction(function () use ($actor, $employee, $data): EmployeeStatusHistory {
+            // Serialize lifecycle changes with invitation acceptance.
+            $employee = Employee::query()->lockForUpdate()->findOrFail($employee->id);
             $previousStatus = $employee->status;
             $newStatus = $data['new_status'] ?? $previousStatus;
             $previousConfirmationStatus = $employee->confirmation_status;

@@ -1328,6 +1328,413 @@ export function StructureSettingsPage() {
   );
 }
 
+interface RequirementFormState {
+  name: string;
+  document_type_id: string;
+  description: string;
+  department_id: string;
+  designation_id: string;
+  grade_level_id: string;
+  employment_type_id: string;
+  organization_location_id: string;
+  is_required: boolean;
+  employee_upload_allowed: boolean;
+  approval_required: boolean;
+  reminder_days: string;
+  is_active: boolean;
+}
+
+function emptyRequirementForm(): RequirementFormState {
+  return {
+    name: '', document_type_id: '', description: '',
+    department_id: '', designation_id: '', grade_level_id: '', employment_type_id: '', organization_location_id: '',
+    is_required: true, employee_upload_allowed: true, approval_required: false, reminder_days: '30', is_active: true,
+  };
+}
+
+function requirementFormFromRow(row: Row): RequirementFormState {
+  const nested = (key: string): Row | null => (row[key] && typeof row[key] === 'object' ? (row[key] as Row) : null);
+  return {
+    name: String(row.name ?? ''),
+    document_type_id: String(nested('document_type')?.id ?? ''),
+    description: String(row.description ?? ''),
+    department_id: String(nested('department')?.id ?? ''),
+    designation_id: String(nested('designation')?.id ?? ''),
+    grade_level_id: String(nested('grade_level')?.id ?? ''),
+    employment_type_id: String(nested('employment_type')?.id ?? ''),
+    organization_location_id: String(nested('location')?.id ?? ''),
+    is_required: Boolean(row.is_required),
+    employee_upload_allowed: Boolean(row.employee_upload_allowed),
+    approval_required: Boolean(row.approval_required),
+    reminder_days: String(row.reminder_days ?? '30'),
+    is_active: Boolean(row.is_active),
+  };
+}
+
+function ScopeSelect({
+  label, value, onChange, options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectMenuOption[];
+}) {
+  return (
+    <Field label={label}>
+      <SelectMenu value={value} onChange={onChange} options={options} />
+    </Field>
+  );
+}
+
+function DocumentRequirementFormModal({
+  open,
+  mode,
+  row,
+  onClose,
+  onSaved,
+  onTypeCreated,
+  documentTypeOptions,
+  departmentOptions,
+  designationOptions,
+  gradeLevelOptions,
+  employmentTypeOptions,
+  locationOptions,
+}: {
+  open: boolean;
+  mode: 'create' | 'edit';
+  row?: Row | null;
+  onClose: () => void;
+  onSaved: () => void;
+  onTypeCreated: () => void;
+  documentTypeOptions: SelectMenuOption[];
+  departmentOptions: SelectMenuOption[];
+  designationOptions: SelectMenuOption[];
+  gradeLevelOptions: SelectMenuOption[];
+  employmentTypeOptions: SelectMenuOption[];
+  locationOptions: SelectMenuOption[];
+}) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<RequirementFormState>(() => (row ? requirementFormFromRow(row) : emptyRequirementForm()));
+  const [showNewType, setShowNewType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeCode, setNewTypeCode] = useState('');
+  const [newTypeRequiresExpiry, setNewTypeRequiresExpiry] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm(row ? requirementFormFromRow(row) : emptyRequirementForm());
+    setShowNewType(false);
+    setNewTypeName('');
+    setNewTypeCode('');
+    setNewTypeRequiresExpiry(false);
+  }, [open, row]);
+
+  const createTypeMutation = useMutation({
+    mutationFn: () =>
+      api.post<{ data: Row }>('/documents/types', {
+        name: newTypeName,
+        code: newTypeCode,
+        requires_expiry_date: newTypeRequiresExpiry,
+        employee_upload_allowed: true,
+        approval_required: true,
+        signature_method: 'none',
+        is_active: true,
+      }),
+    onSuccess: (result) => {
+      toast.success('Document type created', `${newTypeName} is ready to use for this requirement.`);
+      onTypeCreated();
+      queryClient.invalidateQueries({ queryKey: ['control-panel', '/documents/types'] });
+      setForm((current) => ({ ...current, document_type_id: String(result.data.id) }));
+      setShowNewType(false);
+      setNewTypeName('');
+      setNewTypeCode('');
+      setNewTypeRequiresExpiry(false);
+    },
+    onError: (error) => toast.error('Could not create document type', error instanceof ApiError ? error.message : 'Please check the name and code.'),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const payload = {
+        name: form.name,
+        document_type_id: Number(form.document_type_id),
+        description: form.description || null,
+        department_id: form.department_id ? Number(form.department_id) : null,
+        designation_id: form.designation_id ? Number(form.designation_id) : null,
+        grade_level_id: form.grade_level_id ? Number(form.grade_level_id) : null,
+        employment_type_id: form.employment_type_id ? Number(form.employment_type_id) : null,
+        organization_location_id: form.organization_location_id ? Number(form.organization_location_id) : null,
+        is_required: form.is_required,
+        employee_upload_allowed: form.employee_upload_allowed,
+        approval_required: form.approval_required,
+        reminder_days: Number(form.reminder_days || 0),
+        is_active: form.is_active,
+      };
+      return mode === 'edit' && row
+        ? api.patch(`/documents/requirements/${row.id}`, payload)
+        : api.post('/documents/requirements', payload);
+    },
+    onSuccess: () => {
+      toast.success(mode === 'edit' ? 'Requirement updated' : 'Requirement created');
+      onSaved();
+      queryClient.invalidateQueries({ queryKey: ['documents', 'compliance'] });
+      onClose();
+    },
+    onError: (error) => toast.error('Could not save requirement', error instanceof ApiError ? error.message : 'Please check the form and try again.'),
+  });
+
+  const formId = 'document-requirement-form';
+  const canSubmit = form.name.trim() !== '' && form.document_type_id !== '';
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={mode === 'edit' ? 'Edit requirement' : 'Add requirement'}
+      size="lg"
+      footer={
+        <>
+          <ModalCancelAction onClick={onClose} />
+          <ModalSaveAction form={formId} isLoading={saveMutation.isPending} disabled={!canSubmit} title="Save" />
+        </>
+      }
+    >
+      <form
+        id={formId}
+        className="space-y-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          saveMutation.mutate();
+        }}
+      >
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">What it's based on</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Name" required>
+              <Input value={form.name} onChange={(e) => setForm((c) => ({ ...c, name: e.target.value }))} required placeholder="e.g. National ID for new hires" />
+            </Field>
+            <Field label="Document type" required hint="The document catalogue item this requirement is based on.">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <SelectMenu
+                    value={form.document_type_id}
+                    onChange={(value) => setForm((c) => ({ ...c, document_type_id: value }))}
+                    options={[{ value: '', label: 'Select...' }, ...documentTypeOptions]}
+                  />
+                </div>
+                <Button type="button" size="icon" variant="secondary" title="Create a new document type" aria-label="Create a new document type" onClick={() => setShowNewType((v) => !v)}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </Field>
+          </div>
+          {showNewType && (
+            <div className="mt-3 rounded-md border border-dashed border-border bg-surface-soft p-3">
+              <p className="mb-2 text-xs font-medium text-strong">New document type</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="Name">
+                  <Input value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} placeholder="e.g. National ID" />
+                </Field>
+                <Field label="Code">
+                  <Input value={newTypeCode} onChange={(e) => setNewTypeCode(e.target.value)} placeholder="e.g. NATIONAL_ID" />
+                </Field>
+                <Field label="Expiry date required">
+                  <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-strong">
+                    <input type="checkbox" checked={newTypeRequiresExpiry} onChange={(e) => setNewTypeRequiresExpiry(e.target.checked)} />
+                    Requires expiry date
+                  </label>
+                </Field>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-xs leading-5 text-muted">Upload and approval defaults are set to the common case — fine-tune them later in Document types if needed.</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="primary"
+                  isLoading={createTypeMutation.isPending}
+                  disabled={!newTypeName.trim() || !newTypeCode.trim()}
+                  onClick={() => createTypeMutation.mutate()}
+                >
+                  Create type
+                </Button>
+              </div>
+            </div>
+          )}
+          <div className="mt-3">
+            <Field label="Description">
+              <Textarea value={form.description} onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))} placeholder="Optional context for HR reviewing this requirement" />
+            </Field>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Who it applies to</p>
+          <p className="mb-2 text-xs leading-5 text-muted">Leave any of these as "All" to apply the rule organization-wide. Combine them to narrow the rule — e.g. a department and a location together.</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ScopeSelect label="Department" value={form.department_id} onChange={(v) => setForm((c) => ({ ...c, department_id: v }))} options={departmentOptions} />
+            <ScopeSelect label="Designation" value={form.designation_id} onChange={(v) => setForm((c) => ({ ...c, designation_id: v }))} options={designationOptions} />
+            <ScopeSelect label="Grade level" value={form.grade_level_id} onChange={(v) => setForm((c) => ({ ...c, grade_level_id: v }))} options={gradeLevelOptions} />
+            <ScopeSelect label="Employment type" value={form.employment_type_id} onChange={(v) => setForm((c) => ({ ...c, employment_type_id: v }))} options={employmentTypeOptions} />
+            <ScopeSelect label="Location" value={form.organization_location_id} onChange={(v) => setForm((c) => ({ ...c, organization_location_id: v }))} options={locationOptions} />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Upload &amp; review rules</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Required" hint="Required documents appear as compliance expectations.">
+              <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-strong">
+                <input type="checkbox" checked={form.is_required} onChange={(e) => setForm((c) => ({ ...c, is_required: e.target.checked }))} />
+                Required
+              </label>
+            </Field>
+            <Field label="Reminder days" hint="How many days before the deadline to start reminding employees.">
+              <Input type="number" min={0} value={form.reminder_days} onChange={(e) => setForm((c) => ({ ...c, reminder_days: e.target.value }))} />
+            </Field>
+            <Field label="Employee upload allowed" hint="Must also be allowed on the document type itself — both have to agree for employees to self-upload.">
+              <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-strong">
+                <input type="checkbox" checked={form.employee_upload_allowed} onChange={(e) => setForm((c) => ({ ...c, employee_upload_allowed: e.target.checked }))} />
+                Employees can upload
+              </label>
+            </Field>
+            <Field label="Approval required" hint="Overrides the document type's own setting for this specific requirement.">
+              <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-strong">
+                <input type="checkbox" checked={form.approval_required} onChange={(e) => setForm((c) => ({ ...c, approval_required: e.target.checked }))} />
+                Needs HR review
+              </label>
+            </Field>
+            <Field label="Active" hint="Inactive requirements stop applying to new compliance checks without deleting history.">
+              <label className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-strong">
+                <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((c) => ({ ...c, is_active: e.target.checked }))} />
+                Active
+              </label>
+            </Field>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function DocumentRequirementsPanel({
+  requirementRows,
+  documentTypeOptions,
+  departmentOptions,
+  designationOptions,
+  gradeLevelOptions,
+  employmentTypeOptions,
+  locationOptions,
+  onRefetchRequirements,
+  onRefetchTypes,
+}: {
+  requirementRows: Row[];
+  documentTypeOptions: SelectMenuOption[];
+  departmentOptions: SelectMenuOption[];
+  designationOptions: SelectMenuOption[];
+  gradeLevelOptions: SelectMenuOption[];
+  employmentTypeOptions: SelectMenuOption[];
+  locationOptions: SelectMenuOption[];
+  onRefetchRequirements: () => void;
+  onRefetchTypes: () => void;
+}) {
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const [formState, setFormState] = useState<{ open: boolean; mode: 'create' | 'edit'; row: Row | null }>({
+    open: false, mode: 'create', row: null,
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: (row: Row) => api.patch(`/documents/requirements/${row.id}`, { is_active: !row.is_active }),
+    onSuccess: () => {
+      toast.success('Requirement updated');
+      onRefetchRequirements();
+      queryClient.invalidateQueries({ queryKey: ['documents', 'compliance'] });
+    },
+    onError: (error) => toast.error('Could not update requirement', error instanceof ApiError ? error.message : 'Please try again.'),
+  });
+
+  const columns: Column<Row>[] = [
+    { key: 'name', header: 'Name', render: (row) => <span className="font-medium">{formatValue(row.name)}</span> },
+    { key: 'type', header: 'Type', render: (row) => formatValue(valueAt(row, 'document_type.name')) },
+    { key: 'scope', header: 'Applies to', render: (row) => {
+      const parts = [
+        valueAt(row, 'department.name'), valueAt(row, 'designation.name'), valueAt(row, 'grade_level.name'),
+        valueAt(row, 'employment_type.name'), valueAt(row, 'location.name'),
+      ].filter(Boolean).map(String);
+      return parts.length > 0 ? parts.join(', ') : 'All employees';
+    } },
+    { key: 'is_required', header: 'Required', render: (row) => <StatusBadge status={row.is_required ? 'active' : 'inactive'} /> },
+    { key: 'is_active', header: 'Active', render: (row) => <StatusBadge status={row.is_active ? 'active' : 'inactive'} /> },
+    {
+      key: 'actions',
+      header: '',
+      className: 'text-right',
+      render: (row) => (
+        <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            title={row.is_active ? 'Deactivate' : 'Reactivate'}
+            aria-label={row.is_active ? `Deactivate ${formatValue(row.name)}` : `Reactivate ${formatValue(row.name)}`}
+            isLoading={deactivateMutation.isPending}
+            onClick={() => deactivateMutation.mutate(row)}
+          >
+            <Power className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="items-start">
+        <div>
+          <CardTitle>Document requirements</CardTitle>
+          <p className="mt-1 max-w-xl text-xs leading-5 text-muted">Rules that decide who must submit what, and when approval is needed.</p>
+        </div>
+        <span className="rounded-full bg-surface-soft px-2 py-0.5 text-xs font-medium text-muted">
+          {requirementRows.length} record{requirementRows.length === 1 ? '' : 's'}
+        </span>
+      </CardHeader>
+      <CardBody>
+        <div className="mb-4">
+          <Button type="button" size="sm" variant="primary" onClick={() => setFormState({ open: true, mode: 'create', row: null })}>
+            <Plus className="h-3.5 w-3.5" />
+            Add requirement
+          </Button>
+        </div>
+        {requirementRows.length === 0 ? (
+          <EmptyState title="No requirements yet" description="Add one to start tracking who must submit which documents." />
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={requirementRows}
+            rowKey={(row) => String(row.id)}
+            onRowClick={(row) => setFormState({ open: true, mode: 'edit', row })}
+          />
+        )}
+      </CardBody>
+      <DocumentRequirementFormModal
+        open={formState.open}
+        mode={formState.mode}
+        row={formState.row}
+        onClose={() => setFormState((c) => ({ ...c, open: false }))}
+        onSaved={onRefetchRequirements}
+        onTypeCreated={onRefetchTypes}
+        documentTypeOptions={documentTypeOptions}
+        departmentOptions={departmentOptions}
+        designationOptions={designationOptions}
+        gradeLevelOptions={gradeLevelOptions}
+        employmentTypeOptions={employmentTypeOptions}
+        locationOptions={locationOptions}
+      />
+    </Card>
+  );
+}
+
 export function DocumentsControlPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const documentTypesQuery = useQuery({
@@ -1368,41 +1775,50 @@ export function DocumentsControlPage() {
     [lookupsQuery.data?.departments],
   );
 
-  const requirementFields: ActionField[] = [
-    { name: 'name', label: 'Name', required: true },
-    {
-      name: 'document_type_id',
-      label: 'Document type',
-      type: 'select',
-      required: true,
-      options: documentTypeOptions,
-      help: 'The document catalogue item this requirement is based on.',
-    },
-    { name: 'description', label: 'Description', type: 'textarea' },
-    {
-      name: 'department_id',
-      label: 'Department',
-      type: 'select',
-      options: departmentOptions,
-      help: 'Leave as All departments when the rule applies to everyone.',
-    },
-    { name: 'is_required', label: 'Required', type: 'checkbox', defaultValue: true, help: 'Required documents appear as compliance expectations.' },
-    {
-      name: 'employee_upload_allowed',
-      label: 'Employee upload allowed',
-      type: 'checkbox',
-      defaultValue: true,
-      help: 'Allows employees to upload this requirement from self-service. HR can still upload when this is off.',
-    },
-    {
-      name: 'approval_required',
-      label: 'Approval required',
-      type: 'checkbox',
-      help: 'Submitted documents enter the approval/review workflow instead of becoming approved immediately.',
-    },
-    { name: 'reminder_days', label: 'Reminder days', type: 'number', defaultValue: 30 },
-    { name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: true, help: 'Inactive requirements stop applying to new compliance checks without deleting history.' },
-  ];
+  const designationOptions = useMemo(
+    () => [
+      { label: 'All designations', value: '' },
+      ...((lookupsQuery.data?.designations ?? []).map((designation) => ({
+        label: designation.name,
+        value: String(designation.id),
+      }))),
+    ],
+    [lookupsQuery.data?.designations],
+  );
+
+  const gradeLevelOptions = useMemo(
+    () => [
+      { label: 'All grade levels', value: '' },
+      ...((lookupsQuery.data?.grade_levels ?? []).map((gradeLevel) => ({
+        label: gradeLevel.name,
+        value: String(gradeLevel.id),
+      }))),
+    ],
+    [lookupsQuery.data?.grade_levels],
+  );
+
+  const employmentTypeOptions = useMemo(
+    () => [
+      { label: 'All employment types', value: '' },
+      ...((lookupsQuery.data?.employment_types ?? []).map((employmentType) => ({
+        label: employmentType.name,
+        value: String(employmentType.id),
+      }))),
+    ],
+    [lookupsQuery.data?.employment_types],
+  );
+
+  const locationOptions = useMemo(
+    () => [
+      { label: 'All locations', value: '' },
+      ...((lookupsQuery.data?.locations ?? []).map((location) => ({
+        label: location.name,
+        value: String(location.id),
+      }))),
+    ],
+    [lookupsQuery.data?.locations],
+  );
+
 
   const documentTypeRows = rowsFromResponse(documentTypesQuery.data);
   const requirementRows = rowsFromResponse(requirementsQuery.data);
@@ -1523,41 +1939,16 @@ export function DocumentsControlPage() {
           },
         }}
       />
-      <DataPanel
-        config={{
-          title: 'Document requirements',
-          description: 'Rules that decide who must submit what, and when approval is needed.',
-          endpoint: '/documents/requirements',
-          columns: [
-            { key: 'name', label: 'Name' },
-            { key: 'document_type.name', label: 'Type' },
-            { key: 'department.name', label: 'Department' },
-            { key: 'is_required', label: 'Required' },
-          ],
-          action: {
-            label: 'Add requirement',
-            endpoint: '/documents/requirements',
-            successMessage: 'Document requirement created',
-            invalidateKeys: [['control-panel', '/documents/requirements'], ['documents', 'requirements', 'summary'], ['documents', 'compliance']],
-            fields: requirementFields,
-          },
-          edit: {
-            label: 'Edit requirement',
-            endpoint: (row) => `/documents/requirements/${row.id}`,
-            method: 'patch',
-            successMessage: 'Document requirement updated',
-            invalidateKeys: [['control-panel', '/documents/requirements'], ['documents', 'requirements', 'summary'], ['documents', 'compliance']],
-            fields: requirementFields,
-          },
-          deactivate: {
-            label: 'Deactivate requirement',
-            endpoint: (row) => `/documents/requirements/${row.id}`,
-            method: 'patch',
-            successMessage: 'Document requirement deactivated',
-            invalidateKeys: [['control-panel', '/documents/requirements'], ['documents', 'requirements', 'summary'], ['documents', 'compliance']],
-            fields: [{ name: 'is_active', label: 'Active', type: 'checkbox', defaultValue: false }],
-          },
-        }}
+      <DocumentRequirementsPanel
+        requirementRows={requirementRows}
+        documentTypeOptions={documentTypeOptions}
+        departmentOptions={departmentOptions}
+        designationOptions={designationOptions}
+        gradeLevelOptions={gradeLevelOptions}
+        employmentTypeOptions={employmentTypeOptions}
+        locationOptions={locationOptions}
+        onRefetchRequirements={() => requirementsQuery.refetch()}
+        onRefetchTypes={() => documentTypesQuery.refetch()}
       />
     </div>
   );

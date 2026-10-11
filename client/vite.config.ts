@@ -24,6 +24,13 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8000',
           changeOrigin: true,
         },
+        // Public-disk files (photos, logos) — assetUrl() rewrites their
+        // absolute backend URL down to a relative /storage/* path in dev,
+        // which this proxy then forwards the same way /api already is.
+        '/storage': {
+          target: env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
       },
     },
   }

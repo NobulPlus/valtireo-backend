@@ -11,7 +11,7 @@ class DashboardController extends Controller
 {
     public function organization(Request $request, DashboardService $dashboard): JsonResponse
     {
-        abort_unless($request->user()->can('reports.view'), 403, 'You do not have permission to view the organization dashboard.');
+        abort_unless($request->user()->can('reports.view') && app(\App\Services\EmployeeVisibility::class)->organizationWide($request->user()), 403, 'You do not have permission to view the organization dashboard.');
 
         return response()->json($dashboard->organization($request->user(), $request));
     }

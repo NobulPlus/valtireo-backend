@@ -1,9 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { ChevronDown, LogOut, Monitor, Moon, Sun, User, UserRound, Gauge } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, Monitor, Moon, Sun, User, UserRound, Gauge } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme, type ThemePreference } from '@/context/ThemeContext';
 import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { NotificationBell } from '@/components/shell/NotificationBell';
+import { assetUrl } from '@/lib/assetUrl';
 
 const THEME_SEQUENCE: ThemePreference[] = ['light', 'dark', 'system'];
 const THEME_ICON: Record<ThemePreference, typeof Sun> = { light: Sun, dark: Moon, system: Monitor };
@@ -31,7 +32,7 @@ function ThemeToggle() {
   );
 }
 
-export function Topbar() {
+export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const { session, logout, canChooseWorkspaceMode, workspaceMode, setWorkspaceMode, adminLandingRoute } = useAuth();
   const navigate = useNavigate();
   const user = session?.user;
@@ -54,10 +55,18 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-surface px-5">
-      <div className="flex items-center gap-2 text-sm text-muted">
+    <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border bg-surface px-4 sm:px-5">
+      <div className="flex min-w-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={onOpenMobileNav}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted hover:bg-surface-soft hover:text-strong lg:hidden"
+          aria-label="Open navigation"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
         {session?.organization && (
-          <span className="font-medium text-strong">{session.organization.name}</span>
+          <span className="truncate text-sm font-medium text-strong">{session.organization.name}</span>
         )}
       </div>
 
@@ -76,8 +85,8 @@ export function Topbar() {
               aria-label="Account menu"
             >
               <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-teal-light text-pine">
-                {user?.photo_url ? (
-                  <img src={user.photo_url} alt="" className="h-full w-full object-cover" />
+                {assetUrl(user?.photo_url) ? (
+                  <img src={assetUrl(user?.photo_url) ?? undefined} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <User className="h-3.5 w-3.5" />
                 )}

@@ -22,6 +22,8 @@ class EmployeeInvitation extends Model implements AuditableContract
 {
     use Auditable;
 
+    protected $auditExclude = ['token_hash'];
+
     public function organization(): BelongsTo
     {
         return $this->belongsTo(Organization::class);

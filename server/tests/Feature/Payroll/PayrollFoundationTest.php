@@ -115,4 +115,102 @@ class PayrollFoundationTest extends TestCase
         $this->getJson("/api/payroll/runs/{$otherRun->id}")->assertNotFound();
         $this->getJson('/api/payroll/runs')->assertOk()->assertJsonMissing(['reference' => 'PRIVATE-PAYROLL']);
     }
+
+    public function test_employee_payroll_record_distinguishes_active_and_scheduled_compensation(): void
+    {
+        $this->seed();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('organization_id', $admin->organization_id)->where('status', 'active')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        foreach ([['amount' => 500000, 'date' => '2026-01-01'], ['amount' => 650000, 'date' => '2030-01-01']] as $salary) {
+            $this->postJson("/api/payroll/employees/{$employee->id}/compensations", [
+                'base_salary' => $salary['amount'], 'currency' => 'NGN', 'pay_frequency' => 'monthly',
+                'effective_from' => $salary['date'], 'recurring_components' => [],
+            ])->assertCreated();
+        }
+
+        $response = $this->getJson("/api/payroll/employees/{$employee->id}")->assertOk();
+        $this->assertSame('scheduled', $response->json('compensations.0.status'));
+        $this->assertSame('active', $response->json('compensations.1.status'));
+
+        $plainEmployee = User::factory()->create([
+            'organization_id' => $admin->organization_id,
+        ]);
+        $employee->update(['user_id' => $plainEmployee->id]);
+        Sanctum::actingAs($plainEmployee);
+        $this->getJson("/api/payroll/employees/{$employee->id}")->assertForbidden();
+
+        $otherOrganization = Organization::factory()->create();
+        $otherEmployee = Employee::factory()->create(['organization_id' => $otherOrganization->id]);
+        Sanctum::actingAs($admin);
+        $this->getJson("/api/payroll/employees/{$otherEmployee->id}")->assertNotFound();
+    }
+
+    public function test_mid_period_salary_change_is_prorated_across_effective_records(): void
+    {
+        $this->seed();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('organization_id', $admin->organization_id)->where('status', 'active')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $groupId = $this->postJson('/api/payroll/pay-groups', [
+            'name' => 'Effective dated payroll', 'code' => 'EFFECTIVE', 'frequency' => 'monthly', 'pay_day' => 31,
+        ])->assertCreated()->json('pay_group.id');
+        $bankAccountId = $this->postJson("/api/payroll/employees/{$employee->id}/bank-accounts", [
+            'bank_name' => 'Test Bank', 'account_number' => '0123456789',
+            'account_name' => trim("{$employee->first_name} {$employee->last_name}"),
+        ])->assertCreated()->json('bank_account.id');
+        $this->patchJson("/api/payroll/bank-accounts/{$bankAccountId}", ['verification_status' => 'verified'])->assertOk();
+
+        foreach ([['amount' => 500000, 'date' => '2026-01-01'], ['amount' => 620000, 'date' => '2026-08-16']] as $salary) {
+            $this->postJson("/api/payroll/employees/{$employee->id}/compensations", [
+                'pay_group_id' => $groupId, 'base_salary' => $salary['amount'], 'currency' => 'NGN',
+                'pay_frequency' => 'monthly', 'effective_from' => $salary['date'], 'recurring_components' => [],
+            ])->assertCreated();
+        }
+
+        $runId = $this->postJson('/api/payroll/runs', [
+            'pay_group_id' => $groupId, 'reference' => 'PAY-SPLIT-RATE', 'name' => 'Split rate payroll',
+            'period_start' => '2026-08-01', 'period_end' => '2026-08-31', 'payment_date' => '2026-08-31', 'currency' => 'NGN',
+        ])->assertCreated()->json('payroll_run.id');
+
+        $this->postJson("/api/payroll/runs/{$runId}/calculate")
+            ->assertOk()
+            ->assertJsonPath('payroll_run.items.0.base_pay', 561935.48)
+            ->assertJsonPath('payroll_run.items.0.status', 'calculated');
+    }
+
+    public function test_compensation_frequency_and_currency_mismatches_are_blocked(): void
+    {
+        $this->seed();
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $employee = Employee::query()->where('organization_id', $admin->organization_id)->where('status', 'active')->firstOrFail();
+        Sanctum::actingAs($admin);
+
+        $groupId = $this->postJson('/api/payroll/pay-groups', [
+            'name' => 'Monthly controls', 'code' => 'MONTHLY-CONTROL', 'frequency' => 'monthly', 'pay_day' => 25,
+        ])->assertCreated()->json('pay_group.id');
+
+        $this->postJson("/api/payroll/employees/{$employee->id}/compensations", [
+            'pay_group_id' => $groupId, 'base_salary' => 1000, 'currency' => 'USD',
+            'pay_frequency' => 'weekly', 'effective_from' => '2026-01-01', 'recurring_components' => [],
+        ])->assertUnprocessable();
+
+        $this->postJson("/api/payroll/employees/{$employee->id}/compensations", [
+            'pay_group_id' => $groupId, 'base_salary' => 1000, 'currency' => 'USD',
+            'pay_frequency' => 'monthly', 'effective_from' => '2026-01-01', 'recurring_components' => [],
+        ])->assertCreated();
+
+        $runId = $this->postJson('/api/payroll/runs', [
+            'pay_group_id' => $groupId, 'reference' => 'PAY-CURRENCY-GUARD', 'name' => 'Currency guard',
+            'period_start' => '2026-08-01', 'period_end' => '2026-08-31', 'payment_date' => '2026-08-31', 'currency' => 'NGN',
+        ])->assertCreated()->json('payroll_run.id');
+
+        $this->postJson("/api/payroll/runs/{$runId}/calculate")
+            ->assertOk()
+            ->assertJsonPath('payroll_run.items.0.status', 'exception')
+            ->assertJsonPath('payroll_run.items.0.exceptions.0.code', 'currency_mismatch');
+        $this->postJson("/api/payroll/runs/{$runId}/submit")->assertUnprocessable();
+    }
 }

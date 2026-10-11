@@ -109,6 +109,11 @@ class ReportService
                 'permission' => 'employees.view',
                 'filters' => ['search', 'status', 'confirmation_status', 'department_id', 'unit_id', 'cluster_id', 'designation_id', 'grade_level_id', 'employment_type_id', 'organization_location_id', 'reporting_manager_id', 'profile_status', 'date_column', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Work Email', 'Status', 'Confirmation Status', 'Department', 'Unit', 'Cluster', 'Designation', 'Grade Level', 'Employment Type', 'Location', 'Reporting Manager', 'Profile Status', 'Start Date', 'Created At'],
+                'sort_options' => [
+                    ['value' => 'created_at', 'label' => 'Created At'], ['value' => 'updated_at', 'label' => 'Updated At'],
+                    ['value' => 'start_date', 'label' => 'Start Date'], ['value' => 'employee_number', 'label' => 'Employee Number'],
+                    ['value' => 'first_name', 'label' => 'First Name'], ['value' => 'last_name', 'label' => 'Last Name'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'document_compliance',
@@ -118,6 +123,10 @@ class ReportService
                 'permission' => 'employee_documents.view',
                 'filters' => ['search', 'status', 'document_type_id', 'document_requirement_id', 'employee_id', 'department_id', 'expires_from', 'expires_to', 'submitted_from', 'submitted_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Document Type', 'Requirement', 'Title', 'Status', 'Issued At', 'Expires At', 'Submitted At', 'Reviewed At'],
+                'sort_options' => [
+                    ['value' => 'submitted_at', 'label' => 'Submitted At'], ['value' => 'reviewed_at', 'label' => 'Reviewed At'],
+                    ['value' => 'expires_at', 'label' => 'Expires At'], ['value' => 'created_at', 'label' => 'Created At'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'leave_balances',
@@ -127,6 +136,10 @@ class ReportService
                 'permission' => 'leave_requests.view',
                 'filters' => ['search', 'employee_id', 'department_id', 'leave_type_id', 'leave_period_id', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Leave Type', 'Leave Period', 'Allocated', 'Used', 'Pending', 'Available', 'Notes'],
+                'sort_options' => [
+                    ['value' => 'days_allocated', 'label' => 'Days Allocated'], ['value' => 'days_used', 'label' => 'Days Used'],
+                    ['value' => 'days_pending', 'label' => 'Days Pending'], ['value' => 'created_at', 'label' => 'Created At'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'leave_requests',
@@ -136,6 +149,11 @@ class ReportService
                 'permission' => 'leave_requests.view',
                 'filters' => ['search', 'employee_id', 'handover_to_employee_id', 'department_id', 'leave_type_id', 'leave_period_id', 'status', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Leave Type', 'Leave Period', 'Status', 'Starts On', 'Ends On', 'Total Days', 'Handover To', 'Handover Note', 'Reason', 'Submitted At', 'Reviewed At'],
+                'sort_options' => [
+                    ['value' => 'starts_on', 'label' => 'Starts On'], ['value' => 'ends_on', 'label' => 'Ends On'],
+                    ['value' => 'total_days', 'label' => 'Total Days'], ['value' => 'submitted_at', 'label' => 'Submitted At'],
+                    ['value' => 'reviewed_at', 'label' => 'Reviewed At'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'attendance_summary',
@@ -145,6 +163,12 @@ class ReportService
                 'permission' => 'attendance.view',
                 'filters' => ['search', 'employee_id', 'department_id', 'status', 'source', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Total Records', 'Present', 'Late', 'Absent', 'Half Day', 'Corrected', 'Worked Minutes'],
+                'sort_options' => [
+                    ['value' => 'employee_number', 'label' => 'Employee Number'], ['value' => 'full_name', 'label' => 'Full Name'],
+                    ['value' => 'total_records', 'label' => 'Total Records'], ['value' => 'present_count', 'label' => 'Present'],
+                    ['value' => 'late_count', 'label' => 'Late'], ['value' => 'absent_count', 'label' => 'Absent'],
+                    ['value' => 'worked_minutes', 'label' => 'Worked Minutes'],
+                ],
             ],
             [
                 'key' => 'attendance_exceptions',
@@ -154,6 +178,11 @@ class ReportService
                 'permission' => 'attendance.view',
                 'filters' => ['search', 'employee_id', 'department_id', 'status', 'source', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Attendance Date', 'Status', 'Check In', 'Check Out', 'Duration Minutes', 'Source', 'Shift', 'Notes'],
+                'sort_options' => [
+                    ['value' => 'attendance_date', 'label' => 'Attendance Date'], ['value' => 'check_in_at', 'label' => 'Check In'],
+                    ['value' => 'check_out_at', 'label' => 'Check Out'], ['value' => 'duration_minutes', 'label' => 'Duration Minutes'],
+                    ['value' => 'status', 'label' => 'Status'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'ticket_log',
@@ -163,6 +192,10 @@ class ReportService
                 'permission' => 'service_desk.view',
                 'filters' => ['search', 'status', 'priority', 'ticket_category_id', 'assigned_to_user_id', 'employee_id', 'date_from', 'date_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Employee Number', 'Full Name', 'Category', 'Priority', 'Status', 'Assigned To', 'Subject', 'Submitted At', 'Resolved At', 'SLA Due At'],
+                'sort_options' => [
+                    ['value' => 'submitted_at', 'label' => 'Submitted At'], ['value' => 'resolved_at', 'label' => 'Resolved At'],
+                    ['value' => 'priority', 'label' => 'Priority'], ['value' => 'status', 'label' => 'Status'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'asset_inventory',
@@ -172,6 +205,12 @@ class ReportService
                 'permission' => 'assets.view',
                 'filters' => ['search', 'status', 'condition', 'asset_category_id', 'organization_location_id', 'assigned_to_employee_id', 'purchase_from', 'purchase_to', 'warranty_from', 'warranty_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Asset Tag', 'Name', 'Serial Number', 'Category', 'Status', 'Condition', 'Assigned To', 'Location', 'Purchase Date', 'Warranty Expires At', 'Notes'],
+                'sort_options' => [
+                    ['value' => 'asset_tag', 'label' => 'Asset Tag'], ['value' => 'name', 'label' => 'Name'],
+                    ['value' => 'status', 'label' => 'Status'], ['value' => 'condition', 'label' => 'Condition'],
+                    ['value' => 'assigned_at', 'label' => 'Assigned At'], ['value' => 'purchase_date', 'label' => 'Purchase Date'],
+                    ['value' => 'warranty_expires_at', 'label' => 'Warranty Expires At'], ['value' => 'created_at', 'label' => 'Created At'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
             [
                 'key' => 'asset_assignments',
@@ -181,29 +220,64 @@ class ReportService
                 'permission' => 'assets.view',
                 'filters' => ['search', 'asset_id', 'employee_id', 'assigned_from', 'assigned_to', 'returned_from', 'returned_to', 'sort_by', 'sort_direction'],
                 'csv_headers' => ['Asset Tag', 'Asset Name', 'Employee Number', 'Employee Name', 'Assigned By', 'Returned By', 'Assigned At', 'Returned At', 'Issue Condition', 'Return Condition', 'Issue Note', 'Return Note'],
+                'sort_options' => [
+                    ['value' => 'assigned_at', 'label' => 'Assigned At'], ['value' => 'returned_at', 'label' => 'Returned At'],
+                    ['value' => 'asset_id', 'label' => 'Asset'], ['value' => 'employee_id', 'label' => 'Employee'], ['value' => 'id', 'label' => 'ID'],
+                ],
             ],
         ];
     }
 
     private function query(User $user, string $key, Request $request): Builder
     {
-        return match ($key) {
-            'employee_directory' => $this->employeeDirectoryQuery($user, $request),
-            'document_compliance' => $this->documentComplianceQuery($user, $request),
-            'leave_balances' => $this->leaveBalancesQuery($user, $request),
-            'leave_requests' => $this->leaveRequestsQuery($user, $request),
-            'attendance_summary' => $this->attendanceSummaryQuery($user, $request),
-            'attendance_exceptions' => $this->attendanceExceptionsQuery($user, $request),
-            'ticket_log' => $this->ticketLogQuery($user, $request),
-            'asset_inventory' => $this->assetInventoryQuery($user, $request),
-            'asset_assignments' => $this->assetAssignmentsQuery($user, $request),
+        $report = collect($this->definitions())->firstWhere('key', $key);
+        abort_unless($report, 404);
+
+        $query = match ($key) {
+            'employee_directory' => $this->employeeDirectoryQuery($user, $request, $report),
+            'document_compliance' => $this->documentComplianceQuery($user, $request, $report),
+            'leave_balances' => $this->leaveBalancesQuery($user, $request, $report),
+            'leave_requests' => $this->leaveRequestsQuery($user, $request, $report),
+            'attendance_summary' => $this->attendanceSummaryQuery($user, $request, $report),
+            'attendance_exceptions' => $this->attendanceExceptionsQuery($user, $request, $report),
+            'ticket_log' => $this->ticketLogQuery($user, $request, $report),
+            'asset_inventory' => $this->assetInventoryQuery($user, $request, $report),
+            'asset_assignments' => $this->assetAssignmentsQuery($user, $request, $report),
             default => abort(404),
         };
+
+        // These three reports gate on service_desk.view / assets.view, and both
+        // TicketController::index() and AssetController::index() already treat
+        // that permission as full, unrestricted visibility (no employee-hierarchy
+        // scoping exists for tickets or assets) — so reaching the report at all
+        // means the viewer is entitled to see every row, not just their own.
+        if (in_array($key, ['ticket_log', 'asset_inventory', 'asset_assignments'], true)) {
+            return $query;
+        }
+
+        if (app(EmployeeVisibility::class)->organizationWide($user)) {
+            return $query;
+        }
+
+        $column = match ($key) {
+            'employee_directory', 'attendance_summary' => 'employees.id',
+            default => 'employee_id',
+        };
+
+        return $query->whereIn($column, app(EmployeeVisibility::class)->ids($user));
     }
 
-    private function employeeDirectoryQuery(User $user, Request $request): Builder
+    /**
+     * @param array<string, mixed> $report
+     */
+    private function sortableColumns(array $report): array
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'created_at')->toString(), ['id', 'created_at', 'updated_at', 'start_date', 'employee_number', 'first_name', 'last_name'], 'created_at');
+        return array_column($report['sort_options'], 'value');
+    }
+
+    private function employeeDirectoryQuery(User $user, Request $request, array $report): Builder
+    {
+        $sortBy = $this->allowed($request->string('sort_by', 'created_at')->toString(), $this->sortableColumns($report), 'created_at');
         $dateColumn = $this->allowed($request->string('date_column', 'created_at')->toString(), ['created_at', 'updated_at', 'start_date', 'invited_at', 'activated_at'], 'created_at');
 
         return Employee::query()
@@ -226,9 +300,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function documentComplianceQuery(User $user, Request $request): Builder
+    private function documentComplianceQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'submitted_at')->toString(), ['id', 'submitted_at', 'reviewed_at', 'expires_at', 'created_at'], 'submitted_at');
+        $sortBy = $this->allowed($request->string('sort_by', 'submitted_at')->toString(), $this->sortableColumns($report), 'submitted_at');
 
         return EmployeeDocument::query()
             ->with(['employee.department', 'documentType', 'requirement'])
@@ -246,9 +320,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function leaveBalancesQuery(User $user, Request $request): Builder
+    private function leaveBalancesQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'id')->toString(), ['id', 'days_allocated', 'days_used', 'days_pending', 'created_at'], 'id');
+        $sortBy = $this->allowed($request->string('sort_by', 'id')->toString(), $this->sortableColumns($report), 'id');
 
         return LeaveEntitlement::query()
             ->with(['employee.department', 'leaveType', 'leavePeriod'])
@@ -261,9 +335,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function leaveRequestsQuery(User $user, Request $request): Builder
+    private function leaveRequestsQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'starts_on')->toString(), ['id', 'starts_on', 'ends_on', 'total_days', 'submitted_at', 'reviewed_at'], 'starts_on');
+        $sortBy = $this->allowed($request->string('sort_by', 'starts_on')->toString(), $this->sortableColumns($report), 'starts_on');
 
         return LeaveRequest::query()
             ->with(['employee.department', 'handoverTo', 'leaveType', 'leavePeriod'])
@@ -280,9 +354,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function attendanceSummaryQuery(User $user, Request $request): Builder
+    private function attendanceSummaryQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'employee_number')->toString(), ['employee_number', 'full_name', 'total_records', 'present_count', 'late_count', 'absent_count', 'worked_minutes'], 'employee_number');
+        $sortBy = $this->allowed($request->string('sort_by', 'employee_number')->toString(), $this->sortableColumns($report), 'employee_number');
         $records = AttendanceRecord::query()
             ->selectRaw('employee_id, count(*) as total_records')
             ->selectRaw("sum(case when status = 'present' then 1 else 0 end) as present_count")
@@ -316,9 +390,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function attendanceExceptionsQuery(User $user, Request $request): Builder
+    private function attendanceExceptionsQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'attendance_date')->toString(), ['id', 'attendance_date', 'check_in_at', 'check_out_at', 'duration_minutes', 'status'], 'attendance_date');
+        $sortBy = $this->allowed($request->string('sort_by', 'attendance_date')->toString(), $this->sortableColumns($report), 'attendance_date');
 
         return AttendanceRecord::query()
             ->with(['employee.department', 'workShift'])
@@ -338,9 +412,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function ticketLogQuery(User $user, Request $request): Builder
+    private function ticketLogQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'submitted_at')->toString(), ['id', 'submitted_at', 'resolved_at', 'priority', 'status'], 'submitted_at');
+        $sortBy = $this->allowed($request->string('sort_by', 'submitted_at')->toString(), $this->sortableColumns($report), 'submitted_at');
 
         return Ticket::query()
             ->with(['employee.department', 'category', 'assignedTo'])
@@ -356,9 +430,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function assetInventoryQuery(User $user, Request $request): Builder
+    private function assetInventoryQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'created_at')->toString(), ['id', 'asset_tag', 'name', 'status', 'condition', 'assigned_at', 'purchase_date', 'warranty_expires_at', 'created_at'], 'created_at');
+        $sortBy = $this->allowed($request->string('sort_by', 'created_at')->toString(), $this->sortableColumns($report), 'created_at');
 
         return Asset::query()
             ->with(['category', 'assignedTo', 'location'])
@@ -383,9 +457,9 @@ class ReportService
             ->orderBy($sortBy, $this->direction($request));
     }
 
-    private function assetAssignmentsQuery(User $user, Request $request): Builder
+    private function assetAssignmentsQuery(User $user, Request $request, array $report): Builder
     {
-        $sortBy = $this->allowed($request->string('sort_by', 'assigned_at')->toString(), ['id', 'asset_id', 'employee_id', 'assigned_at', 'returned_at'], 'assigned_at');
+        $sortBy = $this->allowed($request->string('sort_by', 'assigned_at')->toString(), $this->sortableColumns($report), 'assigned_at');
 
         return AssetAssignmentHistory::query()
             ->with(['asset.category', 'employee.department', 'assignedBy', 'returnedBy'])

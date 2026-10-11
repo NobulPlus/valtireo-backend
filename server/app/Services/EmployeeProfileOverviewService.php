@@ -45,6 +45,10 @@ class EmployeeProfileOverviewService
             'profileActivities.actor',
         ]);
 
+        $employee->setRelation('customFieldValues', EmployeeFieldVisibility::values(
+            $employee, $employee->customFieldValues, request()->user()
+        ));
+
         return [
             'employee' => new EmployeeResource($employee),
             'profile' => $employee->profile ? new EmployeeProfileResource($employee->profile) : null,

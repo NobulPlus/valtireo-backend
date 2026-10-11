@@ -169,10 +169,12 @@ export function OrganizationVerificationPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusBadge status={item.status} />
-                  <Button type="button" variant="secondary" size="sm" onClick={() => openUpload(item)}>
-                    <Upload className="h-4 w-4" />
-                    {item.document_id ? 'Replace' : 'Upload'}
-                  </Button>
+                  {(item.status === 'missing' || item.status === 'rejected' || item.status === 'changes_requested') && (
+                    <Button type="button" variant="secondary" size="sm" onClick={() => openUpload(item)}>
+                      <Upload className="h-4 w-4" />
+                      {item.document_id ? 'Replace' : 'Upload'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

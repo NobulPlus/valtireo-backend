@@ -96,7 +96,9 @@ class EmployeeResource extends JsonResource
             'documents' => EmployeeDocumentResource::collection($this->whenLoaded('documents')),
             'assets' => AssetResource::collection($this->whenLoaded('assets')),
             'asset_assignment_history' => AssetAssignmentHistoryResource::collection($this->whenLoaded('assetAssignmentHistories')),
-            'custom_fields' => EmployeeCustomFieldValueResource::collection($this->whenLoaded('customFieldValues')),
+            'custom_fields' => $this->whenLoaded('customFieldValues', fn () => EmployeeCustomFieldValueResource::collection(
+                \App\Services\EmployeeFieldVisibility::values($this->resource, $this->customFieldValues, $request->user())
+            )),
             'status_history' => EmployeeStatusHistoryResource::collection($this->whenLoaded('statusHistories')),
             'reporting_history' => EmployeeReportingHistoryResource::collection($this->whenLoaded('reportingHistories')),
             'activities' => EmployeeProfileActivityResource::collection($this->whenLoaded('profileActivities')),

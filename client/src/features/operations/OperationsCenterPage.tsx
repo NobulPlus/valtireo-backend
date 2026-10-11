@@ -292,7 +292,7 @@ function TasksTab() {
           <CardBody className="p-0">
             <ul className="divide-y divide-border">
               {signals.map((signal) => (
-                <li key={signal.key} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                <li key={signal.key} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className={`h-4 w-4 flex-shrink-0 ${signal.severity === 'critical' ? 'text-danger' : 'text-warning'}`} />
                     <span className="text-strong">{signal.title}</span>
@@ -783,7 +783,7 @@ function AutomationTab() {
           {rules.length > 0 && (
             <ul className="divide-y divide-border">
               {rules.map((rule) => (
-                <li key={rule.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                <li key={rule.id} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-medium text-strong">{rule.name}</p>
                     <p className="text-xs text-muted">
@@ -818,7 +818,7 @@ function AutomationTab() {
           {runs.length > 0 && (
             <ul className="divide-y divide-border">
               {runs.map((run) => (
-                <li key={run.id} className="flex items-center justify-between gap-4 px-5 py-3 text-sm">
+                <li key={run.id} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-medium text-strong">{run.rule?.name ?? `Rule #${run.operation_automation_rule_id}`}</p>
                     <p className="text-xs text-muted">

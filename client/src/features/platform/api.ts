@@ -124,13 +124,33 @@ export function useUpdateOrganizationStatus(id: string | undefined) {
   });
 }
 
+/**
+ * The verification document's download_url points at a bearer-token-
+ * protected API route — a plain window.open(url) navigation never carries
+ * that token (browsers don't attach custom headers to link clicks) and
+ * 401s in the new tab. Fetch through the shared axios client instead and
+ * hand the browser a local blob URL, matching the pattern already used for
+ * employee documents and leave evidence/handover files.
+ */
+export async function viewVerificationDocument(documentId: number): Promise<void> {
+  const response = await apiClient.get(`/organization-verification/documents/${documentId}/download`, {
+    responseType: 'blob',
+  });
+  const contentType = response.headers['content-type'];
+  const blobUrl = window.URL.createObjectURL(
+    new Blob([response.data], { type: typeof contentType === 'string' ? contentType : undefined }),
+  );
+  window.open(blobUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60_000);
+}
+
 export function usePlatformOrganizationVerificationDocuments(id: string | undefined) {
   return useQuery({
     queryKey: ['platform', 'organizations', id, 'verification-documents'],
     queryFn: () =>
       api.get<{
         verification: OrganizationVerificationSummary;
-        documents: { data: OrganizationVerificationDocument[] };
+        documents: OrganizationVerificationDocument[] | { data: OrganizationVerificationDocument[] };
       }>(`/platform/organizations/${id}/verification-documents`),
     enabled: Boolean(id),
   });
@@ -159,6 +179,15 @@ export function useReviewOrganizationVerificationDocument(organizationId: string
       queryClient.invalidateQueries({ queryKey: ['platform', 'organizations', organizationId] });
       queryClient.invalidateQueries({ queryKey: ['platform', 'organizations', organizationId, 'verification-documents'] });
     },
+  });
+}
+
+export function useResendAdminInvitation(organizationId: string | undefined) {
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ invitation: { email: string; setup_url: string; delivery_status: string } }>(
+        `/platform/organizations/${organizationId}/resend-admin-invitation`,
+      ),
   });
 }
 

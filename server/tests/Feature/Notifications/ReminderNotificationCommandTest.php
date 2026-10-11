@@ -66,8 +66,8 @@ class ReminderNotificationCommandTest extends TestCase
         Sanctum::actingAs($employeeUser);
         $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => '2026-10-05',
-            'ends_on' => '2026-10-06',
+            'starts_on' => now()->addDays(10)->toDateString(),
+            'ends_on' => now()->addDays(11)->toDateString(),
             'reason' => 'Personal time.',
         ])->assertCreated();
 

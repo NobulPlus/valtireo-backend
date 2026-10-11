@@ -88,7 +88,7 @@ class NotificationDispatchService
                 'title' => 'Complete your Valtireo invitation',
                 'message' => "You have been invited to join {$employee->organization?->name}.",
                 'action_label' => 'Accept invitation',
-                'action_url' => "/employee-invitations/{$plainToken}/accept",
+                'action_url' => "/accept-invitation/{$plainToken}",
                 'entity_type' => 'employee_invitation',
                 'entity_id' => $invitation->id,
                 'metadata' => [

@@ -1,4 +1,7 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios';
+import { ApiError } from './ApiError';
+export { ApiError } from './ApiError';
+import { notifySessionChange } from './sessionEvents';
 import type { ValidationErrorResponse } from '@/types/api';
 
 const TOKEN_STORAGE_KEY = 'valtireo.auth_token';
@@ -22,20 +25,22 @@ export function getStoredToken(): string | null {
 }
 
 export function setStoredToken(token: string | null): void {
+  const previous = getStoredToken();
   if (token) {
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
   } else {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
   }
+  if (previous !== token) notifySessionChange();
 }
 
 apiClient.interceptors.request.use((config) => {
   const token = getStoredToken();
-  if (token) {
+  if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+}, undefined, { synchronous: true });
 
 /** A single event bus so the auth context can react to auth failures from anywhere. */
 type UnauthorizedListener = () => void;
@@ -52,26 +57,22 @@ export function onWorkspaceSuspended(listener: UnauthorizedListener): () => void
   return () => workspaceSuspendedListeners.delete(listener);
 }
 
-export class ApiError extends Error {
-  status: number;
-  errors: Record<string, string[]> | null;
-
-  constructor(message: string, status: number, errors: Record<string, string[]> | null = null) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.errors = errors;
-  }
-
-  /** First validation message for a given field, if any. */
-  fieldError(field: string): string | undefined {
-    return this.errors?.[field]?.[0];
-  }
-}
-
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error: AxiosError<ValidationErrorResponse | { message?: string }>) => {
+  (response) => {
+    const sentAuthorization = response.config.headers.Authorization;
+    const expectedAuthorization = getStoredToken() ? 'Bearer ' + getStoredToken() : undefined;
+    if (sentAuthorization !== expectedAuthorization) {
+      return Promise.reject(new ApiError('The session has changed. Please retry.', 401));
+    }
+    return response;
+  },
+  (error: AxiosError<ValidationErrorResponse | { message?: string; code?: string }>) => {
+    const sentAuthorization = error.config?.headers?.Authorization;
+    const currentToken = getStoredToken();
+    const expectedAuthorization = currentToken ? 'Bearer ' + currentToken : undefined;
+    if (sentAuthorization !== expectedAuthorization) {
+      return Promise.reject(new ApiError('The session has changed. Please retry.', 401));
+    }
     const status = error.response?.status ?? 0;
     const data = error.response?.data;
     const message =
@@ -80,12 +81,14 @@ apiClient.interceptors.response.use(
       'Something went wrong. Please try again.';
     const errors = data && 'errors' in data ? (data as ValidationErrorResponse).errors : null;
 
-    if (status === 401) {
+    const belongsToCurrentSession = Boolean(currentToken && sentAuthorization === 'Bearer ' + currentToken);
+
+    if (status === 401 && belongsToCurrentSession) {
       setStoredToken(null);
       unauthorizedListeners.forEach((listener) => listener());
     }
 
-    if (status === 403 && message.toLowerCase().includes('organization has been suspended')) {
+    if (status === 403 && belongsToCurrentSession && data && 'code' in data && data.code === 'organization_access_revoked') {
       setStoredToken(null);
       workspaceSuspendedListeners.forEach((listener) => listener());
     }

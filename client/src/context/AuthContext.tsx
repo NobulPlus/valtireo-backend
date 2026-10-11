@@ -4,10 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import { api, ApiError, getStoredToken, onUnauthorized, onWorkspaceSuspended, setStoredToken } from '@/lib/apiClient';
+import { onSessionChange } from '@/lib/sessionEvents';
+import { queryClient } from '@/lib/queryClient';
 import type { EntitledModule, LoginResponse, SessionPayload } from '@/types/api';
 
 export type WorkspaceMode = 'admin' | 'employee';
@@ -74,14 +77,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [storedMode, setStoredMode] = useState<WorkspaceMode | null>(() => readStoredWorkspaceMode());
 
+  const sessionGeneration = useRef(0);
+
   const clearSession = useCallback(() => {
+    sessionGeneration.current += 1;
     setStoredToken(null);
+    void queryClient.cancelQueries();
+    queryClient.clear();
     setSession(null);
     sessionStorage.removeItem(WORKSPACE_MODE_STORAGE_KEY);
     setStoredMode(null);
   }, []);
 
   const bootstrap = useCallback(async () => {
+    const generation = sessionGeneration.current;
     const token = getStoredToken();
     if (!token) {
       setIsLoading(false);
@@ -90,8 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const payload = await api.get<SessionPayload>('/auth/me');
+      if (generation !== sessionGeneration.current || token !== getStoredToken()) return;
       setSession(normalizeSessionPayload(payload));
     } catch (error) {
+      if (generation !== sessionGeneration.current || token !== getStoredToken()) return;
       if (error instanceof ApiError && error.status !== 401) {
         // Network/server issue: keep the token, let the user retry rather
         // than silently signing them out.
@@ -110,25 +121,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => onUnauthorized(clearSession), [clearSession]);
 
+  useEffect(() => onSessionChange(() => {
+    sessionGeneration.current += 1;
+    setSession(null);
+    sessionStorage.removeItem(WORKSPACE_MODE_STORAGE_KEY);
+    setStoredMode(null);
+  }), []);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea === localStorage && (event.key === null || event.key === 'valtireo.auth_token')) {
+        // Reset component state as well as cached queries when another tab signs in/out.
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
+    clearSession();
+    const generation = sessionGeneration.current;
     const payload = await api.post<LoginResponse>('/auth/login', {
       email,
       password,
       device_name: 'valtireo-web',
     });
+    if (generation !== sessionGeneration.current) throw new ApiError('Sign-in was cancelled. Please retry.', 401);
+    void queryClient.cancelQueries();
+    queryClient.clear();
     setStoredToken(payload.token);
     const sessionPayload = normalizeSessionPayload(payload);
     setSession(sessionPayload);
     return sessionPayload.is_platform_admin || sessionPayload.permissions.includes('reports.view') || sessionPayload.has_manager_scope;
-  }, []);
+  }, [clearSession]);
 
   const logout = useCallback(async () => {
+    const token = getStoredToken();
+    clearSession();
     try {
-      await api.post('/auth/logout');
+      await api.post('/auth/logout', undefined, { headers: { Authorization: `Bearer ${token}` } });
     } catch {
       // Ignore network errors on logout; we clear local state regardless.
-    } finally {
-      clearSession();
     }
   }, [clearSession]);
 
@@ -154,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const adminLandingRoute = useMemo(() => {
-    if (hasPermission('reports.view')) return '/dashboard/organization';
+    if (hasPermission('reports.view') && (hasPermission('employees.view_all') || hasPermission('organizations.administer'))) return '/dashboard/organization';
     if (hasManagerScope) return '/dashboard/manager';
     return '/dashboard/me';
   }, [hasPermission, hasManagerScope]);

@@ -5,6 +5,7 @@ import type {
   EmployeePayrollRecord,
   EmployeeStatutoryProfile,
   LaravelPage,
+  MyCompensationResponse,
   PayGroup,
   PayrollComponent,
   PayrollInput,
@@ -121,6 +122,15 @@ export function useEmployeePayrollRecord(employeeId: number | null) {
     queryKey: [...KEY, 'employee', employeeId],
     queryFn: () => api.get<EmployeePayrollRecord>(`/payroll/employees/${employeeId}`),
     enabled: employeeId !== null,
+  });
+}
+
+// ---- Self-service: my own compensation, bank accounts, statutory profile (read-only) ----
+
+export function useMyCompensation() {
+  return useQuery({
+    queryKey: [...KEY, 'me', 'compensation'],
+    queryFn: () => api.get<MyCompensationResponse>('/payroll/me/compensation'),
   });
 }
 

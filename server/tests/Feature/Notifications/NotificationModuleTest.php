@@ -79,8 +79,8 @@ class NotificationModuleTest extends TestCase
 
         $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => '2026-09-14',
-            'ends_on' => '2026-09-15',
+            'starts_on' => now()->addDays(10)->toDateString(),
+            'ends_on' => now()->addDays(11)->toDateString(),
             'reason' => 'Personal time.',
         ])->assertCreated();
 

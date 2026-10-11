@@ -691,7 +691,7 @@ class DashboardService
      */
     private function managerScope(User $user, ?Employee $employee, Request $request): array
     {
-        if ($user->can('reports.view') && $request->integer('department_id')) {
+        if ($user->can('reports.view') && app(EmployeeVisibility::class)->organizationWide($user) && $request->integer('department_id')) {
             $department = Department::query()
                 ->where('organization_id', $user->organization_id)
                 ->where('id', $request->integer('department_id'))
@@ -704,7 +704,7 @@ class DashboardService
             ];
         }
 
-        if ($user->can('reports.view') && $request->integer('cluster_id')) {
+        if ($user->can('reports.view') && app(EmployeeVisibility::class)->organizationWide($user) && $request->integer('cluster_id')) {
             $cluster = Cluster::query()
                 ->where('organization_id', $user->organization_id)
                 ->where('id', $request->integer('cluster_id'))

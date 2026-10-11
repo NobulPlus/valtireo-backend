@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
 
 class OrganizationProvisioningService
@@ -132,6 +133,48 @@ class OrganizationProvisioningService
                 ],
             ];
         });
+    }
+
+    /**
+     * Re-issues the admin setup link — the only self-service recovery path
+     * when the original invitation email was lost or never arrived. Rotates
+     * the same password_reset_tokens row (keyed by email), so the old link
+     * stops working the moment a new one is issued.
+     *
+     * @return array<string, mixed>
+     */
+    public function resendAdminInvitation(User $actor, Organization $organization): array
+    {
+        if ($organization->status !== 'invited') {
+            throw ValidationException::withMessages([
+                'organization' => ['Only an organization still awaiting its first admin sign-in can have its invitation resent.'],
+            ]);
+        }
+
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+        $admin = $organization->users->first(fn (User $user) => $user->can('organizations.administer'));
+
+        if (! $admin) {
+            throw ValidationException::withMessages([
+                'organization' => ['This organization has no administrator account to re-invite.'],
+            ]);
+        }
+
+        $setupToken = Str::random(64);
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $admin->email],
+            ['token' => Hash::make($setupToken), 'created_at' => now()],
+        );
+
+        $frontendUrl = config('services.valtireo_notifications.frontend_url') ?: env('FRONTEND_URL', 'http://localhost:5173');
+        $setupUrl = rtrim((string) $frontendUrl, '/').'/admin-invitations/'.$setupToken.'?email='.urlencode($admin->email);
+        $deliveryStatus = $this->deliverAdminInvitation($admin, $organization, $setupUrl, $actor);
+
+        return [
+            'email' => $admin->email,
+            'setup_url' => $setupUrl,
+            'delivery_status' => $deliveryStatus,
+        ];
     }
 
     private function deliverAdminInvitation(

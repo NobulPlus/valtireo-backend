@@ -19,7 +19,7 @@ class EmployeeCustomFieldValueController extends Controller
         $this->authorizeEmployee($request, $employee, 'employees.view');
 
         return EmployeeCustomFieldValueResource::collection(
-            $employee->customFieldValues()->with(['field', 'updatedBy'])->get()
+            \App\Services\EmployeeFieldVisibility::values($employee, $employee->customFieldValues()->with(['field', 'updatedBy'])->get(), $request->user())
         );
     }
 

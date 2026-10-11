@@ -47,7 +47,7 @@ class AuthController extends Controller
             ->where('email', $request->string('email')->toString())
             ->first();
 
-        if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
+        if (! $user || ! Hash::check($request->string('password')->toString(), $user->password) || $user->accessIsBlocked()) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -92,35 +92,55 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
-        $reset = DB::table('password_reset_tokens')->where('email', $data['email'])->first();
+        // Locked so two concurrent accepts of the same token can't both pass
+        // the check below before either deletes the row — without this, both
+        // requests would succeed and mint a token, same as the employee
+        // invitation flow guards against via lockForUpdate() on its own row.
+        // The closure returns an outcome rather than throwing, so a rollback
+        // (which a thrown exception would trigger) never undoes the expired-
+        // token cleanup delete below.
+        $outcome = DB::transaction(function () use ($data, $token): string {
+            $reset = DB::table('password_reset_tokens')->where('email', $data['email'])->lockForUpdate()->first();
 
-        if (! $reset || ! Hash::check($token, $reset->token)) {
-            throw ValidationException::withMessages([
-                'token' => ['This invitation link is invalid or has already been used.'],
-            ]);
-        }
+            if (! $reset || ! Hash::check($token, $reset->token)) {
+                return 'invalid';
+            }
 
-        if (Carbon::parse($reset->created_at)->addHours(24)->isPast()) {
+            if (Carbon::parse($reset->created_at)->addHours(24)->isPast()) {
+                DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
+
+                return 'expired';
+            }
+
+            $user = User::query()
+                ->with('organization')
+                ->where('email', $data['email'])
+                ->first();
+
+            if (! $user || ! $user->organization || $user->accessIsBlocked()) {
+                return 'unlinked';
+            }
+
+            $user->update(['password' => $data['password']]);
             DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
 
-            throw ValidationException::withMessages([
-                'token' => ['This invitation link has expired. Ask Valtireo to resend the organization admin invitation.'],
-            ]);
-        }
+            return 'ok';
+        });
+
+        throw_if($outcome === 'invalid', ValidationException::withMessages([
+            'token' => ['This invitation link is invalid or has already been used.'],
+        ]));
+        throw_if($outcome === 'expired', ValidationException::withMessages([
+            'token' => ['This invitation link has expired. Ask Valtireo to resend the organization admin invitation.'],
+        ]));
+        throw_if($outcome === 'unlinked', ValidationException::withMessages([
+            'token' => ['This invitation is not linked to an organization admin account.'],
+        ]));
 
         $user = User::query()
             ->with('organization')
             ->where('email', $data['email'])
             ->first();
-
-        if (! $user || ! $user->organization) {
-            throw ValidationException::withMessages([
-                'token' => ['This invitation is not linked to an organization admin account.'],
-            ]);
-        }
-
-        $user->update(['password' => $data['password']]);
-        DB::table('password_reset_tokens')->where('email', $data['email'])->delete();
 
         app(PermissionRegistrar::class)->setPermissionsTeamId($user->organization_id);
 

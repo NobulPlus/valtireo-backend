@@ -266,6 +266,18 @@ export function useApproveOnboarding(employeeId: number) {
   });
 }
 
+export function useResendEmployeeInvitation(employeeId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ invitation: { id: number; email: string; status: string; expires_at: string } }>(
+      `/employees/${employeeId}/resend-invitation`,
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees', employeeId] });
+    },
+  });
+}
+
 export function useUpdateEmployee(employeeId: number) {
   const queryClient = useQueryClient();
   return useMutation({
