@@ -12,6 +12,7 @@ import {
   Package,
   Phone,
   Plus,
+  Send,
   Trash2,
   UserCog,
   UserRound,
@@ -46,6 +47,7 @@ import {
   useDocumentTypesForUpload,
   useEmployee,
   useRequestEmployeeCorrection,
+  useResendEmployeeInvitation,
   useUpdateEmployeeDependent,
   useUpdateEmployeeEmergencyContact,
   useUpdateEmployee,
@@ -57,6 +59,7 @@ import { EmployeePayrollTab } from '@/features/employees/EmployeePayrollTab';
 import { useSetupLookups } from '@/features/workspace/api';
 import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/apiClient';
+import { assetUrl } from '@/lib/assetUrl';
 import { useDateFormatter } from '@/lib/dateFormat';
 import type { Dependent, EmergencyContact, Employee } from '@/types/api';
 
@@ -250,6 +253,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const [managerReason, setManagerReason] = useState('');
   const [managerNote, setManagerNote] = useState('');
   const updateEmployeeMutation = useUpdateEmployee(employee.id);
+  const resendInvitationMutation = useResendEmployeeInvitation(employee.id);
   const managerMutation = useChangeEmployeeManager(employee.id);
   const correctionMutation = useRequestEmployeeCorrection(employee.id);
   const documentTypesQuery = useDocumentTypesForUpload();
@@ -542,6 +546,19 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
                     Change status
                   </DropdownMenuItem>
                 )}
+                {canUpdateEmployee && employee.status === 'invited' && (
+                  <DropdownMenuItem
+                    icon={Send}
+                    onClick={() => {
+                      resendInvitationMutation.mutate(undefined, {
+                        onSuccess: () => toast.success('Invitation resent', `A new invitation was sent to ${employee.work_email}.`),
+                        onError: (error) => toast.error('Could not resend invitation', actionError(error, 'Could not resend this invitation.')),
+                      });
+                    }}
+                  >
+                    Resend invitation
+                  </DropdownMenuItem>
+                )}
                 {canUpdateEmployee && (
                   <DropdownMenuItem
                     icon={UserCog}
@@ -589,9 +606,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           </CardHeader>
           <CardBody className="flex flex-col gap-2.5 text-sm">
             <div className="mb-3 flex items-center gap-3 border-b border-border pb-4">
-              {employee.profile?.passport_photo_url ? (
+              {assetUrl(employee.profile?.passport_photo_url) ? (
                 <img
-                  src={employee.profile.passport_photo_url}
+                  src={assetUrl(employee.profile?.passport_photo_url) ?? undefined}
                   alt={`${employee.full_name} passport`}
                   className="h-16 w-16 rounded-md object-cover"
                 />

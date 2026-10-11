@@ -469,6 +469,53 @@ function StatutoryRulesCard({ settings, canUpdate }: { settings: NonNullable<Ret
           )}
         </div>
 
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Accounting (GL codes)</p>
+          <p className="mt-1 text-xs text-muted">Account codes used when generating a finalized payroll run's journal entries.</p>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="block text-xs">
+              <span className="mb-1 block text-muted">Salary expense</span>
+              <Input
+                value={rules.accounting?.salary_expense ?? ''}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('accounting', { salary_expense: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-muted">Employer cost</span>
+              <Input
+                value={rules.accounting?.employer_cost ?? ''}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('accounting', { employer_cost: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-muted">Payroll bank</span>
+              <Input
+                value={rules.accounting?.payroll_bank ?? ''}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('accounting', { payroll_bank: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-muted">Deductions payable</span>
+              <Input
+                value={rules.accounting?.deductions_payable ?? ''}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('accounting', { deductions_payable: e.target.value })}
+              />
+            </label>
+            <label className="block text-xs">
+              <span className="mb-1 block text-muted">Employer payable</span>
+              <Input
+                value={rules.accounting?.employer_payable ?? ''}
+                disabled={!canUpdate}
+                onChange={(e) => updateSection('accounting', { employer_payable: e.target.value })}
+              />
+            </label>
+          </div>
+        </div>
+
         <p className="text-xs text-muted">
           These are organization-wide defaults. An individual employee only has pension/PAYE/NHF deducted once it's also enabled on
           their own statutory profile, from the employee's Payroll tab.

@@ -27,7 +27,7 @@ export function useOrganizationDashboard(filters: OrganizationDashboardFilters =
   return useQuery({
     queryKey: ['dashboard', 'organization', filters],
     queryFn: () => api.get<OrganizationDashboard>('/dashboard/organization', { params: cleanParams(filters) }),
-    enabled: hasPermission('reports.view'),
+    enabled: hasPermission('reports.view') && (hasPermission('employees.view_all') || hasPermission('organizations.administer')),
   });
 }
 

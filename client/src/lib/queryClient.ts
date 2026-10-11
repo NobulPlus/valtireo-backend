@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
-import { ApiError } from '@/lib/apiClient';
+import { ApiError } from './ApiError';
+import { onSessionChange } from './sessionEvents';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,4 +20,10 @@ export const queryClient = new QueryClient({
       retry: false,
     },
   },
+});
+
+// Every token transition, including invitation acceptance, discards prior data.
+onSessionChange(() => {
+  void queryClient.cancelQueries();
+  queryClient.clear();
 });

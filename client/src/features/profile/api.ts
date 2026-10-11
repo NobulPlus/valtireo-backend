@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/apiClient';
+import { useAuth } from '@/context/AuthContext';
 import type { Dependent, EmergencyContact, EmployeeDocument, EmployeeProfileOverview } from '@/types/api';
 
 const OVERVIEW_KEY = ['profile', 'overview'];
@@ -30,6 +31,7 @@ export interface UpdateMyProfilePayload {
  */
 export function useUpdateMyProfile() {
   const queryClient = useQueryClient();
+  const { refresh } = useAuth();
   return useMutation({
     mutationFn: (payload: UpdateMyProfilePayload) => {
       const formData = new FormData();
@@ -45,6 +47,10 @@ export function useUpdateMyProfile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'me'] });
+      // The topbar/sidebar avatar reads session.user.photo_url from
+      // AuthContext, not from either query above — without this, a newly
+      // uploaded photo never appears there until the next full page load.
+      void refresh();
     },
   });
 }

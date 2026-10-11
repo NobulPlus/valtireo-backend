@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme, type ThemePreference } from '@/context/ThemeContext';
 import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { NotificationBell } from '@/components/shell/NotificationBell';
+import { assetUrl } from '@/lib/assetUrl';
 
 const THEME_SEQUENCE: ThemePreference[] = ['light', 'dark', 'system'];
 const THEME_ICON: Record<ThemePreference, typeof Sun> = { light: Sun, dark: Moon, system: Monitor };
@@ -84,8 +85,8 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
               aria-label="Account menu"
             >
               <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-teal-light text-pine">
-                {user?.photo_url ? (
-                  <img src={user.photo_url} alt="" className="h-full w-full object-cover" />
+                {assetUrl(user?.photo_url) ? (
+                  <img src={assetUrl(user?.photo_url) ?? undefined} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <User className="h-3.5 w-3.5" />
                 )}

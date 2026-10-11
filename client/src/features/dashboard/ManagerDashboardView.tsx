@@ -109,7 +109,7 @@ function scopeLabel(data: ManagerDashboard): string {
 
 export function ManagerDashboardView() {
   const { hasPermission, hasManagerScope } = useAuth();
-  const canBrowseDepartments = hasPermission('reports.view');
+  const canBrowseDepartments = hasPermission('reports.view') && (hasPermission('employees.view_all') || hasPermission('organizations.administer'));
   const [departmentId, setDepartmentId] = useState('');
   const departmentOptions = useDepartmentOptions();
   const effectiveDepartmentId = departmentId ? Number(departmentId) : undefined;

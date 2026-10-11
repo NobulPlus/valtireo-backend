@@ -463,6 +463,7 @@ export function EmployeePayrollTab({ employeeId }: { employeeId: number }) {
   const compensations = record?.compensations ?? [];
   const bankAccounts = record?.bank_accounts ?? [];
   const currentCompensation = compensations.find((comp) => comp.status === 'active') ?? null;
+  const scheduledCompensation = compensations.find((comp) => comp.status === 'scheduled') ?? null;
   const componentNameById = new Map((componentsQuery.data ?? []).map((component) => [component.id, component.name]));
 
   return (
@@ -499,6 +500,11 @@ export function EmployeePayrollTab({ employeeId }: { employeeId: number }) {
                 );
               })}
             </ul>
+          )}
+          {scheduledCompensation && (
+            <p className="border-t border-border px-5 py-3 text-xs text-muted">
+              A salary change is scheduled from {formatDate(scheduledCompensation.effective_from)}. Until then, the active compensation remains in effect.
+            </p>
           )}
         </CardBody>
       </Card>

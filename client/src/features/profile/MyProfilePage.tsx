@@ -13,6 +13,7 @@ import { ModalCancelAction, ModalSendAction } from '@/components/ui/ModalActions
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useToast } from '@/components/ui/Toast';
+import { useAuth } from '@/context/AuthContext';
 import {
   useAcknowledgeDocument,
   useCreateDependent,
@@ -28,7 +29,10 @@ import {
   useUpdateMyCustomFieldValues,
   useUpdateMyProfile,
 } from '@/features/profile/api';
+import { useMyCompensation } from '@/features/payroll/api';
+import { useCurrencyFormatter } from '@/features/payroll/useCurrencyFormatter';
 import { ApiError } from '@/lib/apiClient';
+import { assetUrl } from '@/lib/assetUrl';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { downloadDocumentFile } from '@/lib/documents';
 import { isValidEmail } from '@/lib/validation';
@@ -41,7 +45,7 @@ import type {
   EmployeeProfileOverview,
 } from '@/types/api';
 
-type Tab = 'overview' | 'biodata' | 'contacts' | 'dependents' | 'documents' | 'custom_fields';
+type Tab = 'overview' | 'biodata' | 'contacts' | 'dependents' | 'documents' | 'custom_fields' | 'payroll';
 
 const GENDER_OPTIONS: SelectMenuOption[] = [
   { value: '', label: 'Not specified' },
@@ -91,14 +95,106 @@ function ProfileField({ label, children }: { label: string; children: ReactNode 
   );
 }
 
+function MyPayrollTabContent() {
+  const { formatDate } = useDateFormatter();
+  const { formatCurrency } = useCurrencyFormatter();
+  const compensationQuery = useMyCompensation();
+
+  if (compensationQuery.isLoading) return <LoadingState label="Loading payroll information…" />;
+  if (compensationQuery.isError) return <ErrorState error={compensationQuery.error} onRetry={() => compensationQuery.refetch()} />;
+
+  const data = compensationQuery.data;
+  if (!data) return null;
+
+  const { compensations, bank_accounts, statutory_profile } = data;
+  const currentCompensation = compensations.find((comp) => comp.status === 'active') ?? null;
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle>Compensation history</CardTitle>
+        </CardHeader>
+        <CardBody className="p-0">
+          {compensations.length === 0 ? (
+            <EmptyState title="No compensation on file" description="HR hasn't set up your compensation yet." />
+          ) : (
+            <ul className="divide-y divide-border">
+              {compensations.map((comp) => (
+                <li key={comp.id} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-strong">{formatCurrency(comp.base_salary, comp.currency)} · {comp.pay_frequency}</p>
+                    <p className="text-xs text-muted">
+                      {comp.pay_group?.name ?? 'No pay group'} · effective {formatDate(comp.effective_from)}
+                      {comp.effective_to ? ` → ${formatDate(comp.effective_to)}` : ''}
+                    </p>
+                  </div>
+                  <StatusBadge status={comp.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+          {!currentCompensation && compensations.length > 0 && (
+            <p className="border-t border-border px-5 py-3 text-xs text-muted">No compensation record is currently active.</p>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bank accounts</CardTitle>
+        </CardHeader>
+        <CardBody className="p-0">
+          {bank_accounts.length === 0 ? (
+            <EmptyState title="No bank account on file" description="Ask HR to add your bank account so you can be included in payroll." />
+          ) : (
+            <ul className="divide-y divide-border">
+              {bank_accounts.map((account) => (
+                <li key={account.id} className="flex flex-col gap-2 px-5 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-strong">{account.bank_name} · ****{account.account_number_last_four}</p>
+                    <p className="text-xs text-muted">{account.account_name}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {account.is_primary && <StatusBadge status="primary" />}
+                    <StatusBadge status={account.verification_status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Statutory profile</CardTitle>
+        </CardHeader>
+        <CardBody className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+          <OverviewRow label="Pension" value={statutory_profile.pension_enabled ? `Enrolled${statutory_profile.pfa_name ? ` · ${statutory_profile.pfa_name}` : ''}` : 'Not enrolled'} />
+          <OverviewRow label="RSA PIN" value={statutory_profile.rsa_pin_last_four ? `•••• ${statutory_profile.rsa_pin_last_four}` : '—'} />
+          <OverviewRow label="PAYE" value={statutory_profile.paye_enabled ? `Enabled${statutory_profile.tax_state ? ` · ${statutory_profile.tax_state}` : ''}` : 'Not enabled'} />
+          <OverviewRow label="Tax ID" value={statutory_profile.tax_id_last_four ? `•••• ${statutory_profile.tax_id_last_four}` : '—'} />
+          <OverviewRow label="NHF" value={statutory_profile.nhf_enabled ? 'Enrolled' : 'Not enrolled'} />
+          <OverviewRow label="NHF number" value={statutory_profile.nhf_number_last_four ? `•••• ${statutory_profile.nhf_number_last_four}` : '—'} />
+        </CardBody>
+      </Card>
+      <p className="text-xs text-muted">This information is read-only. Ask HR if anything here needs to be corrected.</p>
+    </div>
+  );
+}
+
 function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOverview; onRefetch: () => void }) {
   const toast = useToast();
   const { formatDate, formatDateTime } = useDateFormatter();
-  const { employee, profile, emergency_contacts, dependents, documents, custom_fields, activities } = overview;
+  const { hasPermission } = useAuth();
+  const canViewOwnCompensation = hasPermission('payroll.compensation.view_own');
+  const { employee, profile, emergency_contacts, dependents, documents, custom_fields, activities, status_history } = overview;
+  const [showAllActivities, setShowAllActivities] = useState(false);
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => {
     const requested = searchParams.get('tab');
-    const validTabs: Tab[] = ['overview', 'biodata', 'contacts', 'dependents', 'documents', 'custom_fields'];
+    const validTabs: Tab[] = ['overview', 'biodata', 'contacts', 'dependents', 'documents', 'custom_fields', 'payroll'];
     return validTabs.includes(requested as Tab) ? (requested as Tab) : 'overview';
   });
 
@@ -108,6 +204,7 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
     { key: 'contacts', label: 'Emergency contacts' },
     { key: 'dependents', label: 'Dependents' },
     { key: 'documents', label: 'Documents' },
+    ...(canViewOwnCompensation ? [{ key: 'payroll' as Tab, label: 'Payroll' }] : []),
     ...(custom_fields.length > 0 ? [{ key: 'custom_fields' as Tab, label: 'More details' }] : []),
   ];
 
@@ -375,34 +472,81 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
       </div>
 
       {tab === 'overview' && (
-        <Card>
-          <CardBody className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
-            <OverviewRow label="Employee number" value={employee.employee_number} />
-            <OverviewRow label="Status" value={<StatusBadge status={employee.status} />} />
-            <OverviewRow label="Department" value={employee.department?.name ?? '—'} />
-            <OverviewRow label="Designation" value={employee.designation?.name ?? '—'} />
-            <OverviewRow label="Employment type" value={employee.employment_type?.name ?? '—'} />
-            <OverviewRow label="Location" value={employee.location?.name ?? '—'} />
-            <OverviewRow label="Start date" value={formatDate(employee.start_date)} />
-            <OverviewRow label="Profile status" value={profile ? <StatusBadge status={profile.completion_status} /> : '—'} />
-            <div className="md:col-span-2">
-              <p className="mb-2 text-xs font-medium text-muted">Recent activity</p>
-              {activities.length === 0 ? (
-                <p className="text-sm text-muted">No activity recorded yet.</p>
+        <div className="space-y-5">
+          <Card>
+            <CardBody className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+              <OverviewRow label="Employee number" value={employee.employee_number} />
+              <OverviewRow label="Status" value={<StatusBadge status={employee.status} />} />
+              <OverviewRow label="Department" value={employee.department?.name ?? '—'} />
+              <OverviewRow label="Designation" value={employee.designation?.name ?? '—'} />
+              <OverviewRow label="Employment type" value={employee.employment_type?.name ?? '—'} />
+              <OverviewRow label="Location" value={employee.location?.name ?? '—'} />
+              <OverviewRow label="Start date" value={formatDate(employee.start_date)} />
+              <OverviewRow label="Profile status" value={profile ? <StatusBadge status={profile.completion_status} /> : '—'} />
+              <div className="md:col-span-2">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted">Recent activity</p>
+                  {activities.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllActivities((current) => !current)}
+                      className="text-xs font-medium text-teal hover:underline"
+                    >
+                      {showAllActivities ? 'Show less' : `Show all (${activities.length})`}
+                    </button>
+                  )}
+                </div>
+                {activities.length === 0 ? (
+                  <p className="text-sm text-muted">No activity recorded yet.</p>
+                ) : (
+                  <ul className="divide-y divide-border rounded-md border border-border">
+                    {(showAllActivities ? activities : activities.slice(0, 5)).map((activity) => (
+                      <li key={activity.id} className="px-4 py-2.5 text-sm">
+                        <p className="font-medium text-strong">{activity.title}</p>
+                        {activity.description && <p className="text-muted">{activity.description}</p>}
+                        <p className="mt-1 text-xs text-muted">{formatDateTime(activity.created_at)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Status history</CardTitle>
+            </CardHeader>
+            <CardBody>
+              {status_history.length === 0 ? (
+                <p className="text-sm text-muted">No status changes recorded yet.</p>
               ) : (
                 <ul className="divide-y divide-border rounded-md border border-border">
-                  {activities.slice(0, 5).map((activity) => (
-                    <li key={activity.id} className="px-4 py-2.5 text-sm">
-                      <p className="font-medium text-strong">{activity.title}</p>
-                      {activity.description && <p className="text-muted">{activity.description}</p>}
-                      <p className="mt-1 text-xs text-muted">{formatDateTime(activity.created_at)}</p>
+                  {status_history.map((entry) => (
+                    <li key={entry.id} className="flex flex-col gap-1 px-4 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium text-strong">
+                          {entry.previous_status ? (
+                            <>
+                              <StatusBadge status={entry.previous_status} /> <span className="mx-1 text-muted">→</span>
+                            </>
+                          ) : null}
+                          <StatusBadge status={entry.new_status} />
+                        </p>
+                        {entry.reason && <p className="mt-1 text-xs text-muted">{entry.reason}</p>}
+                        {entry.note && <p className="text-xs text-muted">{entry.note}</p>}
+                      </div>
+                      <div className="text-xs text-muted sm:text-right">
+                        <p>{formatDate(entry.effective_date)}</p>
+                        {entry.changed_by && <p>by {entry.changed_by.name}</p>}
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
-          </CardBody>
-        </Card>
+            </CardBody>
+          </Card>
+        </div>
       )}
 
       {tab === 'biodata' && (
@@ -410,9 +554,9 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
           <CardBody className="space-y-5">
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-teal/10">
-                {passportPreview || profile?.passport_photo_url ? (
+                {passportPreview || assetUrl(profile?.passport_photo_url) ? (
                   <img
-                    src={passportPreview ?? profile?.passport_photo_url ?? ''}
+                    src={passportPreview ?? assetUrl(profile?.passport_photo_url) ?? ''}
                     alt={`${employee.full_name} passport`}
                     className="h-full w-full object-cover"
                   />
@@ -646,6 +790,8 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
           </CardBody>
         </Card>
       )}
+
+      {tab === 'payroll' && <MyPayrollTabContent />}
 
       <Modal
         open={contactModalOpen}
