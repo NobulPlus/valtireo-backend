@@ -37,8 +37,10 @@ density, per audit `05` §1):
 
 `display` moves from Inter-rendered-at-800-weight (today's `theme.tsx:107`) to Manrope, which
 is the one typographic change with real visual weight — Manrope's geometric, slightly wider
-letterforms are what will make the hero greeting and Login title read as "the new identity"
-even before any color changes land, so this is worth sequencing deliberately in
+letterforms are what will make Home's greeting name read as "the new identity" even before any
+color changes land (Login's "Welcome back" uses `title`, not `display` — see
+[04](04-screen-specifications-login-home.md)'s revision), so this is worth sequencing
+deliberately in
 [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md).
 
 ## 2. Spacing
@@ -71,15 +73,13 @@ spec extends mobile's scale as the canonical one rather than inventing a seventh
 | `xl` | 22 |
 | `pill` | 999 |
 
-New: the warm, "modern geometric" direction reads better with slightly more generous rounding
-on hero/card-level surfaces than the outgoing design used — Login's card today is `26` and
-Home's quick-access card is `radius.xl` (`22`) (`LoginScreen.tsx:226`, `HomeScreen.tsx:414`).
-Rather than add an eighth ad hoc value, extend the scale with one additional step used only for
-these two hero-adjacent surfaces:
-
-| Token | Value | Used for |
-|---|---|---|
-| `xxl` | 28 | Login card, Home quick-access card — hero-level surfaces only |
+**Revision note:** an earlier draft added an `xxl` (28) step for "Login card, Home quick-access
+card — hero-level surfaces only." Login's floating card has since been retired entirely (see
+[04](04-screen-specifications-login-home.md)'s revision note) and Home's quick-access card
+reverts to its current, already-fine value — so that step is removed rather than carried
+forward unused. `radius.lg` (16) is promoted instead for Login's form fields and primary
+button, for the rounder "clean, integrated" feel the corrected brief asks for — still within
+the existing scale, no new value needed.
 
 ## 4. Elevation / shadow
 
@@ -93,12 +93,16 @@ occurrences across 12 files).
 |---|---|---|---|---|---|---|
 | `soft` | 6 | 12 | 0.12 | `#000000` | 3 | Floating cards (Home quick-access card) |
 | `tile` | 2 | 6 | 0.10 | `#000000` | 1 | Icon-tile chips |
-| `hero` *(new)* | 20 | 30 | 0.35 | `#000000` | 12 | Login card only — matches the card's current deliberately heavier shadow (`LoginScreen.tsx:231-235`) |
 
-Shadow color stays a neutral black on both themes — a colored shadow (e.g. tinted teal) was
-considered and rejected: at the opacities above it reads as murky rather than "glowing," and
-the brief's "subtle gradients" direction is better served by the gradient surfaces themselves
-(Login/Home hero backdrops) than by colored shadows on unrelated cards.
+**Revision note:** an earlier draft added a `hero` shadow recipe (offsetY 20, blur 30, opacity
+0.35) "matching Login's current deliberately heavier shadow." Login no longer has an elevated
+card to apply it to (see [04](04-screen-specifications-login-home.md)'s revision note), so
+that recipe is removed rather than carried forward unused — `soft` and `tile` cover every
+remaining elevated surface in this spec. Shadow color stays a neutral black on both themes; a
+colored shadow was considered and rejected as reading murky rather than "glowing" at usable
+opacities, and the brief's "subtle gradients" direction is now carried entirely by the
+restrained `GeometricAccent` decoration ([03](03-component-specifications.md)) rather than by
+either a gradient hero or a colored shadow.
 
 ## 5. Iconography
 
@@ -123,10 +127,13 @@ botanical, agricultural, or leaf illustrations"):
   photographic or organic/botanical imagery — flagged here as a constraint for that future
   work, not a deliverable of this spec.
 
-**Gradients:** "Subtle" is the operative word — the existing hero gradient treatment
+**Gradients: revised.** The original draft kept the existing full-bleed hero mechanism
 (`LinearGradient` + SVG grid pattern + `RadialGradient` glow + scattered `Sparkle`s, see
-`LoginScreen.tsx:27-55`, `HomeScreen.tsx:109-137`) is the right *mechanism* already; §
-[04-screen-specifications-login-home.md](04-screen-specifications-login-home.md) re-colors it
-into the new teal/apricot palette rather than replacing the technique. Outside the two hero
-surfaces, no other screen should introduce a new gradient — gradients stay a hero-only brand
-moment, consistent with how `HERO_GRADIENT`/`HERO_ACCENT` are already scoped today.
+`LoginScreen.tsx:27-55`, `HomeScreen.tsx:109-137`) and only re-colored it. Review corrected
+this: "subtle" means there is **no full-bleed gradient fill at all** on Login or Home anymore
+— per [04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)'s
+revision, both screens sit on a flat page background with a small, low-opacity
+`GeometricAccent` decoration (thin-stroke outlined shapes, not a filled gradient, grid, glow, or
+sparkle field) as the only decorative element. A gradient fill is no longer part of this
+system's vocabulary for any screen under this spec — if a future screen wants one, it would be
+a new decision, not an extension of a pattern this spec establishes.

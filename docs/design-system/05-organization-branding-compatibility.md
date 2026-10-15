@@ -31,9 +31,10 @@ same override mechanism client already has** — not a parallel system. Concrete
    `mobile/src/theme.tsx` both resolve to when an organization has not set a custom
    `primary_color`/`logo_url`. Organizations that *have* set a custom color are unaffected by
    this redesign on client — they already override the default and will continue to.
-2. **Mobile must stop discarding `logo_url`/`theme`.** Per audit `05` §2/§3 (item 5, Phase 1
-   step 4), this should be wired for Login/Home specifically as part of the same pass that
-   rebuilds those two screens' hero treatment in the new identity — not deferred, because
+2. **Mobile must stop discarding `logo_url`/`theme`.** This should be wired for Login/Home
+   specifically as part of [08](08-migration-plan-and-regression-checkpoints.md)'s Phase 2,
+   the same step that flips those two screens' layout and palette to the new identity — not
+   deferred, because
    shipping a newly-polished default mobile brand while silently ignoring an org's configured
    colors makes the gap *more* visible than it is today, not less (a rough-looking app
    "doesn't support branding yet" reads as expected; a polished one that ignores a configured

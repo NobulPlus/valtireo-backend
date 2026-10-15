@@ -1,7 +1,36 @@
 # Valtireo Design System v2 — "Warm & Human"
 
 Status: **Specification for review. Not approved for implementation.**
-Date: 2026-10-15
+Date: 2026-10-15 (revised 2026-10-15, see Revision history below)
+
+## Revision history
+
+**Revision 1 — corrected Login/Home layout and migration sequencing.** The original draft
+re-colored the existing full-bleed gradient-hero/floating-card mobile layout rather than
+questioning the structure itself, and had a sequencing conflict between
+[07](07-cross-platform-token-architecture.md) and
+[08](08-migration-plan-and-regression-checkpoints.md) (one global token file can't hold "the new
+values" in one phase and "the original palette" in a later phase at the same time). Both were
+corrected:
+- [04-screen-specifications-login-home.md](04-screen-specifications-login-home.md) is rewritten:
+  no gradient hero, no floating card, compact/centered layout, subtle geometric accents instead
+  of grid/glow/sparkle, rounder form fields and buttons, a dark mode built from the existing
+  deep-teal surface tokens. **No reference image was available when making this correction** —
+  it's built from a detailed written description; check it against the actual approved image
+  before implementation.
+- [07](07-cross-platform-token-architecture.md) and
+  [08](08-migration-plan-and-regression-checkpoints.md) are rewritten around a dual-palette
+  (`legacy`/`v2`) token file with a per-screen rollout flag, so component consolidation happens
+  under the existing design first, the new identity rolls out screen-by-screen under a
+  controlled flag, the global default flips exactly once (never back and forth), and web/website
+  migrations are explicitly gated on mobile being stable first.
+- [01](01-color-tokens.md), [02](02-typography-spacing-elevation-iconography.md),
+  [03](03-component-specifications.md), [05](05-organization-branding-compatibility.md), and
+  [06](06-accessibility-and-responsive-requirements.md) each received smaller cross-reference
+  fixes where they referenced the retired hero/floating-card mechanism, plus one new
+  accessibility finding ([01](01-color-tokens.md) §1: `primary` teal fails contrast as small
+  text directly on the light background, distinct from its already-documented restriction as a
+  fill — `primaryStrong` is the correct choice there).
 
 This directory is a planning document, not code. Nothing in `client/`, `mobile/`, `website/`,
 or `server/` has been changed to produce it, and nothing should be changed on the strength
@@ -71,11 +100,11 @@ into this rewrite rather than carried forward:
 | [01-color-tokens.md](01-color-tokens.md) | Light/dark semantic tokens, contrast validation, module-accent map (10 existing + 5 future modules) |
 | [02-typography-spacing-elevation-iconography.md](02-typography-spacing-elevation-iconography.md) | Type scale, font loading, spacing/radius/elevation scales, icon/illustration rules |
 | [03-component-specifications.md](03-component-specifications.md) | Reusable React Native component specs (Button, Card, IconTile, Avatar, Input, etc.) |
-| [04-screen-specifications-login-home.md](04-screen-specifications-login-home.md) | Login and Home layouts in the new identity |
+| [04-screen-specifications-login-home.md](04-screen-specifications-login-home.md) | Login and Home layouts — compact, centered, no gradient hero or floating card (revised) |
 | [05-organization-branding-compatibility.md](05-organization-branding-compatibility.md) | How per-tenant branding (client's working pipeline, mobile's dead fields) coexists with a global redesign |
 | [06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md) | Contrast, touch targets, safe areas, text scaling, reduced motion |
-| [07-cross-platform-token-architecture.md](07-cross-platform-token-architecture.md) | The single source-of-truth token file and its generated outputs for React, React Native, Astro |
-| [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md) | Phased rollout, what to verify at each checkpoint |
+| [07-cross-platform-token-architecture.md](07-cross-platform-token-architecture.md) | The source-of-truth token file (dual `legacy`/`v2` palettes), generated outputs for React, React Native, Astro, and the per-screen rollout flag (revised) |
+| [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md) | Phased rollout — consolidate under the existing design first, then a controlled per-screen flag rollout, one global cutover, web/website gated on mobile stability (revised) |
 | [09-scope-boundaries.md](09-scope-boundaries.md) | What this redesign is not — explicit lines against manager/HR/admin feature work |
 
 ## Grounding

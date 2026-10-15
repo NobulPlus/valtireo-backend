@@ -6,9 +6,10 @@ Scope: mobile only. Client already has a well-adopted shared library (`Button` i
 lands, not new component specs. This file is specifically where the redesign's biggest risk
 lives: audit `05` §2 found `IconTile`/`Avatar`/`Sparkle` are used in only 4 of 29 mobile
 screens, with the other 25 each hand-rolling their own `StyleSheet.create`. Every spec below is
-written to be adoptable by those 25 screens during
-[08](08-migration-plan-and-regression-checkpoints.md)'s Phase 2 consolidation step, not just by
-Login/Home.
+written to be adoptable by all 29 screens during
+[08](08-migration-plan-and-regression-checkpoints.md)'s Phase 1 consolidation step — which now
+explicitly includes Login and Home, not just the other 25, since consolidation happens under
+the existing design before any screen is flagged into the new visual identity.
 
 Each spec below extends an existing component (named, with its current file path) or defines a
 genuinely new one where audit `03` found a gap. None of this is implemented by this document.
@@ -28,8 +29,11 @@ own `Pressable` + `StyleSheet` (e.g. `LoginScreen.tsx:193-195,255-257,269-280`).
 Props: `label: string`, `variant`, `onPress`, `disabled?`, `loading?` (renders an
 `ActivityIndicator` in place of the label, color matched to the variant's text color — matching
 today's inline pattern at `LoginScreen.tsx:194,146`), `icon?` (leading Ionicon, 18px).
-Radius: `md`. Padding: `spacing.md` vertical, `spacing.lg` horizontal. Min touch target 48×48
-(see [06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md)).
+Radius: `lg` (16) — revised up from `md` (12) per the Login/Home correction's "rounded buttons"
+requirement ([04](04-screen-specifications-login-home.md)); this is a default for every button
+in the system, not a Login-specific override, so every screen's buttons round together once
+this component lands. Padding: `spacing.md` vertical, `spacing.lg` horizontal. Min touch target
+48×48 (see [06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md)).
 Disabled state: `opacity: 0.6` (matches today's `buttonDisabled`, `LoginScreen.tsx:257`).
 
 ## Card
@@ -38,8 +42,10 @@ Disabled state: `opacity: 0.6` (matches today's `buttonDisabled`, `LoginScreen.t
 `{ backgroundColor: colors.white, borderRadius: radius.md, ..., borderWidth: 1, borderColor:
 colors.line }` card styles** (e.g. `HomeScreen.tsx:424,430`). One component, three slots:
 `header?` (title + optional trailing action), `children`, `footer?`. Background `surface`,
-border `border`, radius `md` by default (`lg`/`xxl` via a `size` prop for hero-adjacent cards).
-Padding `spacing.md`. No shadow by default (today's cards are flat with a hairline border, not
+border `border`, radius `md` by default (`xl` via a `size` prop for Home's quick-access card —
+the `xxl` step from an earlier draft was removed once Login's floating card was retired, see
+[02](02-typography-spacing-elevation-iconography.md)). Padding `spacing.md`. No shadow by
+default (today's cards are flat with a hairline border, not
 shadowed — `HomeScreen.tsx:424` confirms no shadow on the row cards); a `elevated` boolean prop
 applies `shadow.soft` for the few cards that should float (Home's quick-access card).
 
@@ -49,8 +55,9 @@ applies `shadow.soft` for the few cards that should float (Home's quick-access c
 Assets, Documents, Payslips, Notifications, etc.) each build their own row layout today. One
 row = leading icon-chip or avatar slot, title/subtitle text block, optional trailing element
 (status pill, chevron, value). Height target ≥56 to keep the full row comfortably tappable
-even though only part of it may be interactive. This is the primitive audit `05` §2's
-consolidation step (Phase 2) is for — it doesn't exist today in any form, generic or per-screen.
+even though only part of it may be interactive. This is the primitive
+[08](08-migration-plan-and-regression-checkpoints.md)'s Phase 1 consolidation step is for — it
+doesn't exist today in any form, generic or per-screen.
 
 ## IconTile (extend existing)
 
@@ -67,12 +74,27 @@ Bearer header, initials fallback). Only the initials-fallback background color c
 already correctly built (auth-aware image loading, graceful fallback) and nothing here asks for
 rework.
 
-## Sparkle (extend existing)
+## Sparkle (retired from Login/Home, kept as-is otherwise)
 
-`mobile/src/components/Sparkle.tsx` — structure unchanged (SVG four-point sparkle). Colors
-supplied by callers change per [04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)
-(white → a cream-tinted white at low opacity for the non-accent sparkles, `accentApricot` for
-the accent sparkles — replacing `HERO_ACCENT`'s old lime).
+`mobile/src/components/Sparkle.tsx` — **revised**: the original draft recolored this component
+for continued use in the hero backdrops. That hero mechanism is retired
+([04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)'s revision
+note), so neither Login nor Home uses `Sparkle` going forward. The component itself is not
+deleted from the codebase by this spec (no code changes here), and nothing prevents a future
+screen from using it deliberately — it's simply not part of either screen's new spec.
+
+## GeometricAccent (new)
+
+**New component**, replacing the hero backdrop's `LinearGradient` + SVG grid + `RadialGradient`
++ `Sparkle` combination for Login and Home. A thin-stroke (1.5px), unfilled SVG shape —
+primarily circles/rings — rendered at low opacity, absolutely positioned behind all screen
+content, `pointerEvents="none"`. Props: `shape` (`'circle'`, extensible later), `color`
+(`primary` or `accentApricot`), `opacity` (0.10–0.15 light, 0.14–0.18 dark — strokes need
+slightly more opacity against the darker ground to stay visible at the same perceived subtlety),
+`size`, `position` (corner anchor, e.g. `{ top: -40, right: -60 }`, allowing the shape to bleed
+off-canvas). Used once or twice per screen, never as a repeating pattern or field — this is
+expressly **not** a return to the retired grid/glow/sparkle treatment, just a single quiet
+geometric mark per screen region, per the "subtle abstract geometric accents" requirement.
 
 ## ErrorBoundary (extend existing)
 

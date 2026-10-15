@@ -29,7 +29,7 @@ workflow change.
    admin features are built for mobile, they consume the same token file
    ([07](07-cross-platform-token-architecture.md)) and the same component specs — but designing
    *those* screens is a separate, future task, not a deliverable here.
-3. **No change to client's or the platform-admin's functional workflows.** Phase 3
+3. **No change to client's or the platform-admin's functional workflows.** Phase 4
    ([08](08-migration-plan-and-regression-checkpoints.md)) touches `client/`'s *tokens* and
    *shared UI components'* values — it does not touch any feature page's logic, any API
    contract, or any admin-only workflow (user management, workspace settings, platform module

@@ -1,72 +1,85 @@
 # 04 — Login and Home screen layouts
 
-Scope and caveat: the brief names "the refined Concept B mobile mockups" as the approved visual
-reference. No artifact matching that label exists in this session's design-exploration canvas
-(`https://claude.ai/artifact/P82DF1UzahpFeAmGxjvb3c`) under that name, and the given palette is
-a complete departure from the pine/lime direction explored there — this decision appears to
-have been finalized through a process outside this conversation. What follows is therefore
-written from (a) the given brand values and stylistic constraints, (b) the existing,
-already-working layout structure and interaction patterns in `LoginScreen.tsx`/`HomeScreen.tsx`
-(hero gradient header, floating bordered card, icon-chip grid, the "one bold accent, neutral
-everywhere else" discipline those screens already settled on this session), and (c) the
-explicit instruction not to touch code yet. **Treat this file's layout description as a spec to
-confirm against the actual Concept B reference before implementation, not as a transcription of
-it** — flag any mismatch during the review this document is submitted for.
+**Revision note (this version supersedes the original draft):** the first draft of this file
+re-colored the existing gradient-hero/floating-card layout rather than questioning whether that
+structure should survive at all. On review, it was corrected: the approved direction (Concept
+B — Warm & Human) is a **calmer, flatter, more compact** layout, not a re-skinned version of
+the outgoing dramatic hero treatment. The sections below replace the original Login and Home
+tables entirely. **No reference image was attached to the review instruction that requested
+this correction** — the layout below is built from that instruction's written description
+(predominantly warm cream background; compact, centered branding and welcome message; clean
+integrated form fields; rounded buttons; subtle abstract geometric accents; no oversized
+gradient hero or floating card; no botanical imagery; a coordinated dark mode using deep teal
+surfaces). If the actual reference image shows something materially different from what's
+described below, flag it before implementation — this file should be checked against the image
+directly, not just against its written description.
 
 ## Login
 
-Structural layout is unchanged from today (`LoginScreen.tsx`) — a gradient hero behind the top
-portion of the screen, brand mark + "Welcome back" title, scroll content pinned to the bottom,
-a white card with the form floating over the hero/content boundary. Only the surface treatment
-and colors change:
+The screen is a single continuous page background (`bg`) from top to bottom — there is no
+separate hero block, no full-bleed gradient fill, and no elevated card floating over a hero
+boundary. Content is centered, not left-aligned.
 
-| Element | Today | New |
-|---|---|---|
-| Hero gradient | `HERO_GRADIENT = ['#123F3A', '#0E332E']` (deep pine) | `['#0EA5A0', '#00585B']` (primary teal → deep teal) — a gradient *within* the brand family rather than two unrelated hues, giving the "subtle gradient" look the brief asks for without introducing a third color |
-| Hero accent (glow + accent sparkles) | `HERO_ACCENT = '#D7F86B'` (lime) | `accentApricot` (`#FF9B54`) — the one bold accent against the teal gradient, replacing lime 1:1 in the same role |
-| Non-accent sparkles | `#FFFFFF` at low opacity | `#FFF9F0` (cream) at low opacity — slightly warmer than pure white, consistent with the warm-cream brand identity even in small decorative details |
-| Card background | `colors.white` | `surface` (`#FFFFFF`) — unchanged value, renamed role |
-| Card radius | `26` (one-off value) | `xxl` (`28`, now a named token — [02](02-typography-spacing-elevation-iconography.md) §3) |
-| Primary button ("Sign in") | `colors.pine` fill, white text | `primaryStrong` fill, `surface` text — passes contrast at any text size (§1 of [01](01-color-tokens.md)) |
-| Biometric button | `HERO_ACCENT` fill, `#0A2420` text (`LoginScreen.tsx:270,280`) | `accentApricot` fill, `inkOnAccent` text — same role (the one accent-colored button on this screen), new values, and now using the documented required pairing instead of an ad hoc dark literal |
-| Biometric icon circle | `colors.lime` fill (`LoginScreen.tsx:265`) | `accentApricot` fill, icon color `inkOnAccent` |
-| Forgot-password link | `colors.pine` text | `primary` text (large/graphic-adjacent context — a text link at `label` size (13px) is borderline for the 3:1-only `primary` teal; verify this specific pairing during implementation, or use `primaryStrong` if the 13px link text fails AA in practice) |
-| Hero title "Welcome back" | `#FFFFFF`, Inter weight-800 | `#FFFFFF` (full white is fine here — it's 42px/`display`-scale large text against the teal gradient, well within the 3:1 large-text threshold even at the gradient's lighter end), Manrope weight-800 per [02](02-typography-spacing-elevation-iconography.md) §1 |
+| Element | Treatment |
+|---|---|
+| Page background | `bg` (`#FFF9F0` light / `#071F24` dark), full screen, no gradient |
+| Top safe area | `useSafeAreaInsets().top` + `spacing.lg`, no hardcoded constant (closes the gap audit `02`/`05` flagged at `LoginScreen.tsx:215`) |
+| Brand mark + wordmark | Compact — logo ~32–36px, wordmark at `label` scale, **horizontally centered**, stacked or side-by-side, modest top margin (`spacing.xl`) rather than a large hero block |
+| Welcome message | "Welcome back" at `title` scale (Manrope 700, 22/28), **centered**, followed by a short `caption`-scale subtitle in `muted`, also centered — replaces the old 42px left-aligned `display`-scale hero title |
+| Decorative accent | One or two thin-stroke, low-opacity outlined circles (`GeometricAccent`, see [03](03-component-specifications.md)) in `primary`/`accentApricot` at 10–15% opacity (light) / 14–18% (dark), anchored off the top-right and bottom-left corners, `pointerEvents="none"`, sitting behind all content — **not** a full gradient fill, grid pattern, radial glow, or sparkle scatter |
+| Form fields | Sit directly on the page background — no wrapping `Card`/panel. Each field: `surfaceAlt`/`chip` fill, `border` outline, `radius.lg` (16, up from today's `radius.md`, for the rounder "clean, integrated" feel the brief asks for) |
+| Primary button ("Sign in") | `primaryStrong` fill (light) / `primaryDark` fill with `inkOnAccent` text (dark), `radius.lg`, full-width — same rounding as the fields, not a separate pill shape, so the form reads as one coherent rounded-corner language |
+| Biometric sign-in button | Same button role as the primary button (`primaryStrong`/`primaryDark`) — no longer given its own accent color. With no hero to "pop" against, two differently-accented primary actions on one calm screen would read as inconsistent rather than deliberate; the screen's one reserved accent now lives only in the decorative geometric shapes |
+| Biometric icon circle | `chip`/`surfaceAlt` fill, `primary` icon tint — a quiet icon chip, not an accent-colored showpiece |
+| "Forgot password?" link | `primaryStrong` text (light) / `primaryDark` text (dark) — **not** `primary` (`#0EA5A0`). Checked against the page background directly (not as a fill): `primary` teal as small text on cream is 2.91:1 and fails even the large-text threshold; `primaryStrong` on cream is 7.88:1. See the added row in [01-color-tokens.md](01-color-tokens.md) §1. This corrects the original draft, which had specified `primary` for this exact link. |
+| Error text | `danger`, unchanged role and placement |
+| Dark mode | `bg` → `#071F24`, fields → dark `chip` (`#1B3F43`) on dark `border` — these are literally the "deep teal surfaces" the brief asks for, already defined in [01](01-color-tokens.md) §2, not a new set of values. Same centered, compact, accent-restrained structure as light mode. |
 
-Everything else — the biometric/password-form toggle logic, field layout, error text placement,
-`KeyboardAvoidingView` behavior — is unchanged; this is a visual re-skin of an already-sound
-screen, not a restructure.
+What this removes, explicitly: the `LinearGradient` hero fill, the SVG grid pattern, the
+`RadialGradient` glow, the scattered `Sparkle` field, and the elevated white card with its
+heavy drop shadow (`LoginScreen.tsx:27-55,222-236`) are all retired for this screen. The
+`Sparkle` component itself is not deleted from the codebase (see [03](03-component-specifications.md))
+but Login no longer uses it.
 
 ## Home
 
-Same principle: today's structure (gradient hero header with greeting + avatar + icon actions,
-a floating "Quick access" card overlapping the hero/body boundary, a stack of flat bordered
-info cards below) stays. Colors and a few literal values change:
+**Preserve all existing functionality and content exactly as-is** — the greeting, avatar,
+header icon actions, quick-access tiles, and every conditional info card (pending actions,
+stats row, role, attendance, document compliance, handover, leave balances, next holiday) stay.
+Nothing is added or removed. Only the visual treatment of the header region and the cards'
+immediate surroundings changes, per the instruction not to assume the gradient-heavy layout
+must be kept.
 
-| Element | Today | New |
+| Element | Before | After |
 |---|---|---|
-| Hero gradient | `HERO_GRADIENT` (pine) | `['#0EA5A0', '#00585B']`, same as Login — one consistent brand gradient across both hero moments rather than two different ones |
-| Hero glow/accent sparkles | `HERO_ACCENT` (lime) | `accentApricot` |
-| Greeting icon + text | `rgba(255,255,255,0.7/0.75)` | Unchanged literal opacities — still white-on-gradient, same large-text-safe context as Login's title |
-| Greeting name (large display text) | `#FFFFFF`, Inter 800 | `#FFFFFF`, Manrope 800 |
-| Header icon buttons (theme toggle, directory, notifications) | `rgba(255,255,255,0.14)` fill circles | Unchanged — these are translucent-on-gradient, not flat token fills, and that treatment still reads correctly against the new teal gradient |
-| Notification badge | `colors.danger` | New `danger` value (`#D14343`/`#FF6B6B`) |
-| Avatar ring | `colors.lime` border | `accentApricot` border — the avatar is the one "special" element in the header, matching Login's biometric-circle accent use |
-| Quick-access card | `colors.white`, radius `xl` (22), `shadow.soft` | `surface`, radius `xxl` (28), `shadow.soft` — promoted to the same hero-level radius as Login's card, since both are the "floating card over the gradient boundary" pattern and should match |
-| Quick-access tile fills | `moduleColors[key].icon` solid fill + white glyph | Same mechanism, new module values from [01](01-color-tokens.md) §5 |
-| "Next holiday" card icon | `colors.lime` fill, `colors.pineDark` icon (`HomeScreen.tsx:374`) | `accentApricot` fill, `inkOnAccent` icon — same "this one card gets the accent treatment" idea, correct pairing per §1 |
-| Watermark circle (decorative, `HomeScreen.tsx:402-411`) | `colors.pine` at 2.5% opacity | `primary` at the same opacity — a near-invisible texture detail, kept as-is structurally |
-| All other info cards (pending actions, role, attendance, documents, leave balances, handover) | `colors.white`/`border: colors.line`, module-colored `SectionIcon` fills | `surface`/`border: border`, same module-colored icon mechanism with new values |
+| Header region | Full-bleed `LinearGradient` block (`['#0EA5A0','#00585B']` in the superseded draft) with SVG grid, radial glow, and scattered sparkles behind the greeting | Sits directly on the page `bg` — no gradient fill. One restrained `GeometricAccent` shape (a single large, low-opacity outlined circle in `primary` or `accentApricot`) positioned behind the avatar/greeting area, reusing the same decorative mechanism as Login rather than inventing a second one |
+| Greeting icon + "Good morning," | `rgba(255,255,255,0.7)` (white-on-gradient) | `muted` — now dark-on-light text, since the background is no longer a dark gradient |
+| Greeting name (large text) | White, `display` scale | `ink`, `display` scale (Manrope) — same scale and weight, new color because the ground changed |
+| Header icon buttons (theme toggle, directory, notifications) | Translucent white circles (`rgba(255,255,255,0.14)`) — only legible against a dark gradient | `chip`/`surfaceAlt` fill, `ink` icon color — a light neutral chip button appropriate to a light page background |
+| Notification badge | `danger` fill | Unchanged role, new value from [01](01-color-tokens.md) §4 |
+| Avatar ring | Heavy `accentApricot` border, sized for contrast against a dark gradient | A thinner `border`-weight ring, optionally tinted `primary` at low weight — toned down to match the calmer screen rather than needing to fight a busy background for attention |
+| Quick-access card | "Floating" over the hero/body boundary with a negative top margin, `radius.xl`, `shadow.soft` | Sits naturally in the page flow — same `surface`/`xl`/`shadow.soft` values (unchanged from today's actual implementation, since this part was never the problem the correction raised), just no longer needs a negative margin to bridge a hero drop that no longer exists |
+| Quick-access tile fills | Solid module `.icon` color + white glyph | Unchanged — each tile is its own small colored surface; this was never part of the "oversized hero" critique |
+| "Next holiday" card | `accentApricot` fill + `inkOnAccent` icon | Unchanged — correctly scoped use of the one reserved accent, already consistent with "subtle... used sparingly" |
+| Decorative watermark circle (`HomeScreen.tsx:402-411`) | `colors.pine` at 2.5% opacity | Folded into the single `GeometricAccent` treatment above rather than kept as a second, separate decorative layer — one restrained accent shape per screen region, not two |
+| Dark mode | Gradient header in dark-mode-tinted teals | `bg`/`surface` → dark values (`#071F24`/`#123237`), same light-on-dark ink/muted/chip mapping as every other dark-mode card on this screen |
 
-No new sections, cards, or data are introduced — this file specifies the re-skin of the
-existing Home dashboard only, per the scope boundary in
-[09-scope-boundaries.md](09-scope-boundaries.md).
+## What changed from the original draft, at a glance
 
-## What this file deliberately does not do
+| Aspect | Original draft | This revision |
+|---|---|---|
+| Hero mechanism | Full gradient + grid + glow + sparkles on both screens | Retired on both screens; one restrained geometric accent shape each |
+| Login layout | Hero block + separately elevated floating card | Single continuous background, centered content, no card wrapper |
+| Login button accenting | Primary button `primaryStrong`, biometric button `accentApricot` | Both buttons use the same `primaryStrong`/`primaryDark` role — no second accent on this screen |
+| Login link color | `primary` (unverified against the bg-as-background use case) | `primaryStrong` — corrected after checking contrast of teal *text on* cream, not just teal *fills with* text on them |
+| Home header | Dark gradient block with white text/icons | Sits on page `bg`, dark text/icons on light chips |
+| Radius for form fields | `radius.md` (unchanged from today) | `radius.lg`, for the rounder "clean, integrated" feel |
 
-- It does not touch any of the other 27 mobile screens — per
-  [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md),
-  those stay on the current look until Phase 2's consolidation step, exactly as audit `05` §2/§3
-  recommended to avoid a half-migrated, inconsistent app mid-rollout.
-- It does not resolve the "Concept B" ambiguity noted above — that needs a direct side-by-side
-  check against whatever reference the user has, before any of this is implemented.
+## What this file still does not do
+
+- It does not resolve whether the specific geometric-accent shapes described above match the
+  actual approved reference image, since that image was not available when writing this
+  revision — confirm before implementation.
+- It does not touch any of the other 27 mobile screens, per
+  [09-scope-boundaries.md](09-scope-boundaries.md) and the phased plan in
+  [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md).
