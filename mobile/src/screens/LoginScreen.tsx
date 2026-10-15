@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,22 +14,31 @@ import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 /**
  * Design System v2 ("Warm & Human") Login — see docs/design-system/04-screen-specifications-login-home.md
  * (Revision 2). No gradient hero, no floating card: a single calm page background,
  * centered branding, pill-shaped fields/buttons, and three solid decorative accent
  * shapes (apricot-dominant in light mode, teal-dominant with one apricot "spark" dot
  * in dark mode, per the approved reference image).
+ *
+ * Pulled further off-canvas and toned down from the first pass — on a real device,
+ * the previous sizes/offsets let the blobs' edges creep in behind the form fields
+ * and the "or"/biometric row, reducing text/control contrast there. Pinned to the
+ * four corners only, well clear of the centered content column.
  */
 function DecorativeAccents({ scheme }: { scheme: 'light' | 'dark' }) {
   const v2 = useV2Colors();
   const largeBlobColor = scheme === 'dark' ? v2.primary : v2.accentApricot;
-  const largeBlobOpacity = scheme === 'dark' ? 0.18 : 0.25;
+  const largeBlobOpacity = scheme === 'dark' ? 0.13 : 0.18;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <GeometricAccent size={220} color={largeBlobColor} opacity={largeBlobOpacity} style={{ top: -70, left: -90 }} />
-      <GeometricAccent size={260} color={largeBlobColor} opacity={largeBlobOpacity} style={{ bottom: -110, right: -100 }} />
-      <GeometricAccent size={34} color={v2.accentApricot} opacity={0.85} style={{ bottom: 64, left: 28 }} />
+      <GeometricAccent size={190} color={largeBlobColor} opacity={largeBlobOpacity} style={{ top: -95, left: -110 }} />
+      <GeometricAccent size={210} color={largeBlobColor} opacity={largeBlobOpacity} style={{ bottom: -130, right: -115 }} />
+      <GeometricAccent size={26} color={v2.accentApricot} opacity={0.8} style={{ bottom: 18, left: 18 }} />
     </View>
   );
 }
@@ -38,6 +47,12 @@ export function LoginScreen({ navigation }: Props) {
   const { scheme } = useTheme();
   const v2 = useV2Colors();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  // A proportional top gap, clamped to a sensible range, so the layout reads as
+  // "balanced" rather than cramped on compact phones or oddly empty-on-top on tall
+  // ones — a fixed constant looked right only on the one size it was tuned against.
+  const topGap = insets.top + clamp(windowHeight * 0.06, spacing.lg, spacing.xl * 1.5);
+  const bottomGap = insets.bottom + clamp(windowHeight * 0.04, spacing.lg, spacing.xl);
   const styles = useMemo(() => makeStyles(v2, scheme), [v2, scheme]);
   const { login, biometricCredential, enableBiometricSignIn, loginWithSavedCredential } = useAuth();
   const [email, setEmail] = useState('');
@@ -103,7 +118,7 @@ export function LoginScreen({ navigation }: Props) {
       <DecorativeAccents scheme={scheme} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topGap, paddingBottom: bottomGap }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.brandBlock}>
@@ -118,7 +133,8 @@ export function LoginScreen({ navigation }: Props) {
           <View style={styles.formArea}>
             {biometricCredential && !showPasswordForm ? (
               <View style={styles.formArea}>
-                <Text style={styles.identityCaption}>Signed in as {biometricCredential.name}</Text>
+                {/* Not "Signed in as" — authentication hasn't happened yet at this point, only identity recall. */}
+                <Text style={styles.identityCaption}>Continue as {biometricCredential.name}</Text>
                 <View style={styles.biometricIconWrap}>
                   <Ionicons name={biometricKind === 'face' ? 'scan-outline' : 'finger-print-outline'} size={30} color={v2.primary} />
                 </View>
@@ -190,7 +206,8 @@ const makeStyles = (v2: V2Colors, scheme: 'light' | 'dark') => StyleSheet.create
   brandBlock: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.lg },
   logo: { width: 44, height: 44, borderRadius: 12 },
   wordmark: { fontFamily: V2_FONTS.manropeExtraBold, fontSize: 22, color: v2.ink, marginTop: spacing.xs },
-  tagline: { fontFamily: V2_FONTS.interMedium, fontSize: 12, color: v2.muted, letterSpacing: 0.3 },
+  // Bumped from 12/interMedium — read as too faint/small on an actual device.
+  tagline: { fontFamily: V2_FONTS.interSemiBold, fontSize: 13, color: v2.muted, letterSpacing: 0.2 },
 
   title: { fontFamily: V2_FONTS.manropeBold, fontSize: 22, lineHeight: 28, color: v2.ink, textAlign: 'center' },
   subtitle: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.xl, maxWidth: 300 },
@@ -205,7 +222,8 @@ const makeStyles = (v2: V2Colors, scheme: 'light' | 'dark') => StyleSheet.create
 
   orDivider: { textAlign: 'center', fontFamily: V2_FONTS.interRegular, fontSize: 13, color: v2.muted },
 
-  identityCaption: { fontFamily: V2_FONTS.interRegular, fontSize: 12, color: v2.muted, textAlign: 'center' },
+  // Bumped from 12/interRegular, same reasoning as tagline.
+  identityCaption: { fontFamily: V2_FONTS.interMedium, fontSize: 14, color: v2.muted, textAlign: 'center' },
   biometricIconWrap: {
     alignSelf: 'center',
     width: 64,
