@@ -68,6 +68,10 @@ class ModuleEntitlementTest extends TestCase
         $this->assertTrue($moduleKeys->contains('attendance'));
         $this->assertTrue($moduleKeys->contains('assets'));
         $this->assertTrue($moduleKeys->contains('payroll'));
+        // Same bug class as attendance/assets/payroll above: EmployeeDocumentController's
+        // store/download/view/acknowledge/signed-copy endpoints already allow an employee
+        // to act on their own documents without employee_documents.view.
+        $this->assertTrue($moduleKeys->contains('documents'));
         // 'users_roles' has no self-service angle at all — genuinely admin-only.
         $this->assertFalse($moduleKeys->contains('users_roles'));
     }

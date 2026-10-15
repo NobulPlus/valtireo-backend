@@ -42,6 +42,8 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ] && [ "$APP_PROCESS_MODE" != "worker" ]
     fi
 fi
 
+php artisan app:verify-production-safety
+
 php artisan storage:link --force >/dev/null 2>&1 || true
 php artisan optimize
 

@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { queryClient } from './src/lib/queryClient';
 import { loadStoredToken } from './src/lib/secureToken';
 import { AuthProvider } from './src/context/AuthContext';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { QueryError } from './src/components/QueryError';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -21,6 +22,14 @@ function AppContent() {
 }
 
 export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppRoot />
+    </ErrorBoundary>
+  );
+}
+
+function AppRoot() {
   // The axios interceptor needs a synchronous token read, so we wait for the
   // one-time secure-store load to resolve before rendering anything that
   // might call the API (see src/lib/secureToken.ts).

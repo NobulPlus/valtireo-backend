@@ -32,7 +32,7 @@ import {
 import { useMyCompensation } from '@/features/payroll/api';
 import { useCurrencyFormatter } from '@/features/payroll/useCurrencyFormatter';
 import { ApiError } from '@/lib/apiClient';
-import { assetUrl } from '@/lib/assetUrl';
+import { useAuthenticatedImage } from '@/lib/useAuthenticatedImage';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { downloadDocumentFile } from '@/lib/documents';
 import { isValidEmail } from '@/lib/validation';
@@ -219,6 +219,7 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
   });
   const [passportPhoto, setPassportPhoto] = useState<File | null>(null);
   const [passportPreview, setPassportPreview] = useState<string | null>(null);
+  const savedPhotoUrl = useAuthenticatedImage(profile?.passport_photo_url);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const updateProfileMutation = useUpdateMyProfile();
   const personalEmailError = biodata.personal_email && !isValidEmail(biodata.personal_email) ? 'Enter a valid email address' : undefined;
@@ -554,9 +555,9 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
           <CardBody className="space-y-5">
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-teal/10">
-                {passportPreview || assetUrl(profile?.passport_photo_url) ? (
+                {passportPreview || savedPhotoUrl ? (
                   <img
-                    src={passportPreview ?? assetUrl(profile?.passport_photo_url) ?? ''}
+                    src={passportPreview ?? savedPhotoUrl ?? ''}
                     alt={`${employee.full_name} passport`}
                     className="h-full w-full object-cover"
                   />

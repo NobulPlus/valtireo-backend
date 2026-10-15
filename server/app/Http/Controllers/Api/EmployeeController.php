@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
@@ -490,12 +491,14 @@ class EmployeeController extends Controller
 
         if ($request->hasFile('passport_photo')) {
             if ($profile->passport_photo_path) {
-                Storage::disk('public')->delete($profile->passport_photo_path);
+                Storage::disk('local')->delete($profile->passport_photo_path);
             }
 
+            // Stored on the private 'local' disk and served only through photo()'s
+            // authenticated, organization-scoped endpoint below — never a public URL.
             $data['passport_photo_path'] = $request->file('passport_photo')->store(
                 "organizations/{$employee->organization_id}/employees/{$employee->id}/passport",
-                'public'
+                'local'
             );
         }
 
@@ -509,6 +512,28 @@ class EmployeeController extends Controller
         return response()->json([
             'employee' => new EmployeeResource($employee->refresh()),
             'profile' => new EmployeeProfileResource($profile->refresh()),
+        ]);
+    }
+
+    /**
+     * Serves a passport photo from private storage — organization-scoped and
+     * restricted to the employee themselves or a viewer with employees.view,
+     * the same authorization shape as EmployeeDocumentController's downloads.
+     */
+    public function photo(Request $request, Employee $employee): BinaryFileResponse
+    {
+        abort_unless($employee->organization_id === $request->user()->organization_id, 404);
+
+        $isSelf = $request->user()->employee?->id === $employee->id;
+        abort_unless($isSelf || $request->user()->can('employees.view'), 403);
+
+        $path = $employee->profile?->passport_photo_path;
+        abort_unless($path && Storage::disk('local')->exists($path), 404);
+
+        return response()->file(Storage::disk('local')->path($path), [
+            'Content-Type' => Storage::disk('local')->mimeType($path) ?: 'application/octet-stream',
+            'Content-Disposition' => 'inline; filename="passport-photo"',
+            'Cache-Control' => 'private, max-age=3600',
         ]);
     }
 

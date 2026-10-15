@@ -97,7 +97,16 @@ class PlatformModuleSeeder extends Seeder
                 'key' => 'documents',
                 'description' => 'Document types, employee documents, approvals, and expiries.',
                 'category' => 'hr',
-                'required_permission' => 'employee_documents.view',
+                // No required_permission, matching attendance/assets/payroll/service_desk:
+                // every route this module gates (store/download/view/acknowledge/signed-copy
+                // in EmployeeDocumentController) already has its own self-service fallback
+                // (upload/view/acknowledge your own document needs no special permission —
+                // see SubmitEmployeeDocumentRequest::authorize() and
+                // EmployeeDocumentController::authorizeDocumentAccess()), so gating the
+                // module itself behind employee_documents.view silently hid the module
+                // (and any mobile/web nav entry keyed off it) for every ordinary employee
+                // even though they could already use every endpoint it covers.
+                'required_permission' => null,
                 'is_active' => true,
                 'sort_order' => 50,
             ],
