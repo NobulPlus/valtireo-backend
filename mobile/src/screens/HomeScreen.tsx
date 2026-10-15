@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -19,6 +19,10 @@ import type { MainTabParamList } from '../navigation/MainTabs';
 import type { MoreStackParamList } from '../navigation/MoreStack';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<HomeStackParamList, 'Home'>, BottomTabScreenProps<MainTabParamList>>;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
 
 type MoreDestination = Exclude<keyof MoreStackParamList, 'MoreMenu'>;
 
@@ -110,7 +114,12 @@ export function HomeScreen({ navigation }: Props) {
   const { scheme, preference, setPreference } = useTheme();
   const v2 = useV2Colors();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => makeStyles(v2), [v2]);
+  const { width: windowWidth } = useWindowDimensions();
+  // More breathing room between the icon buttons/avatar than the original flat
+  // 8px, but clamped down on narrow phones so the header never overflows or
+  // forces the icons to crowd the greeting name.
+  const headerActionGap = clamp(windowWidth * 0.03, spacing.sm + 4, spacing.md);
+  const styles = useMemo(() => makeStyles(v2, headerActionGap), [v2, headerActionGap]);
   const { session, moduleByKey } = useAuth();
   const { data, isLoading, isRefetching, refetch } = useMyDashboard();
   const { data: unread } = useUnreadNotificationCount();
@@ -135,12 +144,15 @@ export function HomeScreen({ navigation }: Props) {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={v2.primary} />}
       >
         <View style={styles.headerRow}>
-          <View>
+          <View style={styles.greetingBlock}>
             <View style={styles.greetingRow}>
               <Ionicons name={GREETING_ICON[greeting.period]} size={13} color={v2.muted} />
-              <Text style={styles.greetingLabel}>{greeting.label},</Text>
+              <Text style={styles.greetingLabel} numberOfLines={1}>{greeting.label},</Text>
             </View>
-            <Text style={styles.greetingName}>{session?.user.name?.split(' ')[0] ?? 'there'}</Text>
+            {/* numberOfLines + the block's own flexShrink (below) keep a long name from
+                wrapping onto a second line and pushing the icon row off a narrow screen —
+                it truncates instead. */}
+            <Text style={styles.greetingName} numberOfLines={1}>{session?.user.name?.split(' ')[0] ?? 'there'}</Text>
           </View>
           <View style={styles.headerActions}>
             <Pressable onPress={cycleTheme} style={styles.headerIconButton} accessibilityLabel={`Appearance: ${preference}. Tap to change.`}>
@@ -151,7 +163,7 @@ export function HomeScreen({ navigation }: Props) {
                 <Ionicons name="people-outline" size={20} color={v2.ink} />
               </Pressable>
             ) : null}
-            <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.headerIconButton} accessibilityLabel="Notifications">
+            <Pressable onPress={() => navigation.navigate('Notifications')} style={[styles.headerIconButton, { marginRight: spacing.xs }]} accessibilityLabel="Notifications">
               <Ionicons name="notifications-outline" size={20} color={v2.ink} />
               {unread && unread.unread_count > 0 ? (
                 <View style={styles.badge}>
@@ -348,21 +360,28 @@ export function HomeScreen({ navigation }: Props) {
   );
 }
 
-const makeStyles = (v2: V2Colors) => StyleSheet.create({
+const makeStyles = (v2: V2Colors, headerActionGap: number) => StyleSheet.create({
   root: { flex: 1, backgroundColor: v2.bg },
   flex: { flex: 1 },
   container: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl * 2 },
 
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  // Shrinks (and the name truncates via numberOfLines) before it ever forces
+  // the icon row to overflow or compress on a narrow screen.
+  greetingBlock: { flexShrink: 1, marginRight: spacing.sm },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs / 2 },
   greetingLabel: { fontFamily: V2_FONTS.interMedium, fontSize: 13, color: v2.muted },
   greetingName: { fontFamily: V2_FONTS.manropeExtraBold, fontSize: 32, color: v2.ink, letterSpacing: -0.5 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // flexShrink: 0 — the icon row keeps its full size even if the greeting
+  // block above needs to shrink first; gap is responsive (see headerActionGap).
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: headerActionGap, flexShrink: 0 },
   // Restyled off the old translucent-white-on-gradient treatment — a neutral
   // chip fill reads correctly now that the header sits on the plain page
   // background instead of a dark gradient.
   headerIconButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: v2.chip, alignItems: 'center', justifyContent: 'center' },
-  badge: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 3, backgroundColor: v2.danger, alignItems: 'center', justifyContent: 'center' },
+  // Tucked in slightly from the original -4/-4 so it doesn't crowd the avatar
+  // now that the button beside it also carries its own small marginRight.
+  badge: { position: 'absolute', top: -2, right: -2, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 3, backgroundColor: v2.danger, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: '#FFFFFF', fontSize: 10, fontFamily: V2_FONTS.interBold },
   avatarRing: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: v2.primary },
   roleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
@@ -383,9 +402,12 @@ const makeStyles = (v2: V2Colors) => StyleSheet.create({
   rowCard: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   cardBody: { flex: 1 },
   cardTitle: { fontFamily: V2_FONTS.interSemiBold, fontSize: 16, color: v2.ink, marginBottom: spacing.sm },
-  body: { fontFamily: V2_FONTS.interRegular, fontSize: 14, color: v2.ink },
+  // 14 -> 15/21, matching the documented v2 `body` scale (docs/design-system/02
+  // §1) — the original value had drifted a point below the spec, which read as
+  // noticeably small for the role/attendance detail lines on an actual device.
+  body: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.ink },
   caption: { fontFamily: V2_FONTS.interRegular, fontSize: 13, color: v2.muted },
-  pendingItem: { fontFamily: V2_FONTS.interRegular, fontSize: 14, color: v2.ink, marginBottom: spacing.xs },
+  pendingItem: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.ink, marginBottom: spacing.xs },
 
   statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   statCard: { flex: 1, borderRadius: radius.md, padding: spacing.md, backgroundColor: v2.surface, borderWidth: 1, borderColor: v2.border },
@@ -402,7 +424,12 @@ const makeStyles = (v2: V2Colors) => StyleSheet.create({
   pill: { borderRadius: radius.pill, paddingHorizontal: spacing.sm + 2, paddingVertical: 3 },
   pillText: { fontSize: 11, fontFamily: V2_FONTS.interBold },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  leaveBalanceChip: { backgroundColor: v2.chip, borderRadius: radius.sm, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.xs + 2 },
-  leaveBalanceLabel: { fontFamily: V2_FONTS.interRegular, fontSize: 12, color: v2.muted },
-  leaveBalanceValue: { fontFamily: V2_FONTS.interBold, fontSize: 15 },
+  leaveBalanceChip: { backgroundColor: v2.chip, borderRadius: radius.sm, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.xs + 4 },
+  // Bumped from 12/interRegular — too faint relative to the value below it.
+  leaveBalanceLabel: { fontFamily: V2_FONTS.interMedium, fontSize: 13, color: v2.muted },
+  // Strengthened from 15 to 18 (and added a small top gap) so the number reads
+  // as the chip's primary content and the label above it as clearly
+  // subordinate — the same "big number, small label" hierarchy the stat cards
+  // above already use, now applied consistently to the leave-balance chips.
+  leaveBalanceValue: { fontFamily: V2_FONTS.interBold, fontSize: 18, marginTop: 2 },
 });
