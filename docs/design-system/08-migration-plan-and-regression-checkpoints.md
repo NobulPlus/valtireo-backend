@@ -1,118 +1,135 @@
 # 08 — Incremental migration plan and regression-testing checkpoints
 
-This phasing is audit `05` §3's plan, carried forward with this spec's actual token values and
-this repo's actual verification tooling (the same discipline used for the pre-launch-readiness
-branch: `tsc --noEmit`, `expo lint`, mobile contract tests, `expo export` bundle smoke tests,
-backend `php artisan test` + `vendor/bin/pint --test`, client `tsc --noEmit` + `npm run lint` +
-`npm run build`). **No step in this plan is authorized to begin by this document alone** — per
-the brief, this is presented for review and approval before any of it starts.
+**Revision note:** the original draft of this file had a sequencing conflict with
+[07-cross-platform-token-architecture.md](07-cross-platform-token-architecture.md) — it
+described swapping the single global token file's values in Phase 1, then described Phase 2
+screens as still resolving to "the original palette," which only makes sense if the token file
+holds both palettes at once. This revision aligns the plan with 07's corrected dual-palette +
+per-screen-flag architecture, and reorders the phases so that **component consolidation happens
+under the existing (legacy) visual design, before any new-identity screen work, not
+interleaved with it** — and so that **web and website migrations don't start until mobile's
+rollout is complete and stable**, both per the explicit correction. **No step in this plan is
+authorized to begin by this document alone** — this remains a specification for review, not an
+implementation authorization.
 
-## Phase 0 — pre-work (no visual change)
+## Phase 0 — token infrastructure, zero visual change
 
-1. Stand up `design-tokens/tokens.json` and the three generators
-   ([07-cross-platform-token-architecture.md](07-cross-platform-token-architecture.md) §2-3),
-   seeded with **current** values first (today's pine/lime palette, byte-for-byte) — so this
-   phase's only diff is "nothing visibly changed," proving the pipeline before it carries new
-   values.
-   - **Checkpoint:** `mobile/src/theme.generated.ts` and `client/src/tokens.generated.css`
-     produce output identical in effect to today's hand-written `theme.tsx`/`index.css` blocks.
-     Run mobile's existing `node --test tests/*.cjs` contract tests, `expo lint`, `tsc --noEmit`;
-     client's `tsc --noEmit` + lint + `npm run build`. No screenshot should differ from
-     pre-change.
-2. Wire the CI parity check (generated output vs. a fresh build from `tokens.json`).
+1. Stand up `design-tokens/tokens.json` with `palettes.legacy` seeded from today's actual
+   values (`theme.tsx`, `index.css`, `global.css`) and `palettes.v2` seeded from
+   [01-color-tokens.md](01-color-tokens.md), with `activePalette: "legacy"`
+   ([07](07-cross-platform-token-architecture.md) §2).
+2. Build the three generators ([07](07-cross-platform-token-architecture.md) §4) and the CI
+   parity check (§6).
+   - **Checkpoint:** `mobile/src/theme.generated.ts` resolving `palettes.legacy` is
+     byte-equivalent in effect to today's hand-written `theme.tsx`; same for client's generated
+     CSS vs. today's `index.css`. Run mobile's `node --test tests/*.cjs`, `expo lint`,
+     `tsc --noEmit`; client's `tsc --noEmit` + lint + `npm run build`. **No screen anywhere
+     should render any differently than before this phase.** This is the one phase whose entire
+     success criterion is "nothing visibly changed."
 
-## Phase 1 — Mobile: Login and Home only
+## Phase 1 — mobile component consolidation, under the existing design
 
-3. Swap `tokens.json`'s values to this spec's new palette
-   ([01](01-color-tokens.md)/[02](02-typography-spacing-elevation-iconography.md)). This phase
-   touches only the two screens already structurally ready for it
-   ([04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)) — every
-   other screen keeps importing the same token names, which now resolve to new values, but since
-   25 of 29 screens don't import `IconTile`/hero-related tokens at all (audit `05` §2 item 1),
-   most of the app is visually unaffected until Phase 2 regardless.
-4. Fix the two platform gaps that interact directly with these two screens' rebuild
+3. Build the shared components from [03-component-specifications.md](03-component-specifications.md)
+   (`Button`, `Card`, `ListRow`, `Input`, `Pill`, `GeometricAccent`), styled by reading from
+   whichever palette is currently active (`legacy`, unchanged at this point) — these components
+   must render pixel-equivalent to what they replace, since no new values exist yet.
+4. Migrate the highest-traffic screens first — **starting with Tickets** (audit `02`'s finding
+   that it's the most fully built-out flow), then Leave, Attendance, Directory, Assets,
+   Documents, Payslips, Profile, Notifications, Calendar, Lifestyle, and **including Login and
+   Home themselves** — onto these shared primitives, still rendering the `legacy` palette
+   throughout. This is the explicit correction from the original draft, which had Login/Home
+   restyled into the new identity *before* the other 25 screens were consolidated; now every
+   screen reaches structural parity on shared components first, and the only thing that changes
+   later is which palette those components read from.
+   - **Checkpoint, per screen:** no functional regression — list pagination/infinite scroll,
+     form submission, navigation, and every existing interaction continue to work exactly as
+     before; a visual diff against the pre-consolidation screenshot should show no change
+     (consolidation is a structural refactor, not a restyle). This is naturally a multi-PR
+     phase, one or a few screens per PR, not one large change.
+5. Fix the two platform gaps that interact with this consolidation pass regardless of palette
    ([06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md)
-   §3): safe-area insets on both hero headers, and `expo-font` loading for Inter/Manrope.
-5. Wire mobile's dead `logo_url`/`theme` branding fields for Login/Home
-   ([05-organization-branding-compatibility.md](05-organization-branding-compatibility.md) §2).
-6. Build the new `Button`, `Input`, and hero-backdrop recoloring described in
-   [03](03-component-specifications.md)/[04](04-screen-specifications-login-home.md), scoped to
-   these two screens.
-   - **Checkpoint:** manual on-device check of the full Login flow (password sign-in, biometric
-     sign-in toggle, forgot-password link, error states) and Home (greeting, quick-access tiles,
-     all conditional info cards, pull-to-refresh, theme-preference cycling) in both light and
-     dark mode, on at least one device with a Dynamic-Type-enlarged system font setting (§
-     [06](06-accessibility-and-responsive-requirements.md) §4). Confirm contrast visually
-     matches the ratios computed in [01](01-color-tokens.md) §1 — specifically confirm the
-     dark-mode CTA button renders dark text on the `#39CFC0` fill, not white (the one pairing
-     easy to get backwards by habit). Re-run mobile's full test/lint/typecheck suite; nothing
-     outside these two screens should show a diff.
+   §3): safe-area insets wherever a screen's header currently hardcodes top padding, and
+   `expo-font` loading for Inter/Manrope (loaded now, even though every screen still renders the
+   `legacy` palette's type choices until flagged — having the fonts available doesn't require
+   using them yet).
 
-## Phase 2 — Mobile: consolidate remaining screens, then roll out
+## Phase 2 — mobile: controlled, per-screen rollout of the new identity
 
-7. Before touching any other screen's visuals, move the highest-traffic remaining screens
-   (Tickets, Leave, Attendance, Directory, Assets, Documents, Payslips, Profile, Notifications,
-   Calendar, Lifestyle — the order audit `05` §3 step 5 gives, "Tickets first" per audit `02`'s
-   finding that it's the most fully built-out flow) onto the shared `Card`/`ListRow`/`Button`
-   primitives from [03](03-component-specifications.md), **while token values still resolve to
-   the Phase-0 (original) palette** — so any visual regression here is attributable to the
-   refactor, not a color change, per audit `05` §2's explicit warning against doing both in one
-   commit.
-   - **Checkpoint:** per screen, confirm no functional regression (every list still loads,
-     paginates, and the infinite-scroll behavior from this session's earlier work still
-     functions — a straightforward place to break by replacing a list row's structure) before
-     moving to the next screen. This is naturally a multi-PR phase, not one large change.
-8. Once consolidated, swap `tokens.json` to the new palette app-wide — now a true single-point
-   change across all 29 screens, not a straggler problem.
-9. Apply the module-accent decision (§5 of [01](01-color-tokens.md): retained, restyled, same
-   `{bg icon}` shape, new values) uniformly across every remaining module tile.
-   - **Checkpoint:** full regression pass across all 29 screens in both themes; re-run the full
-     mobile test suite; spot-check every module's icon-chip color against
-     [01](01-color-tokens.md) §5's table for correctness (easy to transpose two modules' hexes
-     by mistake with 15 entries).
+6. Flip screens from `legacy` to `v2` one at a time via `SCREEN_PALETTE_OVERRIDE`
+   ([07](07-cross-platform-token-architecture.md) §3) — **Login and Home first**, since they're
+   the two screens with an actual new-layout spec
+   ([04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)), not just
+   a palette swap.
+   - **Checkpoint (Login/Home):** manual on-device check of the full flow (password sign-in,
+     biometric toggle, forgot-password, error states; Home's greeting, quick-access tiles, every
+     conditional info card, pull-to-refresh, theme-preference cycling) in both light and dark
+     mode, including a Dynamic-Type-enlarged system font setting. Confirm the specific contrast
+     pairings flagged in [01](01-color-tokens.md) §1 render correctly — especially the
+     dark-mode CTA using dark text on `#39CFC0`, and the "Forgot password?" link using
+     `primaryStrong`, not `primary`. Confirm `logo_url`/`theme` branding wiring
+     ([05-organization-branding-compatibility.md](05-organization-branding-compatibility.md))
+     works for an org with a custom primary color. Re-run the full mobile test/lint/typecheck
+     suite — nothing outside these two screens' palette should show a diff, since every other
+     screen still reads `legacy` via the still-active global default.
+7. Flip the remaining screens one at a time (or in small related groups — e.g. Leave +
+   Attendance together, since they share dashboard cards on Home), applying the module-accent
+   decision ([01](01-color-tokens.md) §5) as each group flips.
+   - **Checkpoint, per group:** same regression bar as step 4's checkpoint, plus a visual
+     confirmation that the flipped screen's module-accent colors match
+     [01-color-tokens.md](01-color-tokens.md) §5's table (easy to transpose two modules' hexes
+     by mistake across 15 entries) and that it visually coheres with any adjacent screen still on
+     `legacy` (a brief, expected "half-migrated" state between flips — bounded to one deploy
+     cycle per group, not an open-ended inconsistency, since flips proceed in quick succession
+     once the mechanism is proven on Login/Home).
 
-## Phase 3 — Web (`client/`)
+## Phase 3 — mobile: full cutover
 
-10. Generate `client/src/tokens.generated.css` from the same `tokens.json`
-    ([07](07-cross-platform-token-architecture.md) §3), closing the parity gaps audit `03` §9.1/
-    §9.2 found (mismatched `danger`/`warning`/`success` hexes, missing `lime`-equivalent token,
-    three different page-background values — now one `bg` value, shared).
-11. Do the radius/shadow token-adoption cleanup (the 294 un-tokenized `rounded-*`/`shadow-*`
-    occurrences across 65 files, audit `03` §3/§8) *before or during* the value swap — same
-    reasoning as mobile's consolidation step.
-12. Port the module-accent decision to `navConfig.ts`-driven nav and any module-colored surface
-    — net-new on client, which has no module-accent concept today (audit `03` §6).
-13. Extend `WorkspaceThemeBridge`'s default values to the new brand
+8. Once every mobile screen has been individually flagged to `v2` and checkpointed, flip the
+   global `tokens.json` `activePalette` from `"legacy"` to `"v2"` — the one and only global
+   default change in this entire plan — and delete `SCREEN_PALETTE_OVERRIDE`/
+   `designSystemRollout.ts` entirely, since every screen now independently resolves to the same
+   answer the new default gives for free.
+   - **Checkpoint:** full regression pass across all 29 screens in both themes; confirm removing
+     the override file changes nothing (it should be provably redundant by this point); re-run
+     the full mobile test suite one final time before considering mobile's migration complete.
+   - **Mobile is not considered "stable" for the purposes of Phase 4 below until this checkpoint
+     passes and the app has run on `v2` in production for a period the team is comfortable with
+     — this spec doesn't set that duration, since it depends on real usage/crash-reporting
+     signal this document has no visibility into.**
+
+## Phase 4 — web (`client/`), gated on mobile being stable
+
+9. Only after Phase 3's checkpoint is signed off does `client/`'s migration begin, per the
+   explicit instruction that web/website migrations follow mobile, not run in parallel with it.
+10. Generate `client/src/tokens.generated.css` for both palettes; toggle via
+    `data-design-system="v2"` on a staging build first, confirming client's higher existing
+    component adoption (41/33-file `Button`/`Card` usage, audit `03` §4) means the toggle reaches
+    nearly the whole app in one step, unlike mobile's screen-by-screen necessity.
+11. Do the radius/shadow token-adoption cleanup (294 un-tokenized `rounded-*`/`shadow-*`
+    occurrences across 65 files, audit `03` §3/§8) under the **legacy** palette first — same
+    "consolidate before switching values" discipline as mobile's Phase 1.
+12. Port the module-accent decision to `navConfig.ts`-driven nav (net-new on client).
+13. Extend `WorkspaceThemeBridge`'s defaults to `v2`'s values
     ([05](05-organization-branding-compatibility.md) §3 item 1).
-    - **Checkpoint:** `tsc --noEmit`, `npm run lint`, `npm run build`; visual spot-check of the
-      ~40 feature pages that import `Button`/`Card` (the 41/33-file adoption audit `03` §4
-      found) to confirm the palette swap reached them as expected, given client's higher
-      component-adoption rate is exactly why this phase is lower-risk than mobile's.
+14. Flip `data-design-system` to `v2` as client's single cutover, then remove the `legacy`
+    palette from client's generated output once confirmed stable.
+    - **Checkpoint:** `tsc --noEmit`, `npm run lint`, `npm run build`; visual spot-check across
+      the ~40 feature pages that import `Button`/`Card`.
 
-## Phase 4 — Website (`website/`)
+## Phase 5 — website, gated on mobile and web both being stable
 
-14. Add the CSS-variable token layer first (website has none today beyond 6 `:root` vars —
-    audit `03` §0/§3/§8).
-15. Apply the new values once the token layer exists.
-16. Add a first dark-mode pass and reconcile `website/src/data/site.ts`'s module list against
-    whatever single source of truth Phase 3 established for client's `navConfig.ts` (audit `03`
-    §9.10).
-    - **Checkpoint:** visual pass across website's 5 pages in both themes (new); confirm the
-      Astro build still produces correct static output (`astro build`/equivalent check this
-      repo already uses, if any — not confirmed to exist yet, worth checking at this phase
-      rather than assuming).
+15. Add the CSS-variable token layer first (website has none today — audit `03` §0/§3/§8).
+16. Apply `v2`'s values directly (website has no flag mechanism — lowest risk, smallest page
+    count, cut over in one step once this phase starts).
+17. Add a first dark-mode pass; reconcile `website/src/data/site.ts`'s module list against
+    client's `navConfig.ts` (audit `03` §9.10).
+    - **Checkpoint:** visual pass across website's 5 pages in both themes; confirm the Astro
+      build still produces correct static output.
 
-## Pre-existing findings folded in, per audit `05` §4
+## Pre-existing findings folded in (unchanged from the original draft)
 
-- **Mobile error boundary**: already shipped (commit `4811d41` era work, this session) —
-  [03-component-specifications.md](03-component-specifications.md)'s `ErrorBoundary` entry is a
-  values-only update, already covered in Phase 1/2 regression passes above, not a separate step.
-- **`documents` module `required_permission` staleness** (audit `04` §1.2): already fixed this
-  session (`docs/audits/07-pre-launch-fixes-deployment-checklist.md`'s step 1,
-  `modules:sync-catalog`) — no action needed here, noted only so Phase 2's module-tile pass
-  doesn't rediscover it as if it were new.
-- **Passport-photo private-storage fix** (audit `04` §1.1): already shipped and deployed per the
-  same checklist — if Phase 2's Profile-screen consolidation (step 7) touches the photo
-  `<Image>` source, confirm it's still pointed at the authenticated endpoint
-  (`/api/employees/{employee}/photo`), not reintroducing a public-URL reference by accident
-  during the refactor.
+- Mobile error boundary and the `documents` module permission fix are already shipped
+  (this session's pre-launch-readiness work) — no action needed here beyond confirming Phase 1's
+  consolidation doesn't regress either.
+- If Phase 1's Profile-screen consolidation touches the passport-photo `<Image>` source, confirm
+  it still points at the authenticated endpoint, not a public-URL reference.

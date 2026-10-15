@@ -49,11 +49,12 @@ file.
 
 ## 5. Reduced motion / reduced transparency
 
-The hero backdrop's `RadialGradient` glow and sparkle scatter (`LoginScreen.tsx:36-39,44-52`,
-`HomeScreen.tsx:118-121,126-134`) are static (no animation), so `prefers-reduced-motion` is not
-currently implicated and stays that way under this spec — nothing proposed here adds animation
-to these surfaces. If a future phase adds an entrance animation to the hero (not part of this
-spec), it should respect `AccessibilityInfo.isReduceMotionEnabled()` at that time.
+Neither today's hero backdrop (`LoginScreen.tsx:36-39,44-52`, `HomeScreen.tsx:118-121,126-134`,
+now retired per [04](04-screen-specifications-login-home.md)'s revision) nor its replacement,
+the static `GeometricAccent` decoration ([03](03-component-specifications.md)), animates — so
+`prefers-reduced-motion` is not currently implicated and stays that way under this spec. If a
+future phase adds an entrance animation anywhere (not part of this spec), it should respect
+`AccessibilityInfo.isReduceMotionEnabled()` at that time.
 
 ## 6. Color-independence of status/compliance information
 

@@ -31,6 +31,9 @@ to carry small text is constrained.
 | Light-mode muted `#4F6B6E` on cream bg `#FFF9F0` | 5.48:1 | AA | Safe |
 | Dark-mode ink `#F5EFE4` on dark bg `#071F24` | ~15:1 | AAA | Safe |
 | Dark-mode muted `#9FB8BA` on dark bg `#071F24` | 8.16:1 | AAA | Safe |
+| Primary teal `#0EA5A0` **as small text** on cream bg `#FFF9F0` | 2.91:1 | Fails even large-text | **Never use `primary` as small link/label text on a light background** — found during the Login/Home revision ([04](04-screen-specifications-login-home.md)), where the original draft had specified `primary` for the "Forgot password?" link |
+| `primaryStrong` `#00585B` as small text on cream bg `#FFF9F0` | 7.88:1 | AAA | **Use this instead, for any small teal-colored text sitting directly on `bg`/`surface`** (not as a button fill — as literal text color) |
+| Primary teal `#0EA5A0` as small text on dark bg `#071F24` | 5.61:1 | AA | Safe — unlike on the light ground, `primary` is fine as small text *in dark mode*, because the dark background is dark enough that even a mid-toned teal clears 4.5:1. `primaryDark` (`#39CFC0`, 8.83:1) remains the preferred choice for consistency with the dark-mode CTA color, but `primary` is not unsafe here the way it is on cream. |
 
 **Net adjustment:** zero hex values changed. Two usage rules added that the brief's flat list
 didn't specify:
@@ -45,6 +48,14 @@ didn't specify:
    opposite of the usual "light text in dark mode" instinct, and worth flagging explicitly in
    [03-component-specifications.md](03-component-specifications.md) so a future implementer
    doesn't flip it to white by habit.
+4. **"Text on a fill" and "text directly on the page background" are different checks against
+   `primary` teal, and both matter.** §1's first rows cover `primary` as a *fill* with white text
+   on top (3.04:1, fails small text). A separate case — `primary` used as the *text color
+   itself*, sitting on `bg`/`surface` rather than as a fill — was checked only after the
+   Login/Home revision found a link that had been colored `primary` without this check: it's
+   2.91:1 on cream (fails) but 5.61:1 on the dark background (passes). `primaryStrong` is the
+   safe choice for small teal text in light mode; `primary` is acceptable as small text only in
+   dark mode, and `primaryDark` is still preferred there for consistency.
 
 ## 2. Core semantic tokens — light and dark
 
@@ -149,7 +160,7 @@ treated as theme-invariant brand identifiers rather than themed surfaces, which 
 to current behavior (`lightModuleColors`/`darkModuleColors` today already differ mostly by
 *lightening* the same hue family for dark backgrounds rather than changing hue; if on-device
 testing in [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md)'s
-Phase 1 checkpoint finds any of these 15 fills too dim against the dark `bg`/`surface` pair,
+Phase 2 checkpoint finds any of these 15 fills too dim against the dark `bg`/`surface` pair,
 derive a dark variant by lifting lightness only, never changing hue — but start with one shared
 set and only fork if testing proves it necessary, to avoid doubling the token surface before
 there's evidence it's needed).
