@@ -55,9 +55,18 @@ implementation authorization.
 
 ## Phase 2 — mobile: controlled, per-screen rollout of the new identity
 
+**Revision 2 note:** Login's first implementation round skips the formal flag mechanism in §3 of
+[07](07-cross-platform-token-architecture.md) — rather than a hidden, flippable override, Login
+is rebuilt directly (the requesting instruction asked to see and verify it immediately via
+screenshots, which a default-off flag would work against). The *effect* is the same as "Login
+flagged to v2, every other screen still on legacy": Login's file reads the new `v2` values
+directly, nothing else changes. The override-map mechanism remains the plan for every screen
+after Login, where a hidden/reversible flag is actually useful during a longer rollout.
+
 6. Flip screens from `legacy` to `v2` one at a time via `SCREEN_PALETTE_OVERRIDE`
-   ([07](07-cross-platform-token-architecture.md) §3) — **Login and Home first**, since they're
-   the two screens with an actual new-layout spec
+   ([07](07-cross-platform-token-architecture.md) §3) — **Login first** (already implemented
+   directly, per the note above), **then Home**, since these are the two screens with an actual
+   new-layout spec
    ([04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)), not just
    a palette swap.
    - **Checkpoint (Login/Home):** manual on-device check of the full flow (password sign-in,

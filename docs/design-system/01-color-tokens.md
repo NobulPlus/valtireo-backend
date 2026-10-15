@@ -27,6 +27,8 @@ to carry small text is constrained.
 | Dark ink on `#39CFC0` fill (dark-mode CTA button) | 8.83:1 | AAA | **Use dark ink text on this fill, not white** |
 | White text on `#39CFC0` fill | 1.93:1 | Fails | **Never use white on the dark primary action color** |
 | Deep teal `#00585B` on dark bg `#071F24` (as a would-be dark-mode CTA) | 2.07:1 | Fails | Confirms why dark mode needs its own brighter action color instead of reusing deep teal |
+| White text on the light-mode CTA gradient (`primaryStrong`→`primary`), worst point | 3.04:1 (at the `primary` end) | Large text only (≥19px bold — see `ctaLabel`, [02](02-typography-spacing-elevation-iconography.md)) | **Safe only because the CTA label is deliberately sized above the large-text threshold** — confirmed when the Login/Home reference image showed this as a real gradient, not a flat fill (§[04](04-screen-specifications-login-home.md)) |
+| `inkOnAccent` text on the dark-mode CTA gradient (`primary`→`primaryDark`), both ends | 5.61:1 – 8.83:1 | AA–AAA, any size | **Safe across the whole gradient** — the reason the dark-mode CTA uses dark text, confirmed again when checked as a gradient rather than a single flat fill |
 | Light-mode ink `#071F24` on cream bg `#FFF9F0` | 16.31:1 | AAA | Safe |
 | Light-mode muted `#4F6B6E` on cream bg `#FFF9F0` | 5.48:1 | AA | Safe |
 | Dark-mode ink `#F5EFE4` on dark bg `#071F24` | ~15:1 | AAA | Safe |

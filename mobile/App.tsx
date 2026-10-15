@@ -3,6 +3,8 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
 import { queryClient } from './src/lib/queryClient';
 import { loadStoredToken } from './src/lib/secureToken';
 import { AuthProvider } from './src/context/AuthContext';
@@ -30,6 +32,19 @@ export default function App() {
 }
 
 function AppRoot() {
+  // Design System v2 (Login only, for now) needs Inter/Manrope loaded before first
+  // render so its screens don't flash the OS system font. A load failure degrades
+  // gracefully — RN falls back to the system font for any unresolved family name —
+  // so we proceed on error rather than blocking the app indefinitely.
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
+  });
+
   // The axios interceptor needs a synchronous token read, so we wait for the
   // one-time secure-store load to resolve before rendering anything that
   // might call the API (see src/lib/secureToken.ts).
@@ -57,7 +72,7 @@ function AppRoot() {
     );
   }
 
-  if (!tokenLoaded) {
+  if (!tokenLoaded || (!fontsLoaded && !fontError)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" />

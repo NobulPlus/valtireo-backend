@@ -21,19 +21,20 @@ own `Pressable` + `StyleSheet` (e.g. `LoginScreen.tsx:193-195,255-257,269-280`).
 
 | Variant | Fill | Text color | Use |
 |---|---|---|---|
-| `primary` | `primaryStrong` (light) / `primaryDark` (dark, with `inkOnAccent` text — see §1 of [01](01-color-tokens.md)) | `surface` (light) / `inkOnAccent` (dark) | The one dominant action per screen |
+| `primary` | `primaryStrong` (light) / `primaryDark` (dark, with `inkOnAccent` text) | `surface` (light) / `inkOnAccent` (dark) | The default dominant action |
+| `gradient` *(new, revised)* | Two-stop `LinearGradient`: `['#00585B','#0EA5A0']` (light) / `['#0EA5A0','#39CFC0']` (dark) — the `ctaGradient` token, [07](07-cross-platform-token-architecture.md) | `surface`/white (light) / **`inkOnAccent`, not white** (dark) — see [01](01-color-tokens.md) §1's gradient rows | Login/Home's one primary CTA, per the reference image ([04](04-screen-specifications-login-home.md)). Label uses `ctaLabel` ([02](02-typography-spacing-elevation-iconography.md)), not the generic `label` scale — required for the white-on-`primary` contrast to actually qualify as large text. |
 | `secondary` | `surfaceAlt`/`chip` | `ink` | Secondary actions, "Not now" |
-| `ghost` | transparent | `primary` | Tertiary/text-only actions, e.g. "Forgot password?" |
+| `outlined` *(new)* | transparent/`surface`, `border`-weight outline | `primaryStrong` (light) / `primaryDark` (dark) | Supporting actions that shouldn't compete with the gradient primary — e.g. "Sign in with biometrics" |
+| `ghost` | transparent | `primaryStrong` (light) / `primaryDark` (dark) | Tertiary/text-only actions, e.g. "Forgot password?" — corrected from an earlier draft that used `primary`, which fails contrast as small text directly on `bg` ([01](01-color-tokens.md) §1) |
 | `danger` | `danger` | `surface` | Destructive confirmations |
 
 Props: `label: string`, `variant`, `onPress`, `disabled?`, `loading?` (renders an
 `ActivityIndicator` in place of the label, color matched to the variant's text color — matching
 today's inline pattern at `LoginScreen.tsx:194,146`), `icon?` (leading Ionicon, 18px).
-Radius: `lg` (16) — revised up from `md` (12) per the Login/Home correction's "rounded buttons"
-requirement ([04](04-screen-specifications-login-home.md)); this is a default for every button
-in the system, not a Login-specific override, so every screen's buttons round together once
-this component lands. Padding: `spacing.md` vertical, `spacing.lg` horizontal. Min touch target
-48×48 (see [06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md)).
+Radius: `pill` — revised from Revision 1's `lg` (16) after the reference image showed fully
+rounded stadium-shaped buttons, not rounded rectangles ([04](04-screen-specifications-login-home.md)).
+Padding: `spacing.md` vertical, `spacing.lg` horizontal. Min touch target 48×48 (see
+[06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md)).
 Disabled state: `opacity: 0.6` (matches today's `buttonDisabled`, `LoginScreen.tsx:257`).
 
 ## Card
@@ -83,18 +84,21 @@ note), so neither Login nor Home uses `Sparkle` going forward. The component its
 deleted from the codebase by this spec (no code changes here), and nothing prevents a future
 screen from using it deliberately — it's simply not part of either screen's new spec.
 
-## GeometricAccent (new)
+## GeometricAccent (new, revised against the reference image)
 
 **New component**, replacing the hero backdrop's `LinearGradient` + SVG grid + `RadialGradient`
-+ `Sparkle` combination for Login and Home. A thin-stroke (1.5px), unfilled SVG shape —
-primarily circles/rings — rendered at low opacity, absolutely positioned behind all screen
-content, `pointerEvents="none"`. Props: `shape` (`'circle'`, extensible later), `color`
-(`primary` or `accentApricot`), `opacity` (0.10–0.15 light, 0.14–0.18 dark — strokes need
-slightly more opacity against the darker ground to stay visible at the same perceived subtlety),
-`size`, `position` (corner anchor, e.g. `{ top: -40, right: -60 }`, allowing the shape to bleed
-off-canvas). Used once or twice per screen, never as a repeating pattern or field — this is
-expressly **not** a return to the retired grid/glow/sparkle treatment, just a single quiet
-geometric mark per screen region, per the "subtle abstract geometric accents" requirement.
++ `Sparkle` combination for Login and Home. **Revised**: an earlier draft specified thin-stroke
+(1.5px) unfilled outline rings at 10–18% opacity. The actual reference image shows **solid,
+soft-edged filled blobs** instead — clearly perceptible shapes, not a near-invisible stroke.
+Updated spec: a filled SVG `Circle` (or soft organic blob path), absolutely positioned behind all
+screen content, `pointerEvents="none"`. Props: `color` (`accentApricot` for light-mode's large
+blobs; a `primary`/`primaryDark`-derived teal for dark-mode's large blobs; `accentApricot` again
+for the one small accent dot that stays warm-colored in both modes), `opacity` (large blobs:
+~20–30% light / ~15–25% dark; the small accent dot: ~70–90%, both modes — it's meant to read as
+a solid dot of color, not a wash), `size`, `position` (corner anchor, allowing the shape to bleed
+off-canvas, e.g. `{ top: -60, left: -80 }`). Used 2–3 times per screen (two large corner blobs
+plus one small accent dot on Login, per [04](04-screen-specifications-login-home.md)) — still
+not a repeating pattern or field, just a small, fixed set of deliberate shapes per screen.
 
 ## ErrorBoundary (extend existing)
 
@@ -130,6 +134,11 @@ from `theme.tsx` to update — no prop or behavior changes.
 (label + `TextInput` with `colors.line` border, `radius.md`, `colors.paper` background). Props:
 `label`, `value`, `onChangeText`, `placeholder`, `secureTextEntry?`, `keyboardType?`, `error?`
 (renders the error message below in `danger`, matching `LoginScreen.tsx:253`'s existing error
-text style). Border `border`, focus state border color `primary` (new — today's input has no
-visible focus state at all, a gap worth closing while building this component rather than
-carrying it forward unaddressed).
+text style), `leadingIcon?` (Ionicon, `muted` color — **new**, added after the reference image
+showed an envelope/lock icon inside each field), `showPasswordToggle?` (boolean — **new**, only
+meaningful alongside `secureTextEntry`; renders a trailing eye/eye-off icon that toggles the
+field's own obscured state when pressed. This must be a real, working toggle — not a decorative
+icon copied from the mockup — per the explicit instruction against shipping nonfunctional
+controls). Radius: `pill` (revised from `md`, matching [04](04-screen-specifications-login-home.md)'s
+reference-image correction). Border `border`, focus state border color `primary` (today's input
+has no visible focus state at all, a gap worth closing while building this component).

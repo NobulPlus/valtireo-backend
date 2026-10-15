@@ -58,7 +58,8 @@ source without a second parser dependency (audit `05` §1).
         "primaryDark": "#39CFC0",
         "accentApricot": "#FF9B54",
         "accentLilac": "#A879F7",
-        "inkOnAccent": "#071F24"
+        "inkOnAccent": "#071F24",
+        "ctaGradient": { "light": ["#00585B", "#0EA5A0"], "dark": ["#0EA5A0", "#39CFC0"] }
       },
       "modules": {
         "leave": { "bg": "#FBEBD4", "icon": "#B8792B" },
@@ -164,6 +165,21 @@ artifacts in §4; CI fails if a committed generated artifact doesn't match a fre
 This applies to **both** palettes simultaneously while they coexist — the parity check doesn't
 care which palette is "active," only that every generated file is a faithful, current
 reflection of the source JSON.
+
+## 7a. Implementation-scope note (Revision 2)
+
+The first round of actual mobile implementation (Login only, per
+[08](08-migration-plan-and-regression-checkpoints.md)) does **not** stand up the full
+repo-root `design-tokens/tokens.json` + three-generator pipeline described in §2–4. That
+remains correctly sequenced for when client/website migration begins. What's implemented now is
+a pragmatic, mobile-only subset: both palettes (`legacy` values matching today's `theme.tsx`
+exactly, plus the new `v2` values including `ctaGradient`) live directly inside
+`mobile/src/theme.tsx` as plain exported objects, with Login reading from `v2` and every other
+screen continuing to read the existing, unrenamed exports exactly as before — so nothing outside
+Login changes behavior or appearance. This satisfies the instruction's "start with the shared
+design-token infrastructure, keeping the existing application appearance and functionality
+unchanged" for this phase without building generator tooling the repo doesn't have yet and that
+nothing currently needs outside mobile.
 
 ## 7. Sequencing — one flip, not a flip-flop
 
