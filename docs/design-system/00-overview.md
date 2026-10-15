@@ -32,6 +32,24 @@ corrected:
   text directly on the light background, distinct from its already-documented restriction as a
   fill — `primaryStrong` is the correct choice there).
 
+**Revision 2 — validated against the approved reference image, mobile Login implementation
+begun.** A reference image (Login, light + dark) was reviewed directly against Revision 1 and
+several differences were found and corrected: the primary button is a two-stop teal gradient,
+not a flat fill (with a dark-mode text-color correction — white fails contrast on part of that
+exact gradient, 1.93:1, so dark-mode uses `inkOnAccent` text instead, regardless of how the
+mockup appears to render it); decorative accents are solid soft-edged blobs, not thin outlined
+rings; fields and buttons are fully rounded pills, not `radius.lg` rectangles; fields gained
+leading icons and a functional (not decorative) password show/hide toggle. A "Keep me signed in"
+checkbox visible in the image was deliberately **not** implemented — it implies a
+session-persistence behavior change, which is out of this spec's scope
+([09](09-scope-boundaries.md)), not a visual one. Full detail in
+[04](04-screen-specifications-login-home.md)'s revision table, [01](01-color-tokens.md) §1's new
+gradient-contrast rows, [02](02-typography-spacing-elevation-iconography.md)'s new `ctaLabel`
+style, and [03](03-component-specifications.md)'s `Button`/`Input`/`GeometricAccent` updates.
+Mobile implementation of Login (only) has begun on a dedicated branch per
+[08](08-migration-plan-and-regression-checkpoints.md)'s Phase 2 note — Home and the other 27
+screens remain untouched and unapproved for implementation.
+
 This directory is a planning document, not code. Nothing in `client/`, `mobile/`, `website/`,
 or `server/` has been changed to produce it, and nothing should be changed on the strength
 of it alone — per the brief that commissioned it: *"Do not modify application UI code, change

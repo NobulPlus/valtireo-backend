@@ -1,85 +1,122 @@
 # 04 — Login and Home screen layouts
 
-**Revision note (this version supersedes the original draft):** the first draft of this file
-re-colored the existing gradient-hero/floating-card layout rather than questioning whether that
-structure should survive at all. On review, it was corrected: the approved direction (Concept
-B — Warm & Human) is a **calmer, flatter, more compact** layout, not a re-skinned version of
-the outgoing dramatic hero treatment. The sections below replace the original Login and Home
-tables entirely. **No reference image was attached to the review instruction that requested
-this correction** — the layout below is built from that instruction's written description
-(predominantly warm cream background; compact, centered branding and welcome message; clean
-integrated form fields; rounded buttons; subtle abstract geometric accents; no oversized
-gradient hero or floating card; no botanical imagery; a coordinated dark mode using deep teal
-surfaces). If the actual reference image shows something materially different from what's
-described below, flag it before implementation — this file should be checked against the image
-directly, not just against its written description.
+**Revision 2 (this version supersedes Revision 1):** Revision 1 was written without a reference
+image, from a written description only, and flagged several of its own guesses as needing
+confirmation. An approved reference image has now been reviewed (Login, light and dark mode)
+and this file is corrected against it. Differences found, and how each was resolved:
+
+| What the image shows | What Revision 1 had | Resolution |
+|---|---|---|
+| Primary "Sign in" button is a two-stop **teal gradient**, not a flat fill | Flat `primaryStrong`/`primaryDark` fill, no gradient | Gradient restored for this one button only — see §Primary button below. The page background itself still has no gradient; "subtle gradients" lives on the CTA, not a hero. |
+| Decorative shapes are **solid, soft-edged blobs** bleeding off corners | Thin-stroke (1.5px) outlined rings at 10–18% opacity | `GeometricAccent` redefined as filled blobs — see [03](03-component-specifications.md) and §Decorative accents below |
+| Fields and buttons are **fully rounded pills**, not rounded rectangles | `radius.lg` (16) | Both now use `radius.pill` |
+| Fields have **leading icons** (envelope, lock) and the password field has a **trailing show/hide toggle** | No icon slots specified | Added to [03](03-component-specifications.md)'s `Input` spec, toggle wired to actually control `secureTextEntry` (functional, not decorative) |
+| A tagline ("People · Work · Progress") and a reworded subtitle appear | Original subtitle copy kept | Adopted as shown — **flagged as new copy to confirm**, not verified as approved marketing text beyond appearing in this mockup |
+| A "Keep me signed in" checkbox appears | Not mentioned | **Deliberately not implemented this round** — see §Deferred below |
+| Dark-mode button text reads as white in the mockup | — | **Corrected to dark text** — white fails contrast on part of this exact gradient (§Primary button); the instruction that commissioned this review explicitly said the image is "not permission to introduce inaccessible color combinations" |
 
 ## Login
 
-The screen is a single continuous page background (`bg`) from top to bottom — there is no
-separate hero block, no full-bleed gradient fill, and no elevated card floating over a hero
-boundary. Content is centered, not left-aligned.
+Single continuous page background (`bg`), no hero block, no gradient fill on the page itself,
+no floating/elevated card. Content is centered, not left-aligned.
 
 | Element | Treatment |
 |---|---|
-| Page background | `bg` (`#FFF9F0` light / `#071F24` dark), full screen, no gradient |
-| Top safe area | `useSafeAreaInsets().top` + `spacing.lg`, no hardcoded constant (closes the gap audit `02`/`05` flagged at `LoginScreen.tsx:215`) |
-| Brand mark + wordmark | Compact — logo ~32–36px, wordmark at `label` scale, **horizontally centered**, stacked or side-by-side, modest top margin (`spacing.xl`) rather than a large hero block |
-| Welcome message | "Welcome back" at `title` scale (Manrope 700, 22/28), **centered**, followed by a short `caption`-scale subtitle in `muted`, also centered — replaces the old 42px left-aligned `display`-scale hero title |
-| Decorative accent | One or two thin-stroke, low-opacity outlined circles (`GeometricAccent`, see [03](03-component-specifications.md)) in `primary`/`accentApricot` at 10–15% opacity (light) / 14–18% (dark), anchored off the top-right and bottom-left corners, `pointerEvents="none"`, sitting behind all content — **not** a full gradient fill, grid pattern, radial glow, or sparkle scatter |
-| Form fields | Sit directly on the page background — no wrapping `Card`/panel. Each field: `surfaceAlt`/`chip` fill, `border` outline, `radius.lg` (16, up from today's `radius.md`, for the rounder "clean, integrated" feel the brief asks for) |
-| Primary button ("Sign in") | `primaryStrong` fill (light) / `primaryDark` fill with `inkOnAccent` text (dark), `radius.lg`, full-width — same rounding as the fields, not a separate pill shape, so the form reads as one coherent rounded-corner language |
-| Biometric sign-in button | Same button role as the primary button (`primaryStrong`/`primaryDark`) — no longer given its own accent color. With no hero to "pop" against, two differently-accented primary actions on one calm screen would read as inconsistent rather than deliberate; the screen's one reserved accent now lives only in the decorative geometric shapes |
-| Biometric icon circle | `chip`/`surfaceAlt` fill, `primary` icon tint — a quiet icon chip, not an accent-colored showpiece |
-| "Forgot password?" link | `primaryStrong` text (light) / `primaryDark` text (dark) — **not** `primary` (`#0EA5A0`). Checked against the page background directly (not as a fill): `primary` teal as small text on cream is 2.91:1 and fails even the large-text threshold; `primaryStrong` on cream is 7.88:1. See the added row in [01-color-tokens.md](01-color-tokens.md) §1. This corrects the original draft, which had specified `primary` for this exact link. |
+| Page background | `bg` (`#FFF9F0` light / `#071F24` dark), full screen, flat |
+| Top safe area | `useSafeAreaInsets().top` + `spacing.lg`, no hardcoded constant (closes the gap at `LoginScreen.tsx:215`) |
+| Logo mark + wordmark | Existing brand mark (`assets/brand-mark.png`), centered, ~40–44px, with "Valtireo" wordmark beside or below it at `heading` scale (Manrope 700). **Confirm whether the current asset already matches the two-tone mark shown in the reference image, or whether an updated asset is needed** — this spec can't resolve that without seeing the current file. |
+| Tagline | "People · Work · Progress", centered, `caption` scale, `muted` — **new copy, not in the current app; confirm before treating as final** |
+| Welcome message | "Welcome back" at `title` scale (Manrope 700, 22/28), centered |
+| Subtitle | "Sign in to your organization and keep things moving." — **new copy, replaces today's "Use the email and password your organization gave you."**; `body` scale, `muted`, centered |
+| Form fields | `surface` fill, `border` outline, `radius.pill` (full stadium shape, matching the image — up from Revision 1's `radius.lg`), each with a leading icon (envelope for email, lock for password) in `muted`; password field adds a trailing eye/eye-off icon that **actually toggles** `secureTextEntry` (a real, functioning control, not decoration — see [03](03-component-specifications.md)'s `Input`) |
+| Primary button ("Sign in") | **Gradient fill**, `radius.pill`, full-width. Light mode: `['#00585B', '#0EA5A0']` (`primaryStrong` → `primary`), white label text. Dark mode: `['#0EA5A0', '#39CFC0']` (`primary` → `primaryDark`), **`inkOnAccent` (dark) label text, not white** — see the contrast note below. Label uses the new `ctaLabel` type style ([02](02-typography-spacing-elevation-iconography.md)), not the generic `label` scale. |
+| Biometric sign-in button | Outlined, not filled — `surface`/transparent fill, `border`-weight outline, `primaryStrong` (light) / `primaryDark` (dark) icon and text, `radius.pill` — the one supporting action, visually secondary to the gradient primary button |
+| "or" divider | Centered `caption`-scale text in `muted`, no rule lines |
+| "Forgot password?" link | `primaryStrong` text (light) / `primaryDark` text (dark), right-aligned on its own row below the fields — unchanged from Revision 1's correction (`primary` fails contrast as small text directly on `bg`, see [01](01-color-tokens.md) §1) |
+| "Keep me signed in" checkbox | **Not implemented this round** — see §Deferred |
 | Error text | `danger`, unchanged role and placement |
-| Dark mode | `bg` → `#071F24`, fields → dark `chip` (`#1B3F43`) on dark `border` — these are literally the "deep teal surfaces" the brief asks for, already defined in [01](01-color-tokens.md) §2, not a new set of values. Same centered, compact, accent-restrained structure as light mode. |
+| Decorative accents | Solid, soft-edged `GeometricAccent` blobs (see [03](03-component-specifications.md)), corner-anchored, bleeding off-canvas, `pointerEvents="none"`, behind all content. **Light mode:** apricot-toned blobs — a large one top-left (partially off-canvas), a large one bottom-right (partially off-canvas), a small fully-visible one bottom-left. **Dark mode:** the two large corner blobs switch to teal-toned (`primary`/`primaryDark`-derived), while the small bottom-left blob stays apricot — the one warm "spark" surviving into the dark palette. See §Decorative accents below for opacity values. |
+| Dark mode (general) | `bg` → `#071F24`, fields → `surface` (`#123237`) on dark `border` — these are the "deep teal surfaces" the brief asked for, already defined in [01](01-color-tokens.md) §2 |
 
-What this removes, explicitly: the `LinearGradient` hero fill, the SVG grid pattern, the
-`RadialGradient` glow, the scattered `Sparkle` field, and the elevated white card with its
-heavy drop shadow (`LoginScreen.tsx:27-55,222-236`) are all retired for this screen. The
-`Sparkle` component itself is not deleted from the codebase (see [03](03-component-specifications.md))
-but Login no longer uses it.
+### Primary button — gradient and text-color reasoning
+
+The reference image's button is a genuine two-stop gradient, not a flat color, so this spec now
+defines a `ctaGradient` brand token ([07](07-cross-platform-token-architecture.md)) using
+**only already-approved hexes** — no new colors introduced:
+- Light: `primaryStrong` (`#00585B`, dark end) → `primary` (`#0EA5A0`, light end).
+- Dark: `primary` (`#0EA5A0`, dark end) → `primaryDark` (`#39CFC0`, light end).
+
+Both gradients contain `primary` (`#0EA5A0`) as one stop, which is already documented
+([01](01-color-tokens.md) §1) as safe for white text only at large-text size (3.04:1, clears
+the 3:1 threshold but not 4.5:1). That's why the button's label uses a dedicated `ctaLabel`
+style (19px/24, Inter 700 — [02](02-typography-spacing-elevation-iconography.md)) instead of the
+generic 13px `label` scale: at 19px bold it qualifies as WCAG "large text" (the bold threshold is
+≈18.7px), so the 3.04:1 ratio is genuinely compliant there, not a near-miss.
+
+The dark-mode gradient is the one place this spec **deviates from how the reference image
+appears to render it**. Its light end, `primaryDark` (`#39CFC0`), is only 1.93:1 with white text
+— failing outright, not borderline, at any text size. Checked the other way, `inkOnAccent`
+(`#071F24`) on that same fill is 8.83:1, and on the gradient's other end (`primary`) is 5.61:1 —
+safe across the entire gradient at any size. **Dark-mode CTA label color is therefore
+`inkOnAccent`, not white**, regardless of how light the mockup's button text looks. This is a
+direct application of the instruction that commissioned this review: the image is a visual
+reference, not permission to ship an inaccessible combination it happens to depict.
+
+### Decorative accents — opacity and placement
+
+Unlike Revision 1's whisper-thin outlined rings, the reference shows clearly perceptible solid
+shapes:
+- Large corner blobs: ~20–30% opacity (light, apricot) / ~15–25% opacity (dark, teal — a
+  saturated teal reads clearly even at lower opacity against the near-black `bg`).
+- The small bottom-left accent (apricot, both modes): much higher opacity, ~70–90% — it reads as
+  a deliberate small dot of full color, not a translucent wash.
+
+All three shapes are `pointerEvents="none"`, positioned behind all interactive content, and
+contained within a single `GeometricAccent`-rendering wrapper per screen (not three separate ad
+hoc `View`s) so the pattern is reusable for Home.
+
+## Deferred: "Keep me signed in" checkbox
+
+The reference image shows this control in both modes, but it isn't mentioned in the written
+visual-direction bullets, and implementing it for real means changing **session-persistence
+behavior** (how long a credential/token is remembered) — a functional/auth change, not a visual
+one. [09-scope-boundaries.md](09-scope-boundaries.md) draws exactly this line: visual-only
+changes are in scope for this spec, behavior changes are not. The instruction that commissioned
+this review also explicitly warned against adding "nonfunctional controls simply because they
+appear in the reference image" — building it as a fake, non-wired checkbox would violate that
+directly, and wiring it to real session-duration logic is a product/security decision this spec
+isn't positioned to make unilaterally. **This round's Login implementation omits the checkbox
+entirely** (the "Forgot password?" link simply stands alone, right-aligned); flagging this as an
+open item for an explicit decision before any future round adds it.
 
 ## Home
 
-**Preserve all existing functionality and content exactly as-is** — the greeting, avatar,
-header icon actions, quick-access tiles, and every conditional info card (pending actions,
-stats row, role, attendance, document compliance, handover, leave balances, next holiday) stay.
-Nothing is added or removed. Only the visual treatment of the header region and the cards'
-immediate surroundings changes, per the instruction not to assume the gradient-heavy layout
-must be kept.
+Unchanged from Revision 1 — preserve all existing functionality, content, and conditional
+sections exactly as-is; only the header region's visual treatment changes (no gradient fill, a
+single restrained `GeometricAccent` shape instead, dark-on-light text/icons since the ground is
+no longer a dark gradient). The reference image reviewed in Revision 2 covers Login only; Home's
+table from Revision 1 stands until a Home-specific reference is available, with one mechanical
+update: wherever Revision 1 referred to the old thin-ring `GeometricAccent`, substitute the
+redefined solid-blob version from §Decorative accents above and [03](03-component-specifications.md)
+— same single-shape-per-region principle, new rendering mechanism.
 
 | Element | Before | After |
 |---|---|---|
-| Header region | Full-bleed `LinearGradient` block (`['#0EA5A0','#00585B']` in the superseded draft) with SVG grid, radial glow, and scattered sparkles behind the greeting | Sits directly on the page `bg` — no gradient fill. One restrained `GeometricAccent` shape (a single large, low-opacity outlined circle in `primary` or `accentApricot`) positioned behind the avatar/greeting area, reusing the same decorative mechanism as Login rather than inventing a second one |
-| Greeting icon + "Good morning," | `rgba(255,255,255,0.7)` (white-on-gradient) | `muted` — now dark-on-light text, since the background is no longer a dark gradient |
-| Greeting name (large text) | White, `display` scale | `ink`, `display` scale (Manrope) — same scale and weight, new color because the ground changed |
-| Header icon buttons (theme toggle, directory, notifications) | Translucent white circles (`rgba(255,255,255,0.14)`) — only legible against a dark gradient | `chip`/`surfaceAlt` fill, `ink` icon color — a light neutral chip button appropriate to a light page background |
-| Notification badge | `danger` fill | Unchanged role, new value from [01](01-color-tokens.md) §4 |
-| Avatar ring | Heavy `accentApricot` border, sized for contrast against a dark gradient | A thinner `border`-weight ring, optionally tinted `primary` at low weight — toned down to match the calmer screen rather than needing to fight a busy background for attention |
-| Quick-access card | "Floating" over the hero/body boundary with a negative top margin, `radius.xl`, `shadow.soft` | Sits naturally in the page flow — same `surface`/`xl`/`shadow.soft` values (unchanged from today's actual implementation, since this part was never the problem the correction raised), just no longer needs a negative margin to bridge a hero drop that no longer exists |
-| Quick-access tile fills | Solid module `.icon` color + white glyph | Unchanged — each tile is its own small colored surface; this was never part of the "oversized hero" critique |
-| "Next holiday" card | `accentApricot` fill + `inkOnAccent` icon | Unchanged — correctly scoped use of the one reserved accent, already consistent with "subtle... used sparingly" |
-| Decorative watermark circle (`HomeScreen.tsx:402-411`) | `colors.pine` at 2.5% opacity | Folded into the single `GeometricAccent` treatment above rather than kept as a second, separate decorative layer — one restrained accent shape per screen region, not two |
-| Dark mode | Gradient header in dark-mode-tinted teals | `bg`/`surface` → dark values (`#071F24`/`#123237`), same light-on-dark ink/muted/chip mapping as every other dark-mode card on this screen |
-
-## What changed from the original draft, at a glance
-
-| Aspect | Original draft | This revision |
-|---|---|---|
-| Hero mechanism | Full gradient + grid + glow + sparkles on both screens | Retired on both screens; one restrained geometric accent shape each |
-| Login layout | Hero block + separately elevated floating card | Single continuous background, centered content, no card wrapper |
-| Login button accenting | Primary button `primaryStrong`, biometric button `accentApricot` | Both buttons use the same `primaryStrong`/`primaryDark` role — no second accent on this screen |
-| Login link color | `primary` (unverified against the bg-as-background use case) | `primaryStrong` — corrected after checking contrast of teal *text on* cream, not just teal *fills with* text on them |
-| Home header | Dark gradient block with white text/icons | Sits on page `bg`, dark text/icons on light chips |
-| Radius for form fields | `radius.md` (unchanged from today) | `radius.lg`, for the rounder "clean, integrated" feel |
+| Header region | Full-bleed gradient + grid + glow + sparkles | Sits on page `bg`; one solid, low-opacity `GeometricAccent` blob behind the avatar/greeting area |
+| Greeting icon + "Good morning," | White-on-gradient | `muted` |
+| Greeting name | White, `display` scale | `ink`, `display` scale (Manrope) |
+| Header icon buttons | Translucent white circles | `chip`/`surfaceAlt` fill, `ink` icon color |
+| Notification badge | `danger` fill | Unchanged role, new value |
+| Avatar ring | Heavy `accentApricot` border | Thinner `border`-weight ring, optionally `primary`-tinted |
+| Quick-access card | Floating, negative top margin | Sits naturally in page flow, same `surface`/`xl`/`shadow.soft` |
+| Quick-access tile fills, "Next holiday" card, every other info card | Unchanged | Unchanged |
+| Dark mode | Gradient header | `bg`/`surface` → dark values, same ink/muted/chip mapping as every other dark-mode card |
 
 ## What this file still does not do
 
-- It does not resolve whether the specific geometric-accent shapes described above match the
-  actual approved reference image, since that image was not available when writing this
-  revision — confirm before implementation.
+- It does not implement Home — per the instruction that commissioned this revision, Home is
+  explicitly deferred until Login is implemented and approved.
+- It does not resolve the brand-mark-asset and new-copy questions flagged above — both need a
+  direct answer, not an assumption, before final sign-off.
 - It does not touch any of the other 27 mobile screens, per
-  [09-scope-boundaries.md](09-scope-boundaries.md) and the phased plan in
-  [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md).
+  [09-scope-boundaries.md](09-scope-boundaries.md).

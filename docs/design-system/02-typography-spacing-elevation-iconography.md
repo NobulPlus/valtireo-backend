@@ -34,6 +34,7 @@ density, per audit `05` §1):
 | `body` | Inter | 15 / 21 | 400 | Standard body text, input values |
 | `label` | Inter | 13 / 18 | 500 | Field labels, button text |
 | `caption` | Inter | 12 / 16 | 400 | Secondary/meta text, timestamps |
+| `ctaLabel` *(new)* | Inter | 19 / 24 | 700 | The Login/Home gradient CTA button's label **only** — deliberately larger than `label` so it clears the WCAG large-text bold threshold (≈18.7px). This isn't a stylistic choice: the gradient fill behind it includes `primary` teal, which is only contrast-safe with white text at large-text size (3.04:1, see [01](01-color-tokens.md) §1) — a smaller label on that same gradient would be a genuine accessibility failure, not a near-miss. |
 
 `display` moves from Inter-rendered-at-800-weight (today's `theme.tsx:107`) to Manrope, which
 is the one typographic change with real visual weight — Manrope's geometric, slightly wider
@@ -77,9 +78,10 @@ spec extends mobile's scale as the canonical one rather than inventing a seventh
 card — hero-level surfaces only." Login's floating card has since been retired entirely (see
 [04](04-screen-specifications-login-home.md)'s revision note) and Home's quick-access card
 reverts to its current, already-fine value — so that step is removed rather than carried
-forward unused. `radius.lg` (16) is promoted instead for Login's form fields and primary
-button, for the rounder "clean, integrated" feel the corrected brief asks for — still within
-the existing scale, no new value needed.
+forward unused. The reference image reviewed in [04](04-screen-specifications-login-home.md)'s
+Revision 2 showed Login's fields and buttons as fully rounded stadium shapes, not rounded
+rectangles — so both now use `radius.pill` (999), not `radius.lg` as an interim draft of this
+note once said. Still within the existing scale, no new value needed.
 
 ## 4. Elevation / shadow
 
@@ -127,13 +129,14 @@ botanical, agricultural, or leaf illustrations"):
   photographic or organic/botanical imagery — flagged here as a constraint for that future
   work, not a deliverable of this spec.
 
-**Gradients: revised.** The original draft kept the existing full-bleed hero mechanism
-(`LinearGradient` + SVG grid pattern + `RadialGradient` glow + scattered `Sparkle`s, see
-`LoginScreen.tsx:27-55`, `HomeScreen.tsx:109-137`) and only re-colored it. Review corrected
-this: "subtle" means there is **no full-bleed gradient fill at all** on Login or Home anymore
-— per [04-screen-specifications-login-home.md](04-screen-specifications-login-home.md)'s
-revision, both screens sit on a flat page background with a small, low-opacity
-`GeometricAccent` decoration (thin-stroke outlined shapes, not a filled gradient, grid, glow, or
-sparkle field) as the only decorative element. A gradient fill is no longer part of this
-system's vocabulary for any screen under this spec — if a future screen wants one, it would be
-a new decision, not an extension of a pattern this spec establishes.
+**Gradients: revised twice.** Revision 1 removed the original draft's full-bleed hero gradient
+(`LinearGradient` + SVG grid + `RadialGradient` glow + scattered `Sparkle`s,
+`LoginScreen.tsx:27-55`, `HomeScreen.tsx:109-137`) entirely, replacing it with a flat page
+background plus a thin-stroke outlined `GeometricAccent`. Revision 2, after reviewing the actual
+approved reference image, found two more corrections: the page background genuinely has **no**
+gradient (Revision 1 was right about that), but the primary CTA button itself *is* a real
+two-stop gradient (`ctaGradient`, [07](07-cross-platform-token-architecture.md)), and
+`GeometricAccent` is solid filled blobs, not thin outlined rings (§[03](03-component-specifications.md)).
+Net effect: "subtle gradients" from the brief lives specifically on the one primary button, not
+on any full-bleed background, hero, or decorative shape — a narrower, more literal reading of
+"subtle" than either prior draft had.
