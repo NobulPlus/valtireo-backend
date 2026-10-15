@@ -8,9 +8,17 @@ Branch: `fix/pre-launch-readiness`. This document covers deploying the four pre-
 - Passport photos already uploaded under the old code are physical files sitting on the `public` disk. Deploying the new code (which only serves photos from the `local` disk) does nothing to move those files. They need to be copied over separately.
 - Neither of these is wired into automatic startup, deliberately — per explicit instruction, nothing related to data migration runs automatically on every container boot.
 
+## How the new commands become available before traffic switches
+
+`modules:sync-catalog`, `employees:migrate-passport-photos-to-private`, and `employees:prune-public-passport-photos` only exist in **this branch's code** — they are not present in whatever is currently running in production. That means step 0 below, not step 1, is the actual first step: get this code into a runnable artifact *before* any live traffic depends on it.
+
+0. **Build (or pull) the new release image, but don't route traffic to it yet.** In a container-based rollout, this means building the new Docker image and running the commands below as **one-off tasks against that new image** — e.g. `docker run --rm <new-image> php artisan modules:sync-catalog`, or an equivalent one-off job/exec in whatever orchestrator you use (a Kubernetes `Job`, an ECS one-off task, `fly ssh console`, etc.) — while the **old containers keep serving live traffic unaffected**, since these commands only touch the database and storage, not any running application process. Only once steps 1–2 below have both succeeded against that new image do you cut traffic over to it (that's "step 3," deploying the code to actually serve requests).
+
+This is the same pattern as running a schema migration ahead of a rolling deploy — the new code's tooling exists as soon as the new image exists, independent of when load balancers start sending it requests.
+
 ## Deployment order
 
-Run in this order. Steps 1–2 are safe to run **before or after** code deploy and are idempotent (safe to re-run, safe if interrupted); step 4 must only run **after** step 3 is verified.
+Run in this order. Steps 1–2 are safe to run **before or after** traffic cutover and are idempotent (safe to re-run, safe if interrupted); step 4 must only run **after** step 3 is verified.
 
 1. **Sync the platform module catalog** (closes the `documents` module visibility bug):
    ```
@@ -27,7 +35,7 @@ Run in this order. Steps 1–2 are safe to run **before or after** code deploy a
    - Reports progress and a summary (copied / already-private / missing / failed).
    - **Exits non-zero if any individual file failed to copy** — check the output, fix the underlying cause (commonly: a referenced file was already deleted from disk out-of-band), and re-run. A failed file is never deleted from `public`, so there's no data-loss risk in re-running.
 
-3. **Deploy the application code** (this branch). From this point on:
+3. **Cut traffic over to the new release** (this branch). From this point on:
    - New uploads go straight to private storage.
    - `GET /api/employees/{employee}/photo` serves from private storage for any photo that step 2 already copied.
    - The old public URLs **still work** too (the file is still there) — this is intentional; closing that off is step 4, done deliberately once step 3 is confirmed working.
@@ -45,7 +53,18 @@ Run in this order. Steps 1–2 are safe to run **before or after** code deploy a
      ```
    - This command **refuses to delete a public copy unless a private copy of the same file already exists** — if step 2 was skipped or failed for a given employee, that employee is reported and skipped rather than risking the only copy of their photo. Exits non-zero if anything was skipped or failed, so a clean exit code is itself a confirmation that every photo now has a private copy and the public ones are gone.
 
-If step 2 is run for the first time *after* step 3 (code already deployed), there is a window between deploy and running step 2 where any employee with an already-uploaded photo gets a 404 on `GET /api/employees/{employee}/photo` (not a security issue — a functional gap only). Running step 2 **before** step 3 avoids this window entirely, which is why it's listed first above.
+If step 2 is run for the first time *after* step 3 (traffic already cut over), there is a window where any employee with an already-uploaded photo gets a 404 on `GET /api/employees/{employee}/photo` (not a security issue — a functional gap only). Running step 2 **before** step 3 avoids this window entirely, which is why it's listed first above.
+
+## Backups
+
+Take these independently of the application-level safety checks above — they're the last-resort recovery path if something unexpected happens during the destructive step (4):
+
+- **Storage**: snapshot or copy the `public` disk's passport-photo directories (`storage/app/public/organizations/*/employees/*/passport/`) before running step 4. If your hosting platform takes automatic storage/volume snapshots, confirm one exists from after step 2 completed and before step 4 runs; if not, take a manual copy.
+- **Database**: a routine `employee_profiles` table backup (or a full DB snapshot, whatever your normal pre-deploy backup practice is) before step 4, so `passport_photo_path` values can be restored if needed. Nothing in this branch alters that table's schema, so no special backup procedure is required beyond your existing one.
+
+## Staging verification
+
+Run the full sequence (steps 0 through 4, including the Verification steps and the old-public-URL check below) against staging first, with production-like data if at all possible — ideally a recent production data copy, since the one thing this whole migration depends on is the *actual* state of already-uploaded photos (how many exist, any with unusual paths, etc.), which demo/seed data won't represent. Only proceed to production once the staging run completes steps 1, 2, and 4 with a clean (`0`) exit code and every verification step below passes.
 
 ## Rollback considerations
 
