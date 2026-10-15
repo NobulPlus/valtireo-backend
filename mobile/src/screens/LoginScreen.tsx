@@ -1,62 +1,44 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, Path, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../lib/apiClient';
 import { BIOMETRIC_LABEL, getAvailableBiometricKind, type BiometricKind } from '../lib/biometrics';
-import { Sparkle } from '../components/Sparkle';
-import { HERO_ACCENT, HERO_GRADIENT, radius, spacing, useTheme, type ThemeColors, type Typography } from '../theme';
+import { Button } from '../components/Button';
+import { GeometricAccent } from '../components/GeometricAccent';
+import { Input } from '../components/Input';
+import { spacing, useTheme, useV2Colors, V2_FONTS, type V2Colors } from '../theme';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-const SPARKLES: { left: `${number}%`; top: number; size: number; opacity: number; accent?: boolean }[] = [
-  { left: '33%', top: 54, size: 11, opacity: 0.8 },
-  { left: '76%', top: 38, size: 7, opacity: 0.45 },
-  { left: '63%', top: 128, size: 13, opacity: 0.9, accent: true },
-  { left: '87%', top: 168, size: 8, opacity: 0.55 },
-  { left: '15%', top: 146, size: 6, opacity: 0.4 },
-  { left: '48%', top: 206, size: 9, opacity: 0.55 },
-  { left: '71%', top: 232, size: 7, opacity: 0.6, accent: true },
-  { left: '27%', top: 258, size: 10, opacity: 0.65 },
-];
-
-function HeroBackdrop() {
+/**
+ * Design System v2 ("Warm & Human") Login — see docs/design-system/04-screen-specifications-login-home.md
+ * (Revision 2). No gradient hero, no floating card: a single calm page background,
+ * centered branding, pill-shaped fields/buttons, and three solid decorative accent
+ * shapes (apricot-dominant in light mode, teal-dominant with one apricot "spark" dot
+ * in dark mode, per the approved reference image).
+ */
+function DecorativeAccents({ scheme }: { scheme: 'light' | 'dark' }) {
+  const v2 = useV2Colors();
+  const largeBlobColor = scheme === 'dark' ? v2.primary : v2.accentApricot;
+  const largeBlobOpacity = scheme === 'dark' ? 0.18 : 0.25;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <LinearGradient colors={HERO_GRADIENT} style={StyleSheet.absoluteFill} />
-      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-        <Defs>
-          <Pattern id="grid" width={65} height={65} patternUnits="userSpaceOnUse">
-            <Path d="M 65 0 L 0 0 0 65" stroke="rgba(255,255,255,0.07)" strokeWidth={1} fill="none" />
-          </Pattern>
-          <RadialGradient id="glow" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={HERO_ACCENT} stopOpacity={0.3} />
-            <Stop offset="100%" stopColor={HERO_ACCENT} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#grid)" />
-        <Circle cx="92%" cy="2%" r={140} fill="url(#glow)" />
-      </Svg>
-      {SPARKLES.map((sparkle, index) => (
-        <Sparkle
-          key={index}
-          size={sparkle.size}
-          color={sparkle.accent ? HERO_ACCENT : '#FFFFFF'}
-          opacity={sparkle.opacity}
-          style={{ left: sparkle.left, top: sparkle.top }}
-        />
-      ))}
+      <GeometricAccent size={220} color={largeBlobColor} opacity={largeBlobOpacity} style={{ top: -70, left: -90 }} />
+      <GeometricAccent size={260} color={largeBlobColor} opacity={largeBlobOpacity} style={{ bottom: -110, right: -100 }} />
+      <GeometricAccent size={34} color={v2.accentApricot} opacity={0.85} style={{ bottom: 64, left: 28 }} />
     </View>
   );
 }
 
 export function LoginScreen({ navigation }: Props) {
-  const { colors, typography } = useTheme();
-  const styles = useMemo(() => makeStyles(colors, typography), [colors, typography]);
+  const { scheme } = useTheme();
+  const v2 = useV2Colors();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => makeStyles(v2, scheme), [v2, scheme]);
   const { login, biometricCredential, enableBiometricSignIn, loginWithSavedCredential } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -118,71 +100,59 @@ export function LoginScreen({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      <HeroBackdrop />
+      <DecorativeAccents scheme={scheme} />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <View style={styles.hero}>
-            <View style={styles.brand}>
-              <Image source={require('../../assets/brand-mark.png')} style={styles.logo} accessibilityLabel="Valtireo logo" />
-              <Text style={styles.brandName}>valtireo</Text>
-            </View>
-            <Text style={styles.heroTitle}>Welcome back</Text>
-            <Text style={styles.heroSubtitle}>Sign in to your workspace to pick up where you left off.</Text>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xl }]}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.brandBlock}>
+            <Image source={require('../../assets/brand-mark.png')} style={styles.logo} accessibilityLabel="Valtireo logo" />
+            <Text style={styles.wordmark}>Valtireo</Text>
+            <Text style={styles.tagline}>People · Work · Progress</Text>
           </View>
 
-          <View style={styles.card}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Sign in to your organization and keep things moving.</Text>
+
+          <View style={styles.formArea}>
             {biometricCredential && !showPasswordForm ? (
-              <>
-                <Text style={[typography.caption, styles.identityCaption]}>Signed in as {biometricCredential.name}</Text>
-
+              <View style={styles.formArea}>
+                <Text style={styles.identityCaption}>Signed in as {biometricCredential.name}</Text>
                 <View style={styles.biometricIconWrap}>
-                  <Ionicons name={biometricKind === 'face' ? 'scan-outline' : 'finger-print-outline'} size={30} color={colors.pine} />
+                  <Ionicons name={biometricKind === 'face' ? 'scan-outline' : 'finger-print-outline'} size={30} color={v2.primary} />
                 </View>
-                <Pressable
-                  style={[styles.button, isBiometricSubmitting && styles.buttonDisabled]}
+                <Button
+                  variant="gradient"
+                  label={`Sign in with ${biometricKind ? BIOMETRIC_LABEL[biometricKind] : 'biometrics'}`}
                   onPress={handleBiometricSignIn}
-                  disabled={isBiometricSubmitting || !biometricKind}
-                >
-                  {isBiometricSubmitting ? <ActivityIndicator color="#0A2420" /> : <Text style={styles.buttonText}>Sign in with {biometricKind ? BIOMETRIC_LABEL[biometricKind] : 'biometrics'}</Text>}
-                </Pressable>
-
+                  loading={isBiometricSubmitting}
+                  disabled={!biometricKind}
+                />
                 {error ? <Text style={styles.error}>{error}</Text> : null}
-
-                <Pressable style={styles.secondaryButton} onPress={() => setFormOverride(true)}>
-                  <Text style={styles.secondaryButtonText}>Use password instead</Text>
-                </Pressable>
-              </>
+                <Button variant="ghost" label="Use password instead" onPress={() => setFormOverride(true)} />
+              </View>
             ) : (
-              <>
-                <Text style={typography.title}>Sign in to your workspace</Text>
-                <Text style={[typography.caption, styles.subtitle]}>Use the email and password your organization gave you.</Text>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>Email address</Text>
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    keyboardType="email-address"
-                    style={styles.input}
-                    placeholder="you@company.com"
-                    placeholderTextColor={colors.muted}
-                  />
-                </View>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>Password</Text>
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    style={styles.input}
-                    placeholder="••••••••"
-                    placeholderTextColor={colors.muted}
-                  />
-                </View>
+              <View style={styles.formArea}>
+                <Input
+                  label="Email address"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@company.com"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  leadingIcon="mail-outline"
+                />
+                <Input
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  leadingIcon="lock-closed-outline"
+                />
 
                 <Pressable style={styles.forgotLink} onPress={() => navigation.navigate('ForgotPassword')}>
                   <Text style={styles.forgotLinkText}>Forgot password?</Text>
@@ -190,16 +160,20 @@ export function LoginScreen({ navigation }: Props) {
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
-                <Pressable style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]} onPress={handleSubmit} disabled={isSubmitting}>
-                  {isSubmitting ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Sign in</Text>}
-                </Pressable>
+                <Button variant="gradient" label="Sign in" onPress={handleSubmit} loading={isSubmitting} />
 
                 {biometricCredential ? (
-                  <Pressable style={styles.secondaryButton} onPress={() => setFormOverride(false)}>
-                    <Text style={styles.secondaryButtonText}>Back to {biometricKind ? BIOMETRIC_LABEL[biometricKind] : 'saved'} sign-in</Text>
-                  </Pressable>
+                  <>
+                    <Text style={styles.orDivider}>or</Text>
+                    <Button
+                      variant="outlined"
+                      label={`Sign in with ${biometricKind ? BIOMETRIC_LABEL[biometricKind] : 'biometrics'}`}
+                      icon={biometricKind === 'face' ? 'scan-outline' : 'finger-print-outline'}
+                      onPress={() => setFormOverride(false)}
+                    />
+                  </>
                 ) : null}
-              </>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -208,77 +182,37 @@ export function LoginScreen({ navigation }: Props) {
   );
 }
 
-const makeStyles = (colors: ThemeColors, typography: Typography) => StyleSheet.create({
-  root: { flex: 1, backgroundColor: HERO_GRADIENT[0] },
+const makeStyles = (v2: V2Colors, scheme: 'light' | 'dark') => StyleSheet.create({
+  root: { flex: 1, backgroundColor: v2.bg },
   flex: { flex: 1 },
-  scrollContent: { flexGrow: 1, justifyContent: 'flex-end' },
-  hero: { paddingHorizontal: 30, paddingTop: 52, paddingBottom: 8, gap: 16 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  logo: { width: 34, height: 34, borderRadius: 9 },
-  brandName: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.3 },
-  heroTitle: { fontSize: 42, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5, lineHeight: 46 },
-  heroSubtitle: { fontSize: 13.5, color: 'rgba(255,255,255,0.64)', maxWidth: 260 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.lg },
 
-  card: {
-    margin: 18,
-    marginTop: 24,
-    backgroundColor: colors.white,
-    borderRadius: 26,
-    padding: 26,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.35,
-    shadowRadius: 30,
-    elevation: 12,
-  },
+  brandBlock: { alignItems: 'center', gap: spacing.xs, marginBottom: spacing.lg },
+  logo: { width: 44, height: 44, borderRadius: 12 },
+  wordmark: { fontFamily: V2_FONTS.manropeExtraBold, fontSize: 22, color: v2.ink, marginTop: spacing.xs },
+  tagline: { fontFamily: V2_FONTS.interMedium, fontSize: 12, color: v2.muted, letterSpacing: 0.3 },
 
-  subtitle: { marginTop: -spacing.xs },
-  field: { gap: 6 },
-  label: { ...typography.caption, fontWeight: '600' },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    fontSize: 15,
-    color: colors.ink,
-    backgroundColor: colors.paper,
-  },
+  title: { fontFamily: V2_FONTS.manropeBold, fontSize: 22, lineHeight: 28, color: v2.ink, textAlign: 'center' },
+  subtitle: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.muted, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.xl, maxWidth: 300 },
+
+  formArea: { width: '100%', maxWidth: 420, gap: spacing.md },
+
   forgotLink: { alignSelf: 'flex-end', marginTop: -spacing.xs },
-  forgotLinkText: { color: colors.pine, fontSize: 13, fontWeight: '600' },
-  error: { color: colors.danger, fontSize: 13 },
+  // primaryStrong is only contrast-safe as text on a LIGHT ground (2.07:1 on dark bg,
+  // a fail) — dark mode needs primaryDark here instead. See docs/design-system/01 §1.
+  forgotLinkText: { fontFamily: V2_FONTS.interSemiBold, fontSize: 13, color: scheme === 'dark' ? v2.primaryDark : v2.primaryStrong },
+  error: { color: v2.danger, fontSize: 13, fontFamily: V2_FONTS.interRegular },
 
-  primaryButton: { backgroundColor: colors.pine, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center' },
-  primaryButtonText: { color: colors.white, fontWeight: '700', fontSize: 15 },
-  buttonDisabled: { opacity: 0.6 },
+  orDivider: { textAlign: 'center', fontFamily: V2_FONTS.interRegular, fontSize: 13, color: v2.muted },
 
-  identityCaption: { textAlign: 'center' },
+  identityCaption: { fontFamily: V2_FONTS.interRegular, fontSize: 12, color: v2.muted, textAlign: 'center' },
   biometricIconWrap: {
     alignSelf: 'center',
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.lime,
+    backgroundColor: v2.chip,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  button: {
-    backgroundColor: HERO_ACCENT,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    shadowColor: '#8FC73E',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  buttonText: { color: '#0A2420', fontWeight: '700', fontSize: 15 },
-
-  secondaryButton: { alignItems: 'center', paddingVertical: spacing.sm },
-  secondaryButtonText: { color: colors.muted, fontWeight: '600', fontSize: 13 },
 });
