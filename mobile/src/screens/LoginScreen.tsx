@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../lib/apiClient';
 import { BIOMETRIC_LABEL, getAvailableBiometricKind, type BiometricKind } from '../lib/biometrics';
+import { classifyBiometricFailure } from '../lib/biometricErrorPresentation';
 import { Button } from '../components/Button';
 import { GeometricAccent } from '../components/GeometricAccent';
 import { Input } from '../components/Input';
@@ -60,10 +61,20 @@ export function LoginScreen({ navigation }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBiometricSubmitting, setIsBiometricSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Deliberately separate from `error` — a password-form validation/API message
+  // must never appear on the biometric view, or vice versa. See
+  // classifyBiometricFailure() for why these two failure modes are distinct.
+  const [biometricError, setBiometricError] = useState<string | null>(null);
   const [biometricKind, setBiometricKind] = useState<BiometricKind | null>(null);
   // null = no manual override yet, so the form shown follows biometricCredential as it loads.
   const [formOverride, setFormOverride] = useState<boolean | null>(null);
   const showPasswordForm = formOverride ?? !biometricCredential;
+
+  function switchMode(toPasswordForm: boolean) {
+    setFormOverride(toPasswordForm);
+    setError(null);
+    setBiometricError(null);
+  }
 
   useEffect(() => {
     void getAvailableBiometricKind().then(setBiometricKind).catch(() => setBiometricKind(null));
@@ -100,14 +111,25 @@ export function LoginScreen({ navigation }: Props) {
 
   async function handleBiometricSignIn() {
     if (!biometricKind) return;
-    setError(null);
+    setBiometricError(null);
     setIsBiometricSubmitting(true);
     try {
       // SecureStore itself authenticates before releasing the saved secret.
       await loginWithSavedCredential();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
-      setFormOverride(true);
+      const outcome = classifyBiometricFailure(err, BIOMETRIC_LABEL[biometricKind]);
+      if (outcome.fallBackToPasswordForm) {
+        // A genuine account-level rejection (nothing saved, or the saved
+        // password no longer works) — there's nothing left to retry
+        // biometrically, so this is the one case that moves to the password form.
+        setError(outcome.message);
+        setFormOverride(true);
+      } else {
+        // A native prompt failure (wrong fingerprint, cancelled, or a lockout) —
+        // not a password problem, so stay here and let the user simply retry;
+        // "Use password instead" is still one tap away if they'd rather switch.
+        setBiometricError(outcome.message);
+      }
     } finally {
       setIsBiometricSubmitting(false);
     }
@@ -145,8 +167,8 @@ export function LoginScreen({ navigation }: Props) {
                   loading={isBiometricSubmitting}
                   disabled={!biometricKind}
                 />
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-                <Button variant="ghost" label="Use password instead" onPress={() => setFormOverride(true)} />
+                {biometricError ? <Text style={styles.error}>{biometricError}</Text> : null}
+                <Button variant="ghost" label="Use password instead" onPress={() => switchMode(true)} />
               </View>
             ) : (
               <View style={styles.formArea}>
@@ -185,7 +207,7 @@ export function LoginScreen({ navigation }: Props) {
                       variant="outlined"
                       label={`Sign in with ${biometricKind ? BIOMETRIC_LABEL[biometricKind] : 'biometrics'}`}
                       icon={biometricKind === 'face' ? 'scan-outline' : 'finger-print-outline'}
-                      onPress={() => setFormOverride(false)}
+                      onPress={() => switchMode(false)}
                     />
                   </>
                 ) : null}

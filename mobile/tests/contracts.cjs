@@ -158,6 +158,37 @@ test('biometric startup reads identity only and credential access requires nativ
   assert.equal(writes[1].value.password, undefined);
 });
 
+test('a native biometric-prompt failure stays on the biometric view; only an account-level rejection falls back to the password form', () => {
+  class FakeApiError extends Error {
+    constructor(message, status) { super(message); this.status = status; }
+  }
+  const { classifyBiometricFailure } = load('src/lib/biometricErrorPresentation.ts', {
+    './apiClient': { ApiError: FakeApiError },
+  });
+
+  // A wrong fingerprint, a cancelled prompt, or a lockout all surface as some
+  // native (non-ApiError) rejection from the OS — none of these are password
+  // problems, so the caller must stay put and let the person retry.
+  for (const nativeFailure of [new Error('UserCancel'), new Error('AuthenticationFailed'), 'not even an Error object', undefined]) {
+    const outcome = classifyBiometricFailure(nativeFailure, 'Fingerprint');
+    assert.equal(outcome.fallBackToPasswordForm, false);
+    assert.match(outcome.message, /Fingerprint not recognized/);
+    assert.doesNotMatch(outcome.message, /email|password field|Enter your/i);
+  }
+
+  // Nothing saved on this device at all (biometric sign-in was never enabled,
+  // or was disabled) — genuinely nothing to retry, so fall back.
+  const nothingSaved = classifyBiometricFailure(new FakeApiError('No saved sign-in found on this device.', 401), 'Face ID');
+  assert.equal(nothingSaved.fallBackToPasswordForm, true);
+  assert.equal(nothingSaved.message, 'No saved sign-in found on this device.');
+
+  // The saved password was rejected by the server (changed elsewhere, account
+  // disabled) — also genuinely nothing to retry biometrically.
+  const rejectedByServer = classifyBiometricFailure(new FakeApiError('These credentials do not match our records.', 401), 'Face ID');
+  assert.equal(rejectedByServer.fallBackToPasswordForm, true);
+  assert.equal(rejectedByServer.message, 'These credentials do not match our records.');
+});
+
 test('overnight correction dates survive timezone and year boundaries; invalid times fail', () => {
   const { correctionTimestamp } = load('src/lib/calendarDate.ts', {});
   assert.equal(correctionTimestamp('2026-12-31', '08:00', true), '2027-01-01T08:00:00');
