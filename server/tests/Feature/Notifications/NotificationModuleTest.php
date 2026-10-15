@@ -66,6 +66,8 @@ class NotificationModuleTest extends TestCase
 
     public function test_leave_approval_flow_creates_approval_notifications(): void
     {
+        // Keep the notification scenario on working days regardless of the test run date.
+        $this->travelTo(\Carbon\Carbon::parse('2026-10-05 09:00:00'));
         $this->seed();
 
         $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();

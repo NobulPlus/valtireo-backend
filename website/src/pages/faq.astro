@@ -1,0 +1,28 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import CallToAction from '../components/CallToAction.astro';
+import { faqCategories } from '../data/site';
+---
+<SiteLayout title="FAQs — Valtireo" description="Answers on getting started, security, permissions, customization, payroll compliance, and more.">
+  <section class="page-hero container">
+    <span class="eyebrow">A LITTLE MORE CLARITY</span>
+    <h1>Good questions.<br/><em>Straight answers.</em></h1>
+    <p>Everything from getting started to security, permissions, and statutory compliance.</p>
+  </section>
+  <div class="container faq-categories">
+    {faqCategories.map(group => (
+      <section class="faq-category">
+        <h2>{group.category}</h2>
+        <div class="faq-list">
+          {group.qa.map(([q, a]) => (
+            <details>
+              <summary>{q}<span aria-hidden="true">+</span></summary>
+              <p>{a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+  <CallToAction />
+</SiteLayout>

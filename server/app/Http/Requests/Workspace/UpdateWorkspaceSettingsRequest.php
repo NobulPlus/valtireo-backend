@@ -18,6 +18,9 @@ class UpdateWorkspaceSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'lifestyle' => ['sometimes', 'array:milestones_enabled,appreciation_enabled'],
+            'lifestyle.milestones_enabled' => ['sometimes', 'boolean'],
+            'lifestyle.appreciation_enabled' => ['sometimes', 'boolean'],
             'name' => ['sometimes', 'string', 'max:255'],
 
             'identity' => ['sometimes', 'array'],

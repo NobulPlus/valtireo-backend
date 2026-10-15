@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\OrganizationResource;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Notifications\PasswordResetCodeNotification;
 use App\Services\DashboardService;
 use App\Services\ModuleEntitlementService;
 use App\Services\OrganizationVerificationService;
@@ -159,6 +162,81 @@ class AuthController extends Controller
         $authToken = $user->createToken('organization-admin-invitation')->plainTextToken;
 
         return response()->json($this->authPayload($user->refresh(), $authToken, $modules, $workspace, $dashboard));
+    }
+
+    /**
+     * Minutes a password-reset code stays valid — short-lived since it's
+     * emailed as a 6-digit code rather than a long opaque link.
+     */
+    private const RESET_CODE_TTL_MINUTES = 15;
+
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $email = $request->string('email')->toString();
+        $user = User::query()->where('email', $email)->first();
+
+        // Always the same response whether or not the email is registered,
+        // so this endpoint can't be used to probe which emails have accounts.
+        if ($user && ! $user->accessIsBlocked()) {
+            $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $email],
+                ['token' => Hash::make($code), 'created_at' => now()],
+            );
+
+            $user->notify(new PasswordResetCodeNotification($code, self::RESET_CODE_TTL_MINUTES));
+        }
+
+        return response()->json([
+            'message' => 'If that email has a Valtireo account, we\'ve sent a password reset code to it.',
+        ]);
+    }
+
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $email = $request->string('email')->toString();
+        $code = $request->string('code')->toString();
+        $password = $request->string('password')->toString();
+
+        // Locked for the same reason as acceptOrganizationAdminInvitation()
+        // above: without it, two concurrent submits of the same code could
+        // both pass validation before either deletes the row.
+        $outcome = DB::transaction(function () use ($email, $code, $password): string {
+            $reset = DB::table('password_reset_tokens')->where('email', $email)->lockForUpdate()->first();
+
+            if (! $reset || ! Hash::check($code, $reset->token)) {
+                return 'invalid';
+            }
+
+            if (Carbon::parse($reset->created_at)->addMinutes(self::RESET_CODE_TTL_MINUTES)->isPast()) {
+                DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+                return 'expired';
+            }
+
+            $user = User::query()->where('email', $email)->first();
+
+            if (! $user || $user->accessIsBlocked()) {
+                return 'invalid';
+            }
+
+            $user->update(['password' => $password]);
+            // A password reset is a credential-recovery event, so every
+            // existing session (every device) is signed out, not just this one.
+            $user->tokens()->delete();
+            DB::table('password_reset_tokens')->where('email', $email)->delete();
+
+            return 'ok';
+        });
+
+        throw_if(in_array($outcome, ['invalid', 'expired'], true), ValidationException::withMessages([
+            'code' => [$outcome === 'expired' ? 'This code has expired. Request a new one.' : 'That code is incorrect or has already been used.'],
+        ]));
+
+        return response()->json([
+            'message' => 'Your password has been reset. Please sign in again.',
+        ]);
     }
 
     public function me(Request $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): JsonResponse

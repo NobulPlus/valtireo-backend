@@ -1,0 +1,22 @@
+---
+const { name = 'arrow', size = 24 } = Astro.props;
+const paths: Record<string, string> = {
+  arrow: 'M5 12h14m-6-6 6 6-6 6',
+  people: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m20 0v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  workflow: 'M9 3H3v6h6V3Zm12 12h-6v6h6v-6ZM6 9v9h9M9 6h9v9',
+  payroll: 'M3 5h18v14H3V5Zm0 5h18m-6 4h3M7 2v5m10-5v5',
+  document: 'M14 2H5v20h14V7l-5-5Zm0 0v6h5M8 12h8m-8 4h5',
+  services: 'm14 6 4 4m-9 4-6 6 1 1 6-6m-3-8a6 6 0 0 0 8 8l6-6-5 1-2-2 1-5-6 6Z',
+  chart: 'M3 3v18h18M7 16v-4m5 4V7m5 9v-7',
+  check: 'm5 12 4 4L19 6',
+  shield: 'm12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Zm-4 9 3 3 5-6',
+  money: 'M12 3v18M16 7H9a3 3 0 0 0 0 6h6a3 3 0 0 1 0 6H7',
+  recruitment: 'M4 7h16v12H4V7Zm4 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M2 13h20',
+  performance: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-4a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0-3a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
+  learning: 'M4 4.5A2.5 2.5 0 0 1 6.5 2H12v20H6.5A2.5 2.5 0 0 1 4 19.5v-15ZM20 4.5A2.5 2.5 0 0 0 17.5 2H12v20h5.5a2.5 2.5 0 0 0 2.5-2.5v-15Z',
+  notifications: 'M12 2a4 4 0 0 0-4 4v2.2C6.6 9.4 5 11.6 5 14v3l-2 3h18l-2-3v-3c0-2.4-1.6-4.6-3-5.8V6a4 4 0 0 0-4-4Zm-2 19a2 2 0 0 0 4 0',
+  intelligence: 'M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2ZM19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14Z',
+  search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm10 17-5.5-5.5',
+};
+---
+<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={paths[name] || paths.arrow}/></svg>

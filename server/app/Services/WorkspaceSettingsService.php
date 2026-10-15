@@ -20,8 +20,7 @@ class WorkspaceSettingsService
     }
 
     /**
-     * @param array<string, mixed> $settings
-     *
+     * @param  array<string, mixed>  $settings
      * @return array<string, mixed>
      */
     public function update(Organization $organization, array $settings): array
@@ -51,6 +50,10 @@ class WorkspaceSettingsService
     private function defaults(): array
     {
         return [
+            'lifestyle' => [
+                'milestones_enabled' => false,
+                'appreciation_enabled' => false,
+            ],
             'identity' => [
                 'logo_url' => null,
                 'favicon_url' => null,

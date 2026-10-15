@@ -17,6 +17,18 @@ class AttendanceModuleTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_mobile_overnight_correction_converts_explicit_timezone_to_utc(): void
+    {
+        $this->seed();
+        $employee = User::where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $this->actingAsInOrganization($employee);
+        $record = $this->postJson('/api/attendance/records', ['attendance_date' => '2026-10-12', 'check_in_at' => '2026-10-12 19:15:00', 'check_out_at' => '2026-10-13 07:00:00'])->assertCreated()->json('attendance_record.id');
+        $id = $this->postJson('/api/attendance/corrections', ['attendance_record_id' => $record, 'requested_check_in_at' => '2026-10-12T20:00:00', 'requested_check_out_at' => '2026-10-13T08:00:00', 'timezone' => 'Africa/Lagos', 'reason' => 'Test overnight correction'])->assertCreated()->json('attendance_correction.id');
+        $correction = AttendanceCorrectionRequest::findOrFail($id);
+        $this->assertSame('2026-10-12 19:00:00', $correction->requested_check_in_at->format('Y-m-d H:i:s'));
+        $this->assertSame('2026-10-13 07:00:00', $correction->requested_check_out_at->format('Y-m-d H:i:s'));
+    }
+
     public function test_hr_can_update_attendance_settings_and_create_shift(): void
     {
         $this->seed();

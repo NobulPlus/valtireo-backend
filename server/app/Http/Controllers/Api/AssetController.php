@@ -121,6 +121,7 @@ class AssetController extends Controller
     public function returnToService(AssetIncidentNoteRequest $request, Asset $asset, AssetService $assets): AssetResource
     {
         abort_unless($asset->organization_id === $request->user()->organization_id, 404);
+        abort_unless($request->user()->can('assets.update'), 403);
 
         if ($asset->status !== 'maintenance') {
             throw ValidationException::withMessages(['status' => ['This asset is not currently in maintenance.']]);

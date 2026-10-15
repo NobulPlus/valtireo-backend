@@ -59,7 +59,16 @@ class ModuleEntitlementTest extends TestCase
         $this->assertTrue($moduleKeys->contains('employee_self_service'));
         $this->assertTrue($moduleKeys->contains('leave'));
         $this->assertTrue($moduleKeys->contains('service_desk'));
-        $this->assertFalse($moduleKeys->contains('payroll'));
+        // attendance/assets/payroll have no required_permission because their
+        // self-service endpoints (attendance.create, "my own assets" scoping,
+        // payroll.payslips.view_own) are already satisfied by the Employee
+        // role — this module gate must not be stricter than the endpoints it
+        // represents, or the module (and its mobile tab/tile) silently
+        // disappears for every ordinary employee even though they can use it.
+        $this->assertTrue($moduleKeys->contains('attendance'));
+        $this->assertTrue($moduleKeys->contains('assets'));
+        $this->assertTrue($moduleKeys->contains('payroll'));
+        // 'users_roles' has no self-service angle at all — genuinely admin-only.
         $this->assertFalse($moduleKeys->contains('users_roles'));
     }
 }

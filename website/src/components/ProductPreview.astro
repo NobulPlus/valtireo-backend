@@ -1,0 +1,14 @@
+---
+const { compact = false } = Astro.props;
+---
+<div class:list={['product-preview', { compact }]} aria-label="Illustrative Valtireo workspace with sample data">
+  <div class="preview-top"><span class="preview-brand"><img src="/favicon.svg" width="22" height="22" alt=""/> Valtireo</span><span>Acme workspace <span class="preview-avatar">AO</span></span></div>
+  <div class="preview-body">
+    <aside class="preview-sidebar" aria-hidden="true"><small>WORKSPACE</small><span class="selected">◫ &nbsp; Overview</span><span>♧ &nbsp; People</span><span>▤ &nbsp; Documents</span><span>✓ &nbsp; Approvals</span><span>▦ &nbsp; Attendance</span><span>◷ &nbsp; Payroll</span><small>ORGANIZATION</small><span>⚙ &nbsp; Settings</span><div class="sidebar-bottom"><i></i> All in one workspace</div></aside>
+    <div class="preview-content"><div class="preview-heading"><div><small>YOUR ORGANIZATION, AT A GLANCE</small><h3>Good morning, Alex <span>☀</span></h3><p>Here’s what’s happening with your team.</p></div><span class="sample-tag">Sample data</span></div>
+      <div class="preview-stats"><div><small>Total employees</small><strong data-count="128">128</strong><span>Across 6 departments</span></div><div><small>At work today</small><strong><span data-count="116">116</span> <i></i></strong><span>Attendance overview</span></div><div><small>Pending requests</small><strong data-count="8" data-pad="1">08</strong><span>Ready for your review</span></div></div>
+      <div class="preview-panels"><div class="preview-requests"><h4>Needs your attention <span>View all ↗</span></h4><div class="request-row"><b class="avatar lavender">AM</b><div><strong>Annual leave request</strong><small>Ada M. · People & Culture</small></div><span class="status amber">Pending</span></div><div class="request-row"><b class="avatar blue">JO</b><div><strong>Employee onboarding</strong><small>James O. · Engineering</small></div><span class="status teal">In review</span></div><div class="request-row"><b class="avatar peach">SK</b><div><strong>Document renewal</strong><small>Sarah K. · Operations</small></div><span class="status amber">Due soon</span></div></div><div class="preview-team"><h4>Your people</h4><div class="donut"><span><strong data-count="128">128</strong><small>employees</small></span></div><p><i></i> Active <span>On leave <i></i></span></p></div></div>
+      <div class="preview-bottom"><span><i></i> People. Processes. One connected view.</span><span>Organization overview ↗</span></div>
+    </div>
+  </div>
+</div>

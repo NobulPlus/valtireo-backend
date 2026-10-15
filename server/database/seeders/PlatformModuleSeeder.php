@@ -115,7 +115,13 @@ class PlatformModuleSeeder extends Seeder
                 'key' => 'attendance',
                 'description' => 'Attendance records, manual entries, and imports.',
                 'category' => 'hr',
-                'required_permission' => 'attendance.view',
+                // Matches 'leave' and 'service_desk' below: these three are the
+                // self-service modules every employee gets by default. The
+                // AttendanceRecordController already allows attendance.create
+                // (which the Employee role has) as an alternative to
+                // attendance.view, so this module-level gate must not be
+                // stricter than the endpoints it's supposed to represent.
+                'required_permission' => null,
                 'is_active' => true,
                 'sort_order' => 70,
             ],
@@ -151,7 +157,12 @@ class PlatformModuleSeeder extends Seeder
                 'key' => 'payroll',
                 'description' => 'Payroll preparation, salary records, allowances, and deductions.',
                 'category' => 'finance',
-                'required_permission' => 'payroll.view',
+                // EmployeePayrollController's self-service endpoints already gate on
+                // payroll.payslips.view_own / payroll.compensation.view_own, which the
+                // Employee role holds — this module-level gate must not be stricter
+                // than that. Admin payroll nav/pages carry their own 'payroll.view'
+                // permission check independently, so this stays safe to loosen.
+                'required_permission' => null,
                 'is_active' => true,
                 'sort_order' => 200,
             ],
@@ -196,7 +207,12 @@ class PlatformModuleSeeder extends Seeder
                 'key' => 'assets',
                 'description' => 'Staff assets, assignments, returns, and asset records.',
                 'category' => 'admin',
-                'required_permission' => 'assets.view',
+                // AssetController's index already scopes to the caller's own assigned
+                // assets when they lack assets.view, rather than denying outright — so
+                // self-service "my assets" needs no permission at all. The admin Assets
+                // settings nav entry carries its own 'assets.view' permission check
+                // independently, so loosening this module gate is safe.
+                'required_permission' => null,
                 'is_active' => true,
                 'sort_order' => 250,
             ],

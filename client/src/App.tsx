@@ -42,6 +42,7 @@ import {
 import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 import { OrganizationVerificationPage } from '@/features/workspace/OrganizationVerificationPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { LifestylePage, LifestyleAdminPage } from '@/features/lifestyle/LifestylePage';
 
 function IndexRedirect() {
   const { defaultRoute } = useAuth();
@@ -80,6 +81,8 @@ export default function App() {
         <Route path="me/leave" element={<MyLeavePage />} />
         <Route path="me/tickets" element={<MyTicketsPage />} />
         <Route path="me/assets" element={<MyAssetsPage />} />
+        <Route path="me/lifestyle" element={<LifestylePage />} />
+        <Route path="settings/lifestyle" element={<LifestyleAdminPage />} />
         <Route path="me/payslips" element={<MyPayslipsPage />} />
         <Route path="me/attendance" element={<MyAttendancePage />} />
         <Route path="me/org-chart" element={<MyOrgChartPage />} />

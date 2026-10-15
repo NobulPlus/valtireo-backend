@@ -1,0 +1,35 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import Icon from '../../components/Icon.astro';
+import CallToAction from '../../components/CallToAction.astro';
+import { industries, modules } from '../../data/site';
+
+export function getStaticPaths() {
+  return industries.map(industry => ({ params: { slug: industry.slug }, props: { industry } }));
+}
+
+const { industry } = Astro.props;
+const relevantModules = industry.relevantModuleIds
+  .map((id: string) => modules.find(m => m.id === id))
+  .filter(Boolean);
+---
+<SiteLayout title={`${industry.title} — Valtireo`} description={industry.description}>
+  <section class="page-hero container">
+    <span class="eyebrow">WHO IT'S FOR</span>
+    <h1>{industry.title}</h1>
+    <p>{industry.description}</p>
+  </section>
+  <section class="container product-full">
+    <img src={industry.image} alt={`${industry.title} at work`} class="industry-photo" />
+  </section>
+  <section class="container story-block">
+    {industry.longDescription.map((paragraph: string) => <p>{paragraph}</p>)}
+  </section>
+  <section class="platform-section"><div class="container">
+    <div class="section-heading"><div><span class="eyebrow">MODULES THAT FIT</span><h2>Where to start.</h2></div></div>
+    <div class="module-strip">
+      {relevantModules.map((module: any) => <a href={`/product/${module.id}/`}><Icon name={module.icon} size={22} />{module.title}<span>↗</span></a>)}
+    </div>
+  </div></section>
+  <CallToAction />
+</SiteLayout>

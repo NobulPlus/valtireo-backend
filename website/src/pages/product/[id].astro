@@ -1,0 +1,42 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import Icon from '../../components/Icon.astro';
+import AppScreenshot from '../../components/AppScreenshot.astro';
+import CallToAction from '../../components/CallToAction.astro';
+import { modules } from '../../data/site';
+
+export function getStaticPaths() {
+  return modules.map(module => ({ params: { id: module.id }, props: { module } }));
+}
+
+const { module } = Astro.props;
+---
+<SiteLayout title={`${module.title} — Valtireo`} description={module.description}>
+  <section class="page-hero container">
+    <span class="eyebrow">{module.number} / THE PLATFORM</span>
+    <h1>{module.title}</h1>
+    <p>{module.short}</p>
+  </section>
+  <section class="container product-full">
+    {module.screenshot ? (
+      <AppScreenshot src={module.screenshot} alt={`${module.title} screenshot`} />
+    ) : (
+      <div class="product-preview illustrative-panel">
+        <div class="illustrative-orbit illustrative-orbit-a"></div>
+        <div class="illustrative-orbit illustrative-orbit-b"></div>
+        <span class="feature-icon illustrative-icon"><Icon name={module.icon} size={30} /></span>
+        <p>&ldquo;{module.short}&rdquo;</p>
+        <span>ILLUSTRATIVE CONCEPT</span>
+      </div>
+    )}
+  </section>
+  <section class="container story-block">
+    {module.longDescription.map((paragraph: string) => <p>{paragraph}</p>)}
+    <h3>What's included</h3>
+    <ul class="capability-list">
+      {module.tags.map((tag: string) => <li><Icon name="check" size={19} />{tag}</li>)}
+    </ul>
+    <a class="text-link dark-link" href="/product/">Back to the full platform <Icon size={18} /></a>
+  </section>
+  <CallToAction />
+</SiteLayout>

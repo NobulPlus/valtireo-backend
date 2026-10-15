@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Valtireo",
+    "slug": "valtireo-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.valtireo.mobile",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Valtireo uses Face ID to sign you back in quickly and securely."
+      }
+    },
+    "android": {
+      "package": "com.valtireo.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#123F3A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Valtireo needs access to your photos to set a profile picture or attach a document."
+        }
+      ],
+      "expo-document-picker",
+      "expo-local-authentication"
+    ]
+  }
+}

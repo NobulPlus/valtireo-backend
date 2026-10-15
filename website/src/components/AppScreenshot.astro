@@ -1,0 +1,6 @@
+---
+const { src, alt = 'Valtireo workspace screenshot', compact = false, eager = false } = Astro.props;
+---
+<div class:list={['product-preview', 'screenshot-preview', { compact }]}>
+  <img src={src} alt={alt} width="1440" height="900" loading={eager ? 'eager' : 'lazy'} fetchpriority={eager ? 'high' : 'auto'} decoding={eager ? 'sync' : 'async'} />
+</div>

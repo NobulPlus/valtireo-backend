@@ -2,10 +2,10 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 
 class AppServiceProvider extends ServiceProvider
@@ -49,6 +49,26 @@ class AppServiceProvider extends ServiceProvider
             return [
                 Limit::perMinute(20)->by('invitation-accept-ip:'.$request->ip()),
                 Limit::perMinute(10)->by('invitation-accept-token:'.hash('sha256', $token)),
+            ];
+        });
+
+        RateLimiter::for('password-reset-request', function (Request $request): array {
+            $email = $request->input('email');
+            $identity = hash('sha256', Str::lower(is_string($email) ? trim($email) : ''));
+
+            return [
+                Limit::perMinute(10)->by('password-reset-request-ip:'.$request->ip()),
+                Limit::perMinutes(15, 3)->by('password-reset-request-identity:'.$identity),
+            ];
+        });
+
+        RateLimiter::for('password-reset-confirm', function (Request $request): array {
+            $email = $request->input('email');
+            $identity = hash('sha256', Str::lower(is_string($email) ? trim($email) : ''));
+
+            return [
+                Limit::perMinute(20)->by('password-reset-confirm-ip:'.$request->ip()),
+                Limit::perMinutes(15, 5)->by('password-reset-confirm-identity:'.$identity),
             ];
         });
     }

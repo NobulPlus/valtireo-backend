@@ -91,6 +91,14 @@ class AttendanceService
      */
     public function requestCorrection(User $actor, array $data): AttendanceCorrectionRequest
     {
+        // Explicit wall-clock timezone for mobile; legacy timestamp clients retain their semantics.
+        if (isset($data['timezone'])) {
+            foreach (['requested_check_in_at', 'requested_check_out_at'] as $field) {
+                if (! empty($data[$field])) {
+                    $data[$field] = Carbon::parse($data[$field], $data['timezone'])->utc()->format('Y-m-d H:i:s');
+                }
+            }
+        }
         return DB::transaction(function () use ($actor, $data): AttendanceCorrectionRequest {
             $record = AttendanceRecord::query()
                 ->where('organization_id', $actor->organization_id)

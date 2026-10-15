@@ -16,6 +16,7 @@ class StoreAttendanceCorrectionRequest extends FormRequest
     {
         return [
             'attendance_record_id' => ['required', 'integer'],
+            'timezone' => ['sometimes', 'timezone'],
             'requested_check_in_at' => ['nullable', 'date'],
             'requested_check_out_at' => ['nullable', 'date', 'after_or_equal:requested_check_in_at'],
             'reason' => ['required', 'string', 'max:2000'],

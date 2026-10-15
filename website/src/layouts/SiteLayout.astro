@@ -1,0 +1,106 @@
+---
+import '../styles/global.css';
+import Icon from '../components/Icon.astro';
+import { appUrl, demoUrl, modules, industries } from '../data/site';
+const { title = 'Valtireo — Your organization. Working as one.', description = 'Connect your people, hiring, payroll, performance, learning, documents, approvals, and internal services in one Organizational OS for modern institutions and growing teams.' } = Astro.props;
+const path = Astro.url.pathname;
+const canonical = Astro.site ? new URL(path, Astro.site).href : undefined;
+---
+<!doctype html>
+<html lang="en">
+  <head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="description" content={description}/><meta name="theme-color" content="#123f3a"/><title>{title}</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"/>{canonical && <link rel="canonical" href={canonical}/>}<meta property="og:title" content={title}/><meta property="og:description" content={description}/><meta property="og:type" content="website"/>{canonical && <meta property="og:url" content={canonical}/>}<meta name="twitter:card" content="summary"/><noscript><style>[data-reveal]{opacity:1!important;transform:none!important}</style></noscript></head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header"><div class="container header-inner"><a class="brand" href="/" aria-label="Valtireo home"><img src="/favicon.svg" width="36" height="36" alt=""/>valtireo</a><button class="menu-toggle" aria-expanded="false" aria-controls="main-nav">Menu <span>☰</span></button><nav id="main-nav" aria-label="Main navigation">
+      <div class="nav-item"><a href="/product/" aria-current={path === '/product/' ? 'page' : undefined}>The platform</a><div class="nav-dropdown nav-dropdown-wide"><div class="nav-dropdown-grid">{modules.map(module => <a href={`/product/${module.id}/`}><Icon name={module.icon} size={17}/>{module.title}</a>)}</div><a class="nav-dropdown-all" href="/product/">Explore the full platform <Icon size={15}/></a></div></div>
+      <div class="nav-item"><a href="/#solutions">Who it’s for</a><div class="nav-dropdown">{industries.map(industry => <a href={`/industries/${industry.slug}/`}>{industry.title}</a>)}</div></div>
+      <a href="/about/" aria-current={path === '/about/' ? 'page' : undefined}>Our approach</a><a href="/faq/" aria-current={path === '/faq/' ? 'page' : undefined}>FAQs</a><a class="mobile-signin" href={appUrl || '/contact/?intent=signin'}>Sign in ↗</a></nav><div class="header-actions"><a class="signin" href={appUrl || '/contact/?intent=signin'}>Sign in ↗</a><a class="button button-dark" href={demoUrl || '/contact/'}>Let’s talk <Icon size={17}/></a></div></div></header>
+    <main id="main"><slot/></main>
+    <footer><div class="container footer-grid"><div><a class="brand" href="/"><img src="/favicon.svg" width="36" height="36" alt=""/>valtireo</a><p>Clarity and control.<br/>For the way your organization works.</p><span class="footer-byline">An Organizational OS by Leading Digitals.</span></div><div><h3>Platform</h3>{modules.slice(0,5).map(module => <a href={`/product/${module.id}/`}>{module.title}</a>)}<a href="/product/">All modules ↗</a></div><div><h3>Who it’s for</h3>{industries.map(industry => <a href={`/industries/${industry.slug}/`}>{industry.title}</a>)}</div><div><h3>Company</h3><a href="/about/">Our approach</a><a href="/faq/">FAQs</a><a href={demoUrl || '/contact/'}>Request a walkthrough ↗</a><a href={appUrl || '/contact/?intent=signin'}>Workspace sign in ↗</a></div></div><div class="container footer-bottom"><span>© {new Date().getFullYear()} Valtireo. All rights reserved.</span><span>People connected. Work in order.</span></div></footer>
+    <script>
+      const toggle = document.querySelector<HTMLButtonElement>('.menu-toggle');
+      const nav = document.querySelector<HTMLElement>('#main-nav');
+      function closeMenu() { toggle?.setAttribute('aria-expanded', 'false'); nav?.classList.remove('is-open'); }
+      toggle?.addEventListener('click', () => { const open = toggle.getAttribute('aria-expanded') !== 'true'; toggle.setAttribute('aria-expanded', String(open)); nav?.classList.toggle('is-open', open); });
+      nav?.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
+      document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (toggle?.getAttribute('aria-expanded') === 'true') { closeMenu(); toggle.focus(); return; }
+        // Desktop nav dropdowns open via :hover/:focus-within (no JS state), so Escape
+        // can't just "set open = false" — it has to force the panel shut and release
+        // that override once the user moves on, or hover would never work again.
+        const openItem = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.nav-item');
+        if (!openItem) return;
+        const trigger = openItem.querySelector<HTMLElement>(':scope > a');
+        (document.activeElement as HTMLElement | null)?.blur();
+        openItem.classList.add('force-closed');
+        trigger?.focus();
+        const release = () => { openItem.classList.remove('force-closed'); openItem.removeEventListener('mouseleave', release); openItem.removeEventListener('focusout', release); };
+        openItem.addEventListener('mouseleave', release);
+        openItem.addEventListener('focusout', release);
+      });
+      document.addEventListener('click', event => { if (event.target instanceof Node && !nav?.contains(event.target) && !toggle?.contains(event.target)) closeMenu(); });
+
+      // Header gains a soft shadow once the page has scrolled past the hero edge.
+      const header = document.querySelector<HTMLElement>('.site-header');
+      function onScroll() { header?.classList.toggle('is-scrolled', window.scrollY > 12); }
+      onScroll();
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // Scroll reveal, staggered by position within a shared parent.
+      const revealEls = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
+      if (revealEls.length) {
+        if (reduceMotion) {
+          revealEls.forEach(el => el.classList.add('in'));
+        } else {
+          const groups = new Map<Element, HTMLElement[]>();
+          revealEls.forEach(el => {
+            const parent = el.parentElement!;
+            const list = groups.get(parent) ?? [];
+            list.push(el);
+            groups.set(parent, list);
+          });
+          groups.forEach(list => list.forEach((el, i) => { el.style.setProperty('--d', `${Math.min(i, 5) * 80}ms`); }));
+          const io = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+              if (entry.isIntersecting) { entry.target.classList.add('in'); io.unobserve(entry.target); }
+            });
+          }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
+          revealEls.forEach(el => io.observe(el));
+        }
+      }
+
+      // Counts up each stat once its card enters view — skipped outright under reduced motion.
+      const counters = document.querySelectorAll<HTMLElement>('[data-count]');
+      if (counters.length) {
+        const format = (n: number, el: HTMLElement) => el.dataset.pad ? String(n).padStart(2, '0') : String(n);
+        if (reduceMotion) {
+          counters.forEach(el => { el.textContent = format(Number(el.dataset.count), el); });
+        } else {
+          const countIo = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+              if (!entry.isIntersecting) return;
+              const el = entry.target as HTMLElement;
+              const target = Number(el.dataset.count);
+              const duration = 1100;
+              el.textContent = format(0, el);
+              const start = performance.now();
+              function tick(now: number) {
+                const progress = Math.min(1, (now - start) / duration);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = format(Math.round(target * eased), el);
+                if (progress < 1) requestAnimationFrame(tick);
+              }
+              requestAnimationFrame(tick);
+              countIo.unobserve(el);
+            });
+          }, { threshold: 0.6 });
+          counters.forEach(el => countIo.observe(el));
+        }
+      }
+    </script>
+  </body>
+</html>
+

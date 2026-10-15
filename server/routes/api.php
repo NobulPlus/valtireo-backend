@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\EmployeeCustomFieldValueController;
 use App\Http\Controllers\Api\EmployeeDependentController;
 use App\Http\Controllers\Api\EmployeeEmergencyContactController;
 use App\Http\Controllers\Api\EmployeeLifecycleController;
+use App\Http\Controllers\Api\EmployeeLifestyleController;
 use App\Http\Controllers\Api\EmployeeProfileActivityController;
 use App\Http\Controllers\Api\EmployeeProfileOverviewController;
 use App\Http\Controllers\Api\EmployeePayrollController;
@@ -64,6 +65,8 @@ Route::get('/health', function () {
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:password-reset-request');
+    Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:password-reset-confirm');
 
     Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizationIsActive::class, EnsureEmployeeVisibility::class])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
@@ -99,6 +102,18 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     });
 
     Route::get('/workspace', [WorkspaceController::class, 'show']);
+    Route::prefix('lifestyle')->middleware(EnsureModuleIsSubscribed::class.':employee_self_service')->group(function () {
+        Route::get('/preferences', [EmployeeLifestyleController::class, 'preferences']);
+        Route::patch('/preferences', [EmployeeLifestyleController::class, 'updatePreferences']);
+        Route::get('/milestones', [EmployeeLifestyleController::class, 'milestones']);
+        Route::get('/appreciation-recipients', [EmployeeLifestyleController::class, 'recipients']);
+        Route::get('/appreciations', [EmployeeLifestyleController::class, 'index']);
+        Route::post('/appreciations', [EmployeeLifestyleController::class, 'store'])->middleware('throttle:10,1,lifestyle-send:');
+        Route::get('/reports', [EmployeeLifestyleController::class, 'reports']);
+        Route::delete('/appreciations/{appreciation}', [EmployeeLifestyleController::class, 'destroy'])->whereNumber('appreciation');
+        Route::post('/appreciations/{appreciation}/report', [EmployeeLifestyleController::class, 'report'])->whereNumber('appreciation')->middleware('throttle:10,1,lifestyle-report:');
+        Route::patch('/appreciations/{appreciation}/hide', [EmployeeLifestyleController::class, 'moderate'])->whereNumber('appreciation');
+    });
     Route::patch('/workspace/settings', [WorkspaceController::class, 'update']);
     Route::post('/workspace/identity/logo', [WorkspaceController::class, 'updateLogo']);
     Route::delete('/workspace/identity/logo', [WorkspaceController::class, 'removeLogo']);
