@@ -26,7 +26,6 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class DashboardService
@@ -214,7 +213,8 @@ class DashboardService
                 'id' => $employee->profile->id,
                 'completion_status' => $employee->profile->completion_status,
                 'passport_photo_path' => $employee->profile->passport_photo_path,
-                'passport_photo_url' => $employee->profile->passport_photo_path ? Storage::disk('public')->url($employee->profile->passport_photo_path) : null,
+                // An authenticated, organization-scoped endpoint — never a public storage URL.
+                'passport_photo_url' => $employee->profile->passport_photo_path ? url("/api/employees/{$employee->id}/photo") : null,
                 'updated_at' => $employee->profile->updated_at,
             ] : null,
             'pending_actions' => $employee ? $this->pendingActions($employee) : [],

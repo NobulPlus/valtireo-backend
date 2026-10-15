@@ -2,11 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
-/** @mixin \App\Models\User */
+/** @mixin User */
 class UserResource extends JsonResource
 {
     /**
@@ -15,6 +15,7 @@ class UserResource extends JsonResource
     public function toArray(Request $request): array
     {
         $photoPath = $this->whenLoaded('employee', fn () => $this->employee?->profile?->passport_photo_path);
+        $employeeId = $this->whenLoaded('employee', fn () => $this->employee?->id);
 
         return [
             'id' => $this->id,
@@ -22,7 +23,8 @@ class UserResource extends JsonResource
             'name' => $this->name,
             'email' => $this->email,
             'email_verified_at' => $this->email_verified_at,
-            'photo_url' => is_string($photoPath) ? Storage::disk('public')->url($photoPath) : null,
+            // An authenticated, organization-scoped endpoint — never a public storage URL.
+            'photo_url' => is_string($photoPath) && $employeeId ? url("/api/employees/{$employeeId}/photo") : null,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

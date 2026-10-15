@@ -106,7 +106,7 @@ class AuthenticationTest extends TestCase
 
     public function test_session_reflects_the_employees_uploaded_passport_photo(): void
     {
-        Storage::fake('public');
+        Storage::fake('local');
         $this->seed();
 
         $withoutPhoto = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
@@ -118,7 +118,8 @@ class AuthenticationTest extends TestCase
 
         Sanctum::actingAs($employeeUser);
         $response = $this->getJson('/api/auth/me')->assertOk();
-        $this->assertStringContainsString('employees/3/passport.jpg', $response->json('user.photo_url'));
+        // The session now points at the authenticated photo() endpoint, never a raw storage path/URL.
+        $this->assertStringContainsString("/api/employees/{$employeeUser->employee->id}/photo", $response->json('user.photo_url'));
     }
 
     public function test_session_has_manager_scope_false_for_organization_admin_without_employee_record(): void

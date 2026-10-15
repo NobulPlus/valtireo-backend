@@ -2,11 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\EmployeeProfile;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
-/** @mixin \App\Models\EmployeeProfile */
+/** @mixin EmployeeProfile */
 class EmployeeProfileResource extends JsonResource
 {
     /**
@@ -24,7 +24,8 @@ class EmployeeProfileResource extends JsonResource
             'next_of_kin_name' => $this->next_of_kin_name,
             'next_of_kin_phone' => $this->next_of_kin_phone,
             'passport_photo_path' => $this->passport_photo_path,
-            'passport_photo_url' => $this->passport_photo_path ? Storage::disk('public')->url($this->passport_photo_path) : null,
+            // An authenticated, organization-scoped endpoint — never a public storage URL.
+            'passport_photo_url' => $this->passport_photo_path ? url("/api/employees/{$this->employee_id}/photo") : null,
             'completion_status' => $this->completion_status,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

@@ -387,6 +387,11 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     Route::patch('/me/employee-profile', [EmployeeController::class, 'updateMyProfile'])
         ->middleware(EnsureModuleIsSubscribed::class.':employee_self_service');
 
+    // Not gated by the 'employees' module — viewing your own photo must work
+    // regardless of whether that admin-facing module is subscribed; the
+    // controller's own organization + self-or-permission check is the real gate.
+    Route::get('/employees/{employee}/photo', [EmployeeController::class, 'photo']);
+
     Route::prefix('employee-profile')->middleware(EnsureModuleIsSubscribed::class.':employee_self_service')->group(function () {
         Route::get('/overview', [EmployeeProfileOverviewController::class, 'me']);
         Route::get('/activities', [EmployeeProfileActivityController::class, 'myIndex']);

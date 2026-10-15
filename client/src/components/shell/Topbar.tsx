@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme, type ThemePreference } from '@/context/ThemeContext';
 import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { NotificationBell } from '@/components/shell/NotificationBell';
-import { assetUrl } from '@/lib/assetUrl';
+import { useAuthenticatedImage } from '@/lib/useAuthenticatedImage';
 
 const THEME_SEQUENCE: ThemePreference[] = ['light', 'dark', 'system'];
 const THEME_ICON: Record<ThemePreference, typeof Sun> = { light: Sun, dark: Moon, system: Monitor };
@@ -38,6 +38,7 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const user = session?.user;
   const userName = user?.name || 'User';
   const userEmail = user?.email || 'Signed in';
+  const photoUrl = useAuthenticatedImage(user?.photo_url);
 
   async function handleLogout() {
     await logout();
@@ -85,8 +86,8 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
               aria-label="Account menu"
             >
               <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-teal-light text-pine">
-                {assetUrl(user?.photo_url) ? (
-                  <img src={assetUrl(user?.photo_url) ?? undefined} alt="" className="h-full w-full object-cover" />
+                {photoUrl ? (
+                  <img src={photoUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <User className="h-3.5 w-3.5" />
                 )}

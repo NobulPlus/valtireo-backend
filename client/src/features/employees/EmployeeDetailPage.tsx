@@ -59,7 +59,7 @@ import { EmployeePayrollTab } from '@/features/employees/EmployeePayrollTab';
 import { useSetupLookups } from '@/features/workspace/api';
 import { cn } from '@/lib/cn';
 import { ApiError } from '@/lib/apiClient';
-import { assetUrl } from '@/lib/assetUrl';
+import { useAuthenticatedImage } from '@/lib/useAuthenticatedImage';
 import { useDateFormatter } from '@/lib/dateFormat';
 import type { Dependent, EmergencyContact, Employee } from '@/types/api';
 
@@ -179,6 +179,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
   const toast = useToast();
   const { formatDate, formatDateTime } = useDateFormatter();
   const lookups = useSetupLookups();
+  const passportPhotoUrl = useAuthenticatedImage(employee.profile?.passport_photo_url);
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -606,9 +607,9 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           </CardHeader>
           <CardBody className="flex flex-col gap-2.5 text-sm">
             <div className="mb-3 flex items-center gap-3 border-b border-border pb-4">
-              {assetUrl(employee.profile?.passport_photo_url) ? (
+              {passportPhotoUrl ? (
                 <img
-                  src={assetUrl(employee.profile?.passport_photo_url) ?? undefined}
+                  src={passportPhotoUrl}
                   alt={`${employee.full_name} passport`}
                   className="h-16 w-16 rounded-md object-cover"
                 />
