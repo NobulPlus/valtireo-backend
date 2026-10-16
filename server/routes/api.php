@@ -102,6 +102,14 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     });
 
     Route::get('/workspace', [WorkspaceController::class, 'show']);
+    Route::prefix('connect')->middleware(EnsureModuleIsSubscribed::class.':connect')->group(function () {
+        Route::get('/people', [\App\Http\Controllers\Api\ConnectController::class, 'people']);
+        Route::get('/meetings', [\App\Http\Controllers\Api\ConnectController::class, 'index']);
+        Route::post('/meetings', [\App\Http\Controllers\Api\ConnectController::class, 'store'])->middleware('throttle:10,1,connect-create:');
+        Route::get('/meetings/{meeting}', [\App\Http\Controllers\Api\ConnectController::class, 'show'])->whereUuid('meeting');
+        Route::post('/meetings/{meeting}/join', [\App\Http\Controllers\Api\ConnectController::class, 'join'])->whereUuid('meeting')->middleware('throttle:20,1,connect-join:');
+        Route::post('/meetings/{meeting}/end', [\App\Http\Controllers\Api\ConnectController::class, 'end'])->whereUuid('meeting');
+    });
     Route::prefix('lifestyle')->middleware(EnsureModuleIsSubscribed::class.':employee_self_service')->group(function () {
         Route::get('/preferences', [EmployeeLifestyleController::class, 'preferences']);
         Route::patch('/preferences', [EmployeeLifestyleController::class, 'updatePreferences']);

@@ -48,6 +48,15 @@ class PlatformModuleSeeder extends Seeder
     {
         return [
             [
+                'name' => 'Connect',
+                'key' => 'connect',
+                'description' => 'Private employee audio/video meetings and screen sharing.',
+                'category' => 'collaboration',
+                'required_permission' => null,
+                'is_active' => true,
+                'sort_order' => 245,
+            ],
+            [
                 'name' => 'Organization Setup',
                 'key' => 'organization_setup',
                 'description' => 'Organization profile, locations, and setup controls.',
