@@ -8,7 +8,7 @@ import { ApiError } from '../lib/apiClient';
 import { BIOMETRIC_LABEL, getAvailableBiometricKind, type BiometricKind } from '../lib/biometrics';
 import { classifyBiometricFailure } from '../lib/biometricErrorPresentation';
 import { Button } from '../components/Button';
-import { GeometricAccent } from '../components/GeometricAccent';
+import { DecorativeAccents } from '../components/DecorativeAccents';
 import { Input } from '../components/Input';
 import { spacing, useTheme, useV2Colors, V2_FONTS, type V2Colors } from '../theme';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -22,28 +22,9 @@ function clamp(value: number, min: number, max: number): number {
 /**
  * Design System v2 ("Warm & Human") Login — see docs/design-system/04-screen-specifications-login-home.md
  * (Revision 2). No gradient hero, no floating card: a single calm page background,
- * centered branding, pill-shaped fields/buttons, and three solid decorative accent
- * shapes (apricot-dominant in light mode, teal-dominant with one apricot "spark" dot
- * in dark mode, per the approved reference image).
- *
- * Pulled further off-canvas and toned down from the first pass — on a real device,
- * the previous sizes/offsets let the blobs' edges creep in behind the form fields
- * and the "or"/biometric row, reducing text/control contrast there. Pinned to the
- * four corners only, well clear of the centered content column.
+ * centered branding, pill-shaped fields/buttons, and the shared `DecorativeAccents`
+ * treatment (see mobile/src/components/DecorativeAccents.tsx).
  */
-function DecorativeAccents({ scheme }: { scheme: 'light' | 'dark' }) {
-  const v2 = useV2Colors();
-  const largeBlobColor = scheme === 'dark' ? v2.primary : v2.accentApricot;
-  const largeBlobOpacity = scheme === 'dark' ? 0.13 : 0.18;
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <GeometricAccent size={190} color={largeBlobColor} opacity={largeBlobOpacity} style={{ top: -95, left: -110 }} />
-      <GeometricAccent size={210} color={largeBlobColor} opacity={largeBlobOpacity} style={{ bottom: -130, right: -115 }} />
-      <GeometricAccent size={26} color={v2.accentApricot} opacity={0.8} style={{ bottom: 18, left: 18 }} />
-    </View>
-  );
-}
-
 export function LoginScreen({ navigation }: Props) {
   const { scheme } = useTheme();
   const v2 = useV2Colors();

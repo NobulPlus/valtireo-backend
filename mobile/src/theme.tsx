@@ -105,6 +105,7 @@ export interface V2Colors {
   ink: string;
   muted: string;
   danger: string;
+  warning: string;
   primary: string;
   primaryStrong: string;
   primaryDark: string;
@@ -121,6 +122,7 @@ export const v2Light: V2Colors = {
   ink: '#071F24',
   muted: '#4F6B6E',
   danger: '#D14343',
+  warning: '#C17A1F',
   primary: '#0EA5A0',
   primaryStrong: '#00585B',
   primaryDark: '#39CFC0',
@@ -136,6 +138,7 @@ export const v2Dark: V2Colors = {
   ink: '#F5EFE4',
   muted: '#9FB8BA',
   danger: '#FF6B6B',
+  warning: '#E2A33D',
   primary: '#0EA5A0',
   primaryStrong: '#00585B',
   primaryDark: '#39CFC0',
@@ -170,6 +173,30 @@ export function useV2Colors(): V2Colors {
   const { scheme } = useTheme();
   return scheme === 'dark' ? v2Dark : v2Light;
 }
+
+/**
+ * Module-accent map for Home (Design System v2) — same shape as the legacy
+ * `ModuleColorPair` so `IconTile`/`SectionIcon`-style usage needs no structural
+ * change, new values per docs/design-system/01-color-tokens.md §5. Theme-invariant
+ * (same light/dark), like the legacy module-color pattern mostly already is.
+ */
+export const v2ModuleColors: Record<string, ModuleColorPair> = {
+  leave: { bg: '#FBEBD4', icon: '#B8792B' },
+  attendance: { bg: '#DCEEF7', icon: '#2E7FB0' },
+  tickets: { bg: '#FBE2DC', icon: '#C1503D' },
+  directory: { bg: '#EBE4F9', icon: '#7A5BC1' },
+  calendar: { bg: '#DCF2E7', icon: '#2F8F6B' },
+  assets: { bg: '#E2E5FB', icon: '#4A5FC9' },
+  documents: { bg: '#F1E7D7', icon: '#8C6A3F' },
+  payslips: { bg: '#DFF3E1', icon: '#3C9A4F' },
+  profile: { bg: '#FBE1EC', icon: '#C1507E' },
+  lifestyle: { bg: '#FCE5EB', icon: '#D1567A' },
+  recruitment: { bg: '#FBE7D4', icon: '#C1621E' },
+  performance: { bg: '#D9F2EE', icon: '#1F8A78' },
+  learning: { bg: '#DEE6F5', icon: '#3A5FA0' },
+  financial_admin: { bg: '#F2E9D2', icon: '#96762A' },
+  ai_assistant: { bg: '#EDE4FB', icon: '#8B5FD9' },
+};
 
 export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
 

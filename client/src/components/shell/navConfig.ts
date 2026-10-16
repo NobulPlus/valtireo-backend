@@ -76,6 +76,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Error logs', to: '/platform/error-logs', icon: TriangleAlert, platformAdminOnly: true },
       { label: 'Dashboard', to: '/dashboard', icon: Gauge },
       { label: 'Calendar', to: '/calendar', icon: CalendarDays },
+      { label: 'Connect', to: '/connect', icon: Headset, moduleKey: 'connect' },
       { label: 'Operations centre', to: '/operations', icon: ClipboardList, permission: 'operations.view' },
       { label: 'Lifestyle controls', to: '/settings/lifestyle', icon: Users, moduleKey: 'employee_self_service', permission: 'workspace_settings.update' },
       { label: 'Notifications', to: '/notifications', icon: Bell },

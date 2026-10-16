@@ -8,7 +8,7 @@ import { AttendanceStack } from './AttendanceStack';
 import { TicketsStack } from './TicketsStack';
 import { MoreStack, type MoreStackParamList } from './MoreStack';
 import { useAuth } from '../context/AuthContext';
-import { radius, shadow, useTheme } from '../theme';
+import { radius, shadow, useV2Colors, V2_FONTS } from '../theme';
 
 /**
  * Alerts and Directory are reachable from the Home header (bell + people icon
@@ -36,7 +36,11 @@ const ICONS: Record<keyof MainTabParamList, { active: keyof typeof Ionicons.glyp
 
 export function MainTabs() {
   const { moduleByKey } = useAuth();
-  const { colors } = useTheme();
+  // Design System v2 — the bar itself is shared chrome under every screen
+  // (most of which are still on the legacy palette), not a screen redesign;
+  // only its own colors/typography move to v2, per explicit request, while no
+  // individual tab's screen content is touched.
+  const v2 = useV2Colors();
   // A hidden tabBarButton still reserves its flex slot (see the comment above) —
   // an unsubscribed module's tab must not be registered at all, not just hidden.
   const showLeave = moduleByKey('leave')?.can_access === true;
@@ -47,14 +51,17 @@ export function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: colors.pine,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarActiveTintColor: v2.primary,
+        tabBarInactiveTintColor: v2.muted,
         tabBarIcon: ({ focused, size }) => (
-          <Ionicons name={focused ? ICONS[route.name as keyof MainTabParamList].active : ICONS[route.name as keyof MainTabParamList].inactive} size={size} color={focused ? colors.pine : colors.muted} />
+          <Ionicons name={focused ? ICONS[route.name as keyof MainTabParamList].active : ICONS[route.name as keyof MainTabParamList].inactive} size={size} color={focused ? v2.primary : v2.muted} />
         ),
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
+        // 10 -> 11, semibold Inter — read as too small on an actual device;
+        // Inter matches the rest of Design System v2's interface typography
+        // even though it now sits above some still-legacy-styled screens.
+        tabBarLabelStyle: { fontSize: 11, fontFamily: V2_FONTS.interSemiBold },
         tabBarStyle: {
-          backgroundColor: colors.white,
+          backgroundColor: v2.surface,
           borderTopWidth: 0,
           height: Platform.select({ ios: 84, default: 64 }),
           paddingTop: 8,

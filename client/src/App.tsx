@@ -43,6 +43,7 @@ import { WorkspacePage } from '@/features/workspace/WorkspacePage';
 import { OrganizationVerificationPage } from '@/features/workspace/OrganizationVerificationPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { LifestylePage, LifestyleAdminPage } from '@/features/lifestyle/LifestylePage';
+import { ConnectPage } from '@/features/connect/ConnectPage';
 
 function IndexRedirect() {
   const { defaultRoute } = useAuth();
@@ -72,6 +73,8 @@ export default function App() {
         <Route path="dashboard" element={<Navigate to="/dashboard/organization" replace />} />
         <Route path="dashboard/:tab" element={<DashboardPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="connect" element={<ConnectPage />} />
+        <Route path="connect/:id" element={<ConnectPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="operations" element={<OperationsCenterPage />} />
         <Route path="employees" element={<EmployeeListPage />} />

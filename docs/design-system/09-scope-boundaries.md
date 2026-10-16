@@ -1,5 +1,17 @@
 # 09 — Scope boundaries: visual redesign vs. future manager/HR/admin features
 
+**Revision note:** this file's boundaries below describe the *visual redesign* work
+(Login/Home re-skinning, [04](04-screen-specifications-login-home.md)) and remain accurate
+for that work — nothing about how Login/Home were actually implemented violated them.
+They do **not** describe [10](10-home-experience-audit.md)–[12](12-home-expansion-plan.md),
+a separate, later, explicitly-authorized expansion of Home's information architecture
+("expanding the Valtireo Home redesign beyond colors and visual styling"). That expansion
+deliberately widens point 2 below to include people-manager (`has_manager_scope`) features
+*where the backend already supports them* — it does not touch HR/admin tooling, which
+stays out of scope exactly as point 2 originally stated. Read this file as "the rule for
+pure visual/styling work," and 10-12 as "the rule for the IA-expansion work," not as two
+documents in conflict.
+
 ## What this spec is
 
 A presentation-layer specification: colors, type, spacing/radius/elevation, a handful of
