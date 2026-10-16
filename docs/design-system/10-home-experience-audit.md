@@ -41,6 +41,32 @@ only**, per the brief's own phrasing ("Employees and, where supported, Managers"
 desk status is evaluated separately below, for employees generally, not folded into the
 Manager IA.
 
+## Cross-cutting finding: actionable tasks vs. informational statuses
+
+A second taxonomy applies across every item below, corrected into this revision:
+**actionable** content is something the signed-in person can resolve or act on by tapping
+it (it has a real destination and a real next step); **informational** content is a status
+or summary with no implied action (nothing is "wrong" or "waiting" just because the card
+exists). Conflating the two — rendering a summary number as if it were a task, or an
+actual task as flat unclickable text — is itself a usability defect independent of any
+individual feature's readiness. Applied per item below:
+
+- **Actionable**: pending actions (item 1, once tappable), notification deep-links
+  (item 6), the holiday card's tap-through (item 7, the action is "see the full calendar,"
+  not resolve something, but it is a real navigable action rather than a dead end),
+  approvals (item 10 — but see that item's note on why it's being built later and
+  separately, not bundled with the informational card below).
+- **Informational**: stats row, attendance exceptions, document compliance status (the
+  *list* is informational even though the underlying documents may separately need
+  action via the Documents screen), leave balances, the Lifestyle card (item 8 — a
+  deliberate "no implied action" card per its own entry), and the manager "Team at a
+  glance" card (item 10's dashboard aggregate — read-only summary data, explicitly not a
+  task list).
+
+This distinction drives [11](11-home-information-architecture.md)'s proposed ordering:
+actionable content is placed ahead of informational content, not interleaved by feature
+area or by who it's for.
+
 ## Opportunity-by-opportunity evaluation
 
 ### 1. Actionable pending tasks and document compliance
@@ -60,23 +86,26 @@ Manager IA.
   implemented** for the interaction: pending-action items render as static text with no
   `onPress` — nothing deep-links to the screen that would resolve the action.
 - **Access rules**: no module gate beyond auth; scoped to the signed-in employee only
-  (self-scoped, not manager-visible) for `complete_profile`/`profile_approval`/
-  `leave_handover_cover`/`ticket_pending`. **`leave_approval`'s exact semantic needs direct
-  verification before implementation** — the research could only confirm the key name and
-  its presence in a self-scoped method (`DashboardService.php:846-890`, called with the
-  *employee*, not a *manager*, as argument), which suggests it more likely means "your own
-  leave request is pending someone else's approval," not "you have approvals waiting for
-  you" — but this should be read directly from the method body before any deep-link is
-  wired, since getting it backwards would silently send an employee into a screen that
-  doesn't exist (no manager-approval screen exists on mobile at all, see §9).
+  (self-scoped, not manager-visible) for all five keys, including `leave_approval`.
+  **`leave_approval`'s meaning is now confirmed directly from source**:
+  `DashboardService.php:864-868` sets it when
+  `$employee->leaveRequests()->where('status', 'submitted')->exists()`, with the label
+  *"Your leave request is awaiting approval."* — this means **the employee's own leave
+  request is awaiting someone else's approval**, not "you have approvals waiting for you
+  to act on." The earlier draft of this audit flagged this key as needing verification
+  before any deep-link was wired; that verification is now done, and the correct,
+  safe deep-link destination for this key is the Leave screen (showing the employee's own
+  request status) — it never implies or requires a manager-approval screen, so it carries
+  no dependency on §10's manager work.
 - **Importance & position**: High — this is the single highest-value, lowest-risk
   improvement available (same data, same card, just tappable). Recommended position:
   unchanged (top of the conditional stack, as today).
 - **Additional considerations**: Zero new API calls — wiring `onPress` per `action.key` to
   the already-built destination screens (Profile for `complete_profile`/
-  `profile_approval`, Leave for `leave_handover_cover`, Tickets tab for `ticket_pending`) is
-  pure navigation code. No new empty/error states beyond what the card already handles
-  (the card doesn't render when the array is empty, unchanged).
+  `profile_approval`, Leave for `leave_approval`/`leave_handover_cover`, Tickets tab for
+  `ticket_pending`) is pure navigation code, and every one of the five keys now has a
+  confirmed, existing destination. No new empty/error states beyond what the card already
+  handles (the card doesn't render when the array is empty, unchanged).
 - **Duplication risk**: None — this improves the existing card in place, no new surface.
 
 ### 2. Profile completion and onboarding
@@ -317,20 +346,32 @@ Manager IA.
   `ManagerDashboardView.tsx:111-121` department-browse capability should not be
   replicated on a Home card without an equivalent, deliberate UI affordance for choosing
   scope — see [12](12-home-expansion-plan.md)'s security test plan).
-- **Approvals** (separate from the above): the generic workflow engine
-  (`ApprovalRequestService`/`ApprovalVisibility`) already has real manager-scope logic —
-  `direct_manager`/`department_head` step-type checks
+- **Approvals** (deliberately separated from the above, revised this pass): the generic
+  workflow engine (`ApprovalRequestService`/`ApprovalVisibility`) already has real
+  manager-scope logic — `direct_manager`/`department_head` step-type checks
   (`server/app/Services/ApprovalRequestService.php:179-201`,
   `ApprovalVisibility.php:36-53`) — confirming a manager really can approve their own
   reports' requests today, via `POST /approvals/{id}/actions`. **No cheap pending-count
   endpoint exists** — a manager-facing "3 approvals waiting" badge would call
-  `GET /approvals?status=pending` and read `.meta.total`, not ideal but genuinely
-  functional today (not blocked on new backend work, just not optimally cheap).
-- **Importance & position**: High, conditional on `has_manager_scope` — recommended as a
-  new card near the top of Home (directly under the header, above Quick Access), visible
-  only to managers, with zero layout impact for the majority non-manager audience (see
-  [12](12-home-expansion-plan.md)'s accessibility/regression notes on the "hidden element
-  still reserves space" risk class).
+  `GET /approvals?status=pending` and read `.meta.total`. An earlier draft of this audit
+  treated this as "not ideal but good enough to bundle into the first manager-dashboard
+  card." **That bundling is now explicitly undone**: Approvals is an *actionable* feature
+  (per the taxonomy above) being proposed for a mobile surface that has never had any
+  approval-acting code before, against an endpoint whose authorization behavior
+  (`ensureActorCanApproveStep()`) and list-filtering (`ApprovalVisibility::query()`) have
+  only been read, not exercised, from mobile. It is held out of the initial manager-home
+  implementation as its own, later, separately-approved phase — see
+  [12](12-home-expansion-plan.md)'s phase list — pending direct verification that the
+  authorization and API behavior work as read before any mobile UI commits to them.
+- **Importance & position**: The **Team at a glance** aggregate (informational, read-only,
+  per the taxonomy above) is High, conditional on `has_manager_scope`. Per the ordering
+  correction in [11](11-home-information-architecture.md), it sits **after** the
+  employee's own actionable pending-actions card, not above it — an urgent personal task
+  (e.g. "complete your profile," "your leave needs attention") outranks a manager's team
+  summary even on a manager's own Home. Zero layout impact for the majority non-manager
+  audience either way (see [12](12-home-expansion-plan.md)'s accessibility/regression
+  notes on the "hidden element still reserves space" risk class). Approvals has no
+  position yet — it isn't part of this phase.
 - **Additional considerations**: One new mobile hook (`useManagerDashboard`, mirroring the
   web pattern against the same endpothat already exists), one new conditional Home card.
   Empty state: a manager with zero direct reports / an empty team should see nothing (card
@@ -353,8 +394,8 @@ Manager IA.
 | Birthdays/anniversaries/appreciation | Ready | Ready (hooks exist) | Yes — zero Home presence |
 | Payslips/assets (employee) | Ready | Ready | None (unchanged) |
 | Payslips/assets (manager-scoped) | **Requires new backend dev** | N/A | N/A |
-| Team leave/attendance (manager) | Ready (`/dashboard/manager`) | **Requires new mobile dev** | Yes — zero mobile presence |
-| Approvals (manager) | Ready (no cheap count) | **Requires new mobile dev** | Yes — zero mobile presence |
+| Team leave/attendance (manager), informational | Ready (`/dashboard/manager`) | **Requires new mobile dev** | Yes — zero mobile presence, ordered after personal actionable items |
+| Approvals (manager), actionable | Ready (no cheap count) | **Requires new mobile dev — separate, later phase** | Yes — deliberately deferred pending auth/API verification, not bundled into the initial manager dashboard |
 
 Continued in [11-home-information-architecture.md](11-home-information-architecture.md)
 (current-vs-proposed structure, Employee IA, Manager IA) and
