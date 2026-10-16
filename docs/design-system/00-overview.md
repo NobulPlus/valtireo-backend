@@ -50,6 +50,30 @@ Mobile implementation of Login (only) has begun on a dedicated branch per
 [08](08-migration-plan-and-regression-checkpoints.md)'s Phase 2 note — Home and the other 27
 screens remain untouched and unapproved for implementation.
 
+**Revision 3 — Login implemented and approved after real-device testing; Home implemented,
+polished, and approved the same way.** Both screens went through the full cycle: spec →
+implementation → real-device review on an Android handset → a focused fix/polish pass →
+re-verification. Login's biometric-failure handling was found to leak an unrelated error
+across modes and was corrected (see the commit history on
+`feature/design-system-v2-login`, not duplicated here). Home's redesign additionally
+updated `mobile/src/navigation/MainTabs.tsx` (shared bottom-tab chrome, not a screen) to
+the v2 palette and type, since it was explicitly named in review. Both are implemented,
+verified (`tsc`, lint, full test suite, iOS/Android bundle exports), and approved by the
+user pending final Home review.
+
+**Revision 4 — Home Experience and Information Architecture Audit.** A separate,
+explicitly-authorized expansion beyond visual styling: three new files
+([10](10-home-experience-audit.md), [11](11-home-information-architecture.md),
+[12](12-home-expansion-plan.md)) evaluate ten Home-feature opportunity areas against the
+full backend/mobile/web codebase, propose an Employee and a Manager Home information
+architecture, and lay out phased implementation with a dedicated security test plan for
+the one genuinely new category of risk this introduces: manager-scoped data reaching a
+screen every employee uses. This expansion is reconciled with
+[09-scope-boundaries.md](09-scope-boundaries.md)'s original "no manager/HR/admin surface
+changes" line in that file's own revision note — the two documents are not in conflict,
+the scope was deliberately widened by explicit instruction. Nothing in 10-12 is
+implemented; they are proposals awaiting approval, same as this spec was before Revision 3.
+
 This directory is a planning document, not code. Nothing in `client/`, `mobile/`, `website/`,
 or `server/` has been changed to produce it, and nothing should be changed on the strength
 of it alone — per the brief that commissioned it: *"Do not modify application UI code, change
@@ -123,7 +147,10 @@ into this rewrite rather than carried forward:
 | [06-accessibility-and-responsive-requirements.md](06-accessibility-and-responsive-requirements.md) | Contrast, touch targets, safe areas, text scaling, reduced motion |
 | [07-cross-platform-token-architecture.md](07-cross-platform-token-architecture.md) | The source-of-truth token file (dual `legacy`/`v2` palettes), generated outputs for React, React Native, Astro, and the per-screen rollout flag (revised) |
 | [08-migration-plan-and-regression-checkpoints.md](08-migration-plan-and-regression-checkpoints.md) | Phased rollout — consolidate under the existing design first, then a controlled per-screen flag rollout, one global cutover, web/website gated on mobile stability (revised) |
-| [09-scope-boundaries.md](09-scope-boundaries.md) | What this redesign is not — explicit lines against manager/HR/admin feature work |
+| [09-scope-boundaries.md](09-scope-boundaries.md) | What the visual redesign is not — explicit lines against manager/HR/admin feature work (narrowed by Revision 4, see its own revision note) |
+| [10-home-experience-audit.md](10-home-experience-audit.md) | Evidence-based evaluation of ten Home-feature opportunity areas against the full backend/mobile/web codebase, with a file-level feature-readiness matrix |
+| [11-home-information-architecture.md](11-home-information-architecture.md) | Current-vs-proposed Home structure; Employee and Manager Home information architecture |
+| [12-home-expansion-plan.md](12-home-expansion-plan.md) | Prioritized phases, responsiveness/accessibility additions, and a regression + security test plan |
 
 ## Grounding
 
