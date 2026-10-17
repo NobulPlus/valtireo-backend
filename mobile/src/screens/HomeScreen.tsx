@@ -16,7 +16,7 @@ import { useUnreadNotificationCount } from '../features/notifications/api';
 import { getGreeting, type GreetingPeriod } from '../lib/greeting';
 import { selectLifestyleHomeSummary } from '../lib/lifestyleHomeSummary';
 import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
-import { resolvePendingAction, type PendingActionDestination } from '../lib/pendingActionNavigation';
+import { resolvePendingAction, selectPendingActionsHeading, type PendingActionDestination } from '../lib/pendingActionNavigation';
 import { INFINITE_LIST_PAGE_SIZE } from '../lib/useInfiniteList';
 import { radius, shadow, spacing, useTheme, useV2Colors, v2ModuleColors, V2_FONTS, type ThemePreference, type V2Colors } from '../theme';
 import type { HomeStackParamList } from '../navigation/HomeStack';
@@ -221,13 +221,24 @@ export function HomeScreen({ navigation }: Props) {
           <Text style={styles.caption}>Could not load your dashboard. Pull down to retry.</Text>
         ) : (
           <>
-            {data.pending_actions.length > 0 ? (
+            {data.pending_actions.length > 0 ? (() => {
+              // Resolved once, reused for both the heading choice and the row render —
+              // the data, order, and per-item destinations are exactly what Phase A
+              // shipped; only the heading (and this card's icon, for the same reason)
+              // adapts to whether anything in the list actually needs the employee to
+              // do something, so an all-informational list is never framed as urgent.
+              const resolutions = data.pending_actions.map((action) => ({ action, resolution: resolvePendingAction(action.key, pendingActionAccess) }));
+              const hasActionableItem = resolutions.some(({ resolution }) => resolution.tone === 'actionable');
+              return (
               <View style={[styles.card, styles.rowCard]}>
-                <SectionIcon name="alert-circle-outline" color="#FFFFFF" style={{ backgroundColor: v2ModuleColors.tickets.icon }} />
+                <SectionIcon
+                  name={hasActionableItem ? 'alert-circle-outline' : 'information-circle-outline'}
+                  color={hasActionableItem ? '#FFFFFF' : v2.muted}
+                  style={{ backgroundColor: hasActionableItem ? v2ModuleColors.tickets.icon : v2.chip }}
+                />
                 <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>Needs your attention</Text>
-                  {data.pending_actions.map((action) => {
-                    const resolution = resolvePendingAction(action.key, pendingActionAccess);
+                  <Text style={styles.cardTitle}>{selectPendingActionsHeading(resolutions.map((r) => r.resolution.tone))}</Text>
+                  {resolutions.map(({ action, resolution }) => {
                     const tappable = resolution.destination.kind !== 'none';
                     const row = (
                       <View style={styles.pendingItemRow}>
@@ -259,7 +270,8 @@ export function HomeScreen({ navigation }: Props) {
                   })}
                 </View>
               </View>
-            ) : null}
+              );
+            })() : null}
 
             <View style={styles.statsRow}>
               <View style={styles.statCard}>

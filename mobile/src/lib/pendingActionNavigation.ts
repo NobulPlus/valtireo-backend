@@ -66,3 +66,13 @@ export function resolvePendingAction(key: string, access: PendingActionAccess): 
       return { tone: 'informational', destination: { kind: 'none' } };
   }
 }
+
+/**
+ * The card's heading must not claim every item in it needs the employee's intervention
+ * when most of them are just statuses — "Needs your attention" is only accurate when at
+ * least one item actually is. A minimal, content-driven heading swap, not a restructure:
+ * the underlying data, order, and per-item destinations are all unchanged either way.
+ */
+export function selectPendingActionsHeading(tones: PendingActionTone[]): string {
+  return tones.includes('actionable') ? 'Needs your attention' : 'Updates';
+}

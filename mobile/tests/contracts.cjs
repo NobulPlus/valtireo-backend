@@ -219,6 +219,17 @@ test('pending-action navigation: only complete_profile is actionable, module acc
   assert.deepEqual(plain(resolvePendingAction('future_unknown_key', fullAccess)), { tone: 'informational', destination: { kind: 'none' } });
 });
 
+test('"Needs your attention" heading only appears when something in the list actually is', () => {
+  const { selectPendingActionsHeading } = load('src/lib/pendingActionNavigation.ts', {});
+  // complete_profile present — genuinely something to act on.
+  assert.equal(selectPendingActionsHeading(['actionable', 'informational', 'informational']), 'Needs your attention');
+  // Every item is just a status (e.g. leave_approval, ticket_pending, ...) — must not
+  // be framed as something requiring intervention.
+  assert.equal(selectPendingActionsHeading(['informational', 'informational']), 'Updates');
+  assert.equal(selectPendingActionsHeading(['informational']), 'Updates');
+  assert.equal(selectPendingActionsHeading([]), 'Updates');
+});
+
 test('notification deep-linking: the explicit allowlist covers every real backend action_url, rejects unauthorized/malformed/unsupported combinations', () => {
   const { resolveNotificationDestination } = load('src/lib/notificationNavigation.ts', {});
   const fullAccess = { leave: true, serviceDesk: true, employeeSelfService: true };
@@ -276,16 +287,18 @@ test('Lifestyle Home card: feature flags gate content, an empty/disabled result 
   assert.equal(milestonesOnly.milestoneLabel, "Amara's birthday is in 3 days");
   assert.equal(milestonesOnly.appreciationLabel, null); // feature disabled — never shown even though a count was supplied.
 
-  // Appreciation only, exact count (not capped).
+  // Appreciation only, exact count (not capped). "received", not "new" — the
+  // received-appreciation query has no read/unread concept, so the label must not
+  // imply one.
   const appreciationOnly = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 2, receivedAppreciationCapped: false, today });
   assert.equal(appreciationOnly.milestoneLabel, null);
-  assert.equal(appreciationOnly.appreciationLabel, '2 new appreciation messages');
+  assert.equal(appreciationOnly.appreciationLabel, '2 appreciations received');
 
   // Capped count is honest ("N+"), singular wording only when both exact and 1.
   const capped = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 10, receivedAppreciationCapped: true, today });
-  assert.equal(capped.appreciationLabel, '10+ new appreciation messages');
+  assert.equal(capped.appreciationLabel, '10+ appreciations received');
   const exactlyOne = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 1, receivedAppreciationCapped: false, today });
-  assert.equal(exactlyOne.appreciationLabel, '1 new appreciation message');
+  assert.equal(exactlyOne.appreciationLabel, '1 appreciation received');
 
   // Nothing to show at all — the card must not render an empty shell.
   const nothing = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: true, milestones: [], receivedAppreciationCount: 0, receivedAppreciationCapped: false, today });

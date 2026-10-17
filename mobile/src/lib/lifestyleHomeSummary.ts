@@ -67,8 +67,12 @@ export function selectLifestyleHomeSummary(input: LifestyleHomeSummaryInput): Li
   const milestoneLabel = nearestMilestone ? formatMilestone(nearestMilestone, today) : null;
 
   const count = input.appreciationEnabled ? input.receivedAppreciationCount ?? 0 : 0;
+  // "Received", not "new" — useAppreciations('received', ...) has no read/unread concept
+  // at all (unlike notifications), so calling these "new" would claim something this
+  // data doesn't actually establish. The `+` convention for a possibly-incomplete count
+  // (no count endpoint exists, per the audit) is unchanged.
   const appreciationLabel = input.appreciationEnabled && count > 0
-    ? `${count}${input.receivedAppreciationCapped ? '+' : ''} new appreciation message${count === 1 && !input.receivedAppreciationCapped ? '' : 's'}`
+    ? `${count}${input.receivedAppreciationCapped ? '+' : ''} appreciation${count === 1 && !input.receivedAppreciationCapped ? '' : 's'} received`
     : null;
 
   return {
