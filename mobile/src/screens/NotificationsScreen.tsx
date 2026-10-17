@@ -3,11 +3,56 @@ import { QueryError } from '../components/QueryError';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { useAuth } from '../context/AuthContext';
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationList } from '../features/notifications/api';
+import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
+import { resolveNotificationDestination, type NotificationDestination } from '../lib/notificationNavigation';
 import { radius, spacing, useTheme, type ThemeColors, type Typography } from '../theme';
+import type { HomeStackParamList } from '../navigation/HomeStack';
+import type { MainTabParamList } from '../navigation/MainTabs';
 import type { NotificationEntry } from '../types/api';
 
-function NotificationRow({ item, colors, typography, styles }: { item: NotificationEntry; colors: ThemeColors; typography: Typography; styles: ReturnType<typeof makeStyles> }) {
+type Props = CompositeScreenProps<NativeStackScreenProps<HomeStackParamList, 'Notifications'>, BottomTabScreenProps<MainTabParamList>>;
+
+/** The imperative half of resolveNotificationDestination's result — the decision itself is pure and unit-tested; this just calls the matching navigate(). An `unsupported` destination does nothing beyond the mark-read that already happened, by design (fail gracefully, never a broken navigate()). */
+function navigateForNotification(destination: NotificationDestination, navigation: HomeAreaNavigation) {
+  switch (destination.kind) {
+    case 'profile':
+      navigation.navigate('Profile');
+      return;
+    case 'leaveTab':
+      navigation.navigate('LeaveTab');
+      return;
+    case 'ticketsTab':
+      navigation.navigate('TicketsTab');
+      return;
+    case 'ticketDetail':
+      navigation.navigate('TicketsTab', { screen: 'TicketDetail', params: { ticketId: destination.ticketId } });
+      return;
+    case 'moreScreen':
+      goIntoMoreTab(navigation, destination.screen);
+      return;
+    case 'unsupported':
+      return;
+  }
+}
+
+function NotificationRow({
+  item,
+  colors,
+  typography,
+  styles,
+  onOpen,
+}: {
+  item: NotificationEntry;
+  colors: ThemeColors;
+  typography: Typography;
+  styles: ReturnType<typeof makeStyles>;
+  onOpen: (item: NotificationEntry) => void;
+}) {
   // A single neutral chip background (rather than a per-severity tint) reads cleanly against both the light and dark card surface.
   const severityMap: Record<string, { color: string; icon: keyof typeof Ionicons.glyphMap }> = {
     info: { color: colors.pine, icon: 'information-circle' },
@@ -15,14 +60,13 @@ function NotificationRow({ item, colors, typography, styles }: { item: Notificat
     warning: { color: colors.warning, icon: 'warning' },
     danger: { color: colors.danger, icon: 'alert-circle' },
   };
-  const markRead = useMarkNotificationRead();
   const isUnread = !item.read_at;
   const severity = severityMap[item.severity] ?? severityMap.info;
 
   return (
     <Pressable
       style={[styles.card, isUnread && styles.cardUnread]}
-      onPress={() => isUnread && markRead.mutate(item.id)}
+      onPress={() => onOpen(item)}
     >
       <View style={styles.cardHeader}>
         <View style={styles.iconWrap}>
@@ -37,12 +81,30 @@ function NotificationRow({ item, colors, typography, styles }: { item: Notificat
   );
 }
 
-export function NotificationsScreen() {
+export function NotificationsScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { moduleByKey } = useAuth();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const { items, isLoading, isError, refetch, isRefetching, fetchMore, isFetchingNextPage } = useNotificationList({ status: filter === 'unread' ? 'unread' : '' });
   const markAllRead = useMarkAllNotificationsRead();
+  const markRead = useMarkNotificationRead();
+
+  const notificationAccess = {
+    leave: moduleByKey('leave')?.can_access === true,
+    serviceDesk: moduleByKey('service_desk')?.can_access === true,
+    employeeSelfService: moduleByKey('employee_self_service')?.can_access === true,
+  };
+
+  function openNotification(item: NotificationEntry) {
+    // Preserve existing read behavior exactly: mark read first (fire-and-forget,
+    // same as before), then navigate — a single tap does both, never twice, and
+    // an unsupported destination still marks the item read without navigating
+    // anywhere, matching "handle unsupported notification types gracefully."
+    if (!item.read_at) markRead.mutate(item.id);
+    const destination = resolveNotificationDestination(item, notificationAccess);
+    navigateForNotification(destination, navigation);
+  }
 
   function changeFilter(next: 'all' | 'unread') {
     setFilter(next);
@@ -67,7 +129,7 @@ export function NotificationsScreen() {
         data={items}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => <NotificationRow item={item} colors={colors} typography={typography} styles={styles} />}
+        renderItem={({ item }) => <NotificationRow item={item} colors={colors} typography={typography} styles={styles} onOpen={openNotification} />}
         refreshing={isRefetching}
         onRefresh={refetch}
         onEndReached={fetchMore}

@@ -11,12 +11,16 @@ import { DecorativeAccents } from '../components/DecorativeAccents';
 import { IconTile } from '../components/IconTile';
 import { useMyDashboard } from '../features/dashboard/api';
 import { downloadAndShare } from '../features/leave/api';
+import { useAppreciations, useLifestylePreferences, useMilestones } from '../features/lifestyle/api';
 import { useUnreadNotificationCount } from '../features/notifications/api';
 import { getGreeting, type GreetingPeriod } from '../lib/greeting';
+import { selectLifestyleHomeSummary } from '../lib/lifestyleHomeSummary';
+import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
+import { resolvePendingAction, type PendingActionDestination } from '../lib/pendingActionNavigation';
+import { INFINITE_LIST_PAGE_SIZE } from '../lib/useInfiniteList';
 import { radius, shadow, spacing, useTheme, useV2Colors, v2ModuleColors, V2_FONTS, type ThemePreference, type V2Colors } from '../theme';
 import type { HomeStackParamList } from '../navigation/HomeStack';
 import type { MainTabParamList } from '../navigation/MainTabs';
-import type { MoreStackParamList } from '../navigation/MoreStack';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<HomeStackParamList, 'Home'>, BottomTabScreenProps<MainTabParamList>>;
 
@@ -24,35 +28,21 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-type MoreDestination = Exclude<keyof MoreStackParamList, 'MoreMenu'>;
-
-/**
- * Jumping into a MoreTab screen from Home must not just push onto whatever
- * MoreTab's stack already has — bottom-tabs keeps every tab's nested stack
- * alive across tab switches, so repeated Home shortcuts into different
- * features (Documents, then Assets, ...) would otherwise pile up into one
- * unrelated back-stack, and pressing back from Assets would land on
- * Documents instead of the More menu. Reset to the menu first, then push the
- * destination — but only when actually switching features, so reopening the
- * same feature you're already in (e.g. tapping "My assets" again while still
- * on Assets) doesn't discard its in-progress state.
- */
-function currentMoreTabScreen(navigation: Props['navigation']): string | undefined {
-  const parentState = navigation.getParent()?.getState() as
-    | { routes?: { name: string; state?: { routes?: { name: string }[]; index?: number } }[] }
-    | undefined;
-  const moreRoute = parentState?.routes?.find((route) => route.name === 'MoreTab');
-  const nestedRoutes = moreRoute?.state?.routes;
-  const nestedIndex = moreRoute?.state?.index;
-  if (!nestedRoutes || nestedIndex === undefined) return undefined;
-  return nestedRoutes[nestedIndex]?.name;
-}
-
-function goIntoMoreTab(navigation: Props['navigation'], screen: MoreDestination) {
-  if (currentMoreTabScreen(navigation) !== screen) {
-    navigation.navigate('MoreTab', { screen: 'MoreMenu' });
+/** The imperative half of resolvePendingAction's result — the decision itself (which destination, which tone) is pure and unit-tested; this is just "call the matching navigate()." */
+function navigateForPendingAction(destination: PendingActionDestination, navigation: HomeAreaNavigation) {
+  switch (destination.kind) {
+    case 'profile':
+      navigation.navigate('Profile');
+      return;
+    case 'leaveTab':
+      navigation.navigate('LeaveTab');
+      return;
+    case 'ticketsTab':
+      navigation.navigate('TicketsTab');
+      return;
+    case 'none':
+      return;
   }
-  navigation.navigate('MoreTab', { screen });
 }
 
 /**
@@ -129,6 +119,35 @@ export function HomeScreen({ navigation }: Props) {
   // Login's links, since this is the identical "small teal text on bg/surface"
   // pairing (see docs/design-system/01-color-tokens.md §1).
   const linkColor = scheme === 'dark' ? v2.primaryDark : v2.primaryStrong;
+
+  // Pending-action navigation must respect the same module access the rest of
+  // Home already does — a stale action referencing a now-disabled module must
+  // resolve to "not tappable", never a broken navigate() call.
+  const pendingActionAccess = {
+    leave: moduleByKey('leave')?.can_access === true,
+    serviceDesk: moduleByKey('service_desk')?.can_access === true,
+  };
+
+  // Lifestyle card: mirrors LifestyleScreen.tsx's own gating exactly (feature
+  // flags first, then conditionally-enabled queries) so Home never fires the
+  // milestones/appreciations requests when the organization has either
+  // feature turned off.
+  const lifestylePreferences = useLifestylePreferences();
+  const milestonesEnabled = lifestylePreferences.data?.features.milestones_enabled === true;
+  const appreciationEnabled = lifestylePreferences.data?.features.appreciation_enabled === true;
+  const milestonesQuery = useMilestones(30, milestonesEnabled);
+  const receivedAppreciationQuery = useAppreciations('received', appreciationEnabled);
+  const receivedAppreciationCount = receivedAppreciationQuery.items?.length;
+  const lifestyleSummary = selectLifestyleHomeSummary({
+    milestonesEnabled,
+    appreciationEnabled,
+    milestones: milestonesQuery.data,
+    receivedAppreciationCount,
+    // No count endpoint exists for appreciations (per docs/design-system/10 item 8) — a
+    // full first page means there may be more than shown, so the label says "N+", not a
+    // precise total it can't actually guarantee.
+    receivedAppreciationCapped: receivedAppreciationCount === INFINITE_LIST_PAGE_SIZE,
+  });
 
   function cycleTheme() {
     const next = THEME_CYCLE[(THEME_CYCLE.indexOf(preference) + 1) % THEME_CYCLE.length];
@@ -207,9 +226,37 @@ export function HomeScreen({ navigation }: Props) {
                 <SectionIcon name="alert-circle-outline" color="#FFFFFF" style={{ backgroundColor: v2ModuleColors.tickets.icon }} />
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle}>Needs your attention</Text>
-                  {data.pending_actions.map((action) => (
-                    <Text key={action.key} style={styles.pendingItem}>• {action.label}</Text>
-                  ))}
+                  {data.pending_actions.map((action) => {
+                    const resolution = resolvePendingAction(action.key, pendingActionAccess);
+                    const tappable = resolution.destination.kind !== 'none';
+                    const row = (
+                      <View style={styles.pendingItemRow}>
+                        <Text
+                          style={[styles.pendingItem, resolution.tone === 'informational' && styles.pendingItemInformational]}
+                          numberOfLines={2}
+                        >
+                          • {action.label}
+                        </Text>
+                        {/* Only the one truly actionable key gets the "go fix this" affordance —
+                            an informational status never looks like a task requiring intervention. */}
+                        {tappable && resolution.tone === 'actionable' ? (
+                          <Ionicons name="chevron-forward" size={16} color={v2.ink} />
+                        ) : null}
+                      </View>
+                    );
+                    return tappable ? (
+                      <Pressable
+                        key={action.key}
+                        onPress={() => navigateForPendingAction(resolution.destination, navigation)}
+                        accessibilityRole="button"
+                        accessibilityLabel={action.label}
+                      >
+                        {row}
+                      </Pressable>
+                    ) : (
+                      <View key={action.key}>{row}</View>
+                    );
+                  })}
                 </View>
               </View>
             ) : null}
@@ -345,13 +392,40 @@ export function HomeScreen({ navigation }: Props) {
               </View>
             ) : null}
 
+            {lifestyleSummary.visible ? (
+              <Pressable
+                onPress={() => goIntoMoreTab(navigation, 'Lifestyle')}
+                style={[styles.card, styles.rowCard]}
+                accessibilityRole="button"
+                accessibilityLabel="Birthdays, anniversaries, and appreciation"
+              >
+                <SectionIcon name="heart-outline" color="#FFFFFF" style={{ backgroundColor: v2ModuleColors.lifestyle.icon }} />
+                <View style={styles.cardBody}>
+                  <Text style={styles.cardTitle}>Life at work</Text>
+                  {lifestyleSummary.milestoneLabel ? <Text style={styles.body}>{lifestyleSummary.milestoneLabel}</Text> : null}
+                  {lifestyleSummary.appreciationLabel ? (
+                    <Text style={[styles.body, lifestyleSummary.milestoneLabel ? { marginTop: spacing.xs } : undefined]}>
+                      {lifestyleSummary.appreciationLabel}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={v2.muted} />
+              </Pressable>
+            ) : null}
+
             {data.next_holiday ? (
-              <View style={[styles.card, styles.rowCard, { alignItems: 'center' }]}>
+              <Pressable
+                onPress={() => goIntoMoreTab(navigation, 'Calendar')}
+                style={[styles.card, styles.rowCard, { alignItems: 'center' }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${data.next_holiday.name}, ${data.next_holiday.days_away} days away. View calendar.`}
+              >
                 <SectionIcon name="sunny-outline" color={v2.inkOnAccent} style={{ backgroundColor: v2.accentApricot }} />
                 <Text style={[styles.body, { flex: 1, fontFamily: V2_FONTS.interSemiBold }]}>
                   {data.next_holiday.name} — {data.next_holiday.days_away} day(s) away
                 </Text>
-              </View>
+                <Ionicons name="chevron-forward" size={18} color={v2.muted} />
+              </Pressable>
             ) : null}
           </>
         )}
@@ -407,7 +481,13 @@ const makeStyles = (v2: V2Colors, headerActionGap: number) => StyleSheet.create(
   // noticeably small for the role/attendance detail lines on an actual device.
   body: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.ink },
   caption: { fontFamily: V2_FONTS.interRegular, fontSize: 13, color: v2.muted },
-  pendingItem: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.ink, marginBottom: spacing.xs },
+  // Tappable rows get a real touch target (44+); the row wrapper carries the
+  // spacing that used to live on the Text itself.
+  pendingItemRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, minHeight: 44, paddingVertical: spacing.xs },
+  pendingItem: { fontFamily: V2_FONTS.interRegular, fontSize: 15, lineHeight: 21, color: v2.ink, flex: 1 },
+  // Informational statuses are never styled like an urgent task — muted text,
+  // no chevron (applied conditionally where the row is rendered).
+  pendingItemInformational: { color: v2.muted },
 
   statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   statCard: { flex: 1, borderRadius: radius.md, padding: spacing.md, backgroundColor: v2.surface, borderWidth: 1, borderColor: v2.border },

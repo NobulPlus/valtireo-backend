@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeStack } from './HomeStack';
 import { LeaveStack } from './LeaveStack';
 import { AttendanceStack } from './AttendanceStack';
-import { TicketsStack } from './TicketsStack';
+import { TicketsStack, type TicketsStackParamList } from './TicketsStack';
 import { MoreStack, type MoreStackParamList } from './MoreStack';
 import { useAuth } from '../context/AuthContext';
 import { radius, shadow, useV2Colors, V2_FONTS } from '../theme';
@@ -20,7 +20,12 @@ export type MainTabParamList = {
   HomeTab: undefined;
   LeaveTab: undefined;
   AttendanceTab: undefined;
-  TicketsTab: undefined;
+  // Widened from `undefined` (Phase A) so Home's pending-actions card and the
+  // notification deep-link resolver can navigate straight to a specific ticket
+  // (`{ screen: 'TicketDetail', params: { ticketId } }`), the same nested-navigate
+  // shape already used for MoreTab below — TicketsTab itself is unchanged, still a
+  // plain tab with no params when navigated to bare.
+  TicketsTab: NavigatorScreenParams<TicketsStackParamList> | undefined;
   MoreTab: NavigatorScreenParams<MoreStackParamList> | undefined;
 };
 
