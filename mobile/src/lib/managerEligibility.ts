@@ -38,20 +38,32 @@ export function managerScopeWasRevoked(
 
 /**
  * Whether a manager-dashboard refetch should fire after a session refresh
- * resolves (or fails to resolve) — see HomeScreen.tsx's pull-to-refresh.
- * `freshSession` is the just-resolved, authoritative answer from that same
- * refresh; `undefined` means it couldn't resolve anything new (network/
- * server error, or superseded by a newer transition), in which case the
- * caller's previously-known eligibility is the only thing left to go on.
+ * resolves — see HomeScreen.tsx's pull-to-refresh. `freshSession` is the
+ * just-resolved result of that same refresh, which lands in one of three
+ * buckets:
  *
- * Deliberately evaluated from the FRESH result rather than in parallel with
- * it — racing a manager-dashboard refetch against the session refresh let a
- * just-revoked session's stale, pre-refresh `hasManagerScope` still trigger
- * one more (unauthorized, but still unnecessary) request.
+ *  - A real session payload — refresh succeeded, and `has_manager_scope` on
+ *    it is the authoritative, current answer (true: scope retained or newly
+ *    granted; false: scope revoked, or was never there).
+ *  - `null` — the session was explicitly invalidated (logout, or a token
+ *    that turned out to be invalid). Definitely not eligible.
+ *  - `undefined` — nothing new was confirmed: either a transient network/
+ *    server failure, or this particular refresh was superseded by a newer
+ *    session transition before it resolved. Both collapse to the same
+ *    answer here for the same reason: current authorization could not be
+ *    freshly confirmed, so this deliberately does NOT fall back to
+ *    whatever eligibility was believed before the refresh ran. A failed or
+ *    superseded refresh is not evidence that access is still fine — it is
+ *    simply the absence of evidence either way, and re-affirming a stale
+ *    "it was true last time" for a manager-only data request is exactly the
+ *    kind of assumption this must not make. Failing closed here costs at
+ *    most one skipped refetch (any already-cached team data stays exactly
+ *    as it was, untouched); the user can pull to refresh again once the
+ *    network/session recovers.
+ *
+ * This is why the function takes only `freshSession` — there is nothing a
+ * caller-supplied fallback could safely add.
  */
-export function shouldRefetchManagerDashboard(
-  freshSession: ManagerEligibilitySession | null | undefined,
-  fallbackEligibility: boolean,
-): boolean {
-  return freshSession === undefined ? fallbackEligibility : isEligibleForManagerHome(freshSession);
+export function shouldRefetchManagerDashboard(freshSession: ManagerEligibilitySession | null | undefined): boolean {
+  return isEligibleForManagerHome(freshSession);
 }

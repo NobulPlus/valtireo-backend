@@ -188,11 +188,13 @@ export function HomeScreen({ navigation }: Props) {
               // deliberately not in parallel with it: racing the two meant a
               // just-revoked session's stale `hasManagerScope` (captured from
               // render scope, not yet aware of the revocation) could still fire
-              // one more manager-dashboard request. Sequencing means that
-              // decision is always made from the freshest answer available.
+              // one more manager-dashboard request. shouldRefetchManagerDashboard
+              // fails closed on a failed/superseded refresh (its `undefined`
+              // case) rather than falling back to this stale value — see its
+              // doc comment for why that fallback would be unsafe here.
               void (async () => {
                 const freshSession = await refreshSession();
-                if (shouldRefetchManagerDashboard(freshSession, hasManagerScope)) void managerDashboard.refetch();
+                if (shouldRefetchManagerDashboard(freshSession)) void managerDashboard.refetch();
               })();
             }}
             tintColor={v2.primary}

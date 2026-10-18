@@ -87,6 +87,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [biometricCredential, setBiometricCredentialState] = useState<BiometricIdentity | null>(null);
   const sessionGeneration = useRef(0);
+  // Mirrors `session`, written synchronously by every commitSession() call —
+  // never via a useEffect, which would lag a render behind. This is what lets
+  // bootstrap() read "the session as of right now" as plain, ordinary code
+  // (no closures, no React state-updater machinery) instead of needing a
+  // functional setState updater — see commitSession() below for why that
+  // matters: a function passed to setState must stay pure (React is free to
+  // invoke it more than once, e.g. under Strict Mode), so a side effect like
+  // queryClient.removeQueries() can never live inside one.
+  const sessionRef = useRef<SessionPayload | null>(null);
+
+  const commitSession = useCallback((next: SessionPayload | null) => {
+    sessionRef.current = next;
+    setSession(next);
+  }, []);
 
   useEffect(() => {
     // Independent of token bootstrap below — this only decides whether the
@@ -99,9 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void setStoredToken(null).catch(() => setReconnectError('Could not clear secure storage. Retry sign-out before closing the app.'));
     void queryClient.cancelQueries();
     queryClient.clear();
-    setSession(null);
+    commitSession(null);
     setReconnectError(null);
-  }, []);
+  }, [commitSession]);
 
   const bootstrap = useCallback(async (): Promise<SessionPayload | null | undefined> => {
     const generation = sessionGeneration.current;
@@ -125,16 +139,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const normalized = normalizeSessionPayload(payload);
       // A session refresh can be the only signal that manager scope was
       // revoked mid-session (no push/poll tells us otherwise — see
-      // HomeScreen.tsx's pull-to-refresh comment). Purge the manager
-      // dashboard's cached data on exactly that transition so a former
-      // manager's team data cannot linger in the query cache after access
-      // is gone, independent of whatever any screen chooses to render.
-      setSession((previous) => {
-        if (managerScopeWasRevoked(previous, normalized)) {
-          queryClient.removeQueries({ queryKey: MANAGER_DASHBOARD_QUERY_KEY });
-        }
-        return normalized;
-      });
+      // HomeScreen.tsx's pull-to-refresh comment). Read sessionRef.current —
+      // not the `session` captured in this closure, which can be arbitrarily
+      // stale by the time this await resolves, and not a functional
+      // setSession updater, which must stay pure — as ordinary, synchronous
+      // code immediately before committing, so the side effect runs exactly
+      // once, outside any React-managed function React could re-invoke.
+      if (managerScopeWasRevoked(sessionRef.current, normalized)) {
+        queryClient.removeQueries({ queryKey: MANAGER_DASHBOARD_QUERY_KEY });
+      }
+      commitSession(normalized);
       return normalized;
     } catch (error) {
       if (generation !== sessionGeneration.current || token !== getStoredToken()) return undefined;
@@ -149,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [clearSession]);
+  }, [clearSession, commitSession]);
 
   useEffect(() => {
     // Bootstrap awaits secure storage and HTTP before updating session state.
@@ -162,8 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => onSessionChange(() => {
     sessionGeneration.current += 1;
-    setSession(null);
-  }), []);
+    commitSession(null);
+  }), [commitSession]);
 
   const login = useCallback(async (email: string, password: string) => {
     clearSession();
@@ -180,8 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const savingGeneration = sessionGeneration.current;
     await saving;
     if (savingGeneration !== sessionGeneration.current || getStoredToken() !== payload.token) throw new ApiError('Sign-in was cancelled. Please retry.', 401);
-    setSession(normalizeSessionPayload(payload));
-  }, [clearSession]);
+    commitSession(normalizeSessionPayload(payload));
+  }, [clearSession, commitSession]);
 
   const logout = useCallback(async () => {
     const token = getStoredToken();
