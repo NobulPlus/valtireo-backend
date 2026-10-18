@@ -13,13 +13,17 @@ use Spatie\Permission\PermissionRegistrar;
  * only blocks the operation that would cause total lockout, never a mere
  * reduction in access, which is ordinary role administration.
  *
- * "Admin-capable" = EFFECTIVE permissions (the union across every role a
- * user holds, not any single role in isolation) include both roles.update
- * and employees.assign_role — the two permissions needed to recover from
- * any other lockout state (reshape a role, and hand it to someone). A user
- * can be admin-capable by holding one role with both, or by holding two
- * roles that each grant one — both must count, now that a user can hold
- * more than one role.
+ * "Admin-capable" = EFFECTIVE permissions include both roles.update and
+ * employees.assign_role — the two permissions needed to recover from any
+ * other lockout state (reshape a role, and hand it to someone). "Effective"
+ * is every source the authorization model actually supports: the union
+ * across every role a user holds (not any single role in isolation — a
+ * user can be admin-capable by holding one role with both, or two roles
+ * that each grant one), PLUS any permission granted directly to the user
+ * (bypassing roles entirely — Spatie's HasPermissions trait, actively used
+ * today in tests like AccessPrivacyRegressionTest via $user->
+ * givePermissionTo(), so a direct grant is a real source this guardrail
+ * must not be blind to, not a theoretical one).
  */
 class OrganizationRoleGuardrailService
 {
@@ -40,7 +44,7 @@ class OrganizationRoleGuardrailService
 
         $users = User::query()
             ->where('organization_id', $organization->id)
-            ->with('employee', 'roles.permissions')
+            ->with('employee', 'roles.permissions', 'permissions')
             ->get();
 
         foreach ($users as $user) {
@@ -60,10 +64,16 @@ class OrganizationRoleGuardrailService
             // role they hold, substituting $replacementPermissionNames for
             // $excludingRole's own current permissions where applicable —
             // never zeroing out a role a user holds unless that's actually
-            // what's being simulated. This is what makes a two-role split
-            // (one role granting roles.update, a separate one granting
+            // what's being simulated — PLUS any permission granted to the
+            // user directly. This is what makes a two-role split (one role
+            // granting roles.update, a separate one granting
             // employees.assign_role) correctly count as admin-capable,
-            // where checking each role in isolation would not.
+            // where checking each role in isolation would not, and what
+            // makes a direct grant (bypassing roles) count too. Direct
+            // grants are never substituted/excluded — none of this
+            // service's callers ever propose changing a user's direct
+            // permissions, only a role's, so the user's actual current
+            // direct grants are always the right thing to credit.
             $effectivePermissionNames = $user->roles
                 ->flatMap(function (Role $role) use ($excludingRole, $replacementPermissionNames) {
                     if ($excludingRole && $role->is($excludingRole)) {
@@ -72,6 +82,7 @@ class OrganizationRoleGuardrailService
 
                     return $role->permissions->pluck('name');
                 })
+                ->merge($user->permissions->pluck('name'))
                 ->unique();
 
             if (collect(self::REQUIRED_PERMISSIONS)->every(fn (string $permission) => $effectivePermissionNames->contains($permission))) {

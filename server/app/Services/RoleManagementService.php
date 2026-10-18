@@ -153,12 +153,26 @@ class RoleManagementService
     private function assertNoLockout(User $actor, Role $role, array $newPermissionNames): void
     {
         $currentNames = $role->permissions->pluck('name');
-        $currentlyAdminCapable = collect(self::ADMIN_CAPABLE_PERMISSIONS)->every(fn (string $permission) => $currentNames->contains($permission));
-        $stillAdminCapable = collect(self::ADMIN_CAPABLE_PERMISSIONS)->every(fn (string $permission) => in_array($permission, $newPermissionNames, true));
+
+        // Gating on whether THIS ROLE ALONE currently holds both guardrail
+        // permissions (the previous check) is wrong once a user can hold
+        // multiple roles: a role holding only roles.update, on a user who
+        // separately holds employees.assign_role via a second role, was
+        // never "admin-capable" by itself — so that check skipped the
+        // guardrail call entirely, even though removing roles.update here
+        // could still be the exact action that locks the organization out.
+        // The only question that actually matters is narrower and cheaper:
+        // is this role about to lose one of the two guardrail permissions
+        // it currently grants at all? If not — including every unrelated
+        // permission change, and every role that holds neither permission
+        // to begin with — nothing it contributes to anyone's effective
+        // permissions is shrinking, so there is nothing for the guardrail
+        // to re-check.
+        $losingAGuardrailPermission = collect(self::ADMIN_CAPABLE_PERMISSIONS)
+            ->contains(fn (string $permission) => $currentNames->contains($permission) && ! in_array($permission, $newPermissionNames, true));
 
         if (
-            $currentlyAdminCapable
-            && ! $stillAdminCapable
+            $losingAGuardrailPermission
             && $this->guardrail->wouldCauseLockout($actor->organization, excludingRole: $role, replacementPermissionNames: $newPermissionNames)
         ) {
             throw ValidationException::withMessages([

@@ -228,6 +228,43 @@ class OrganizationRoleGuardrailServiceTest extends TestCase
         $this->assertTrue($this->guardrail()->wouldCauseLockout($organization));
     }
 
+    public function test_a_permission_granted_directly_to_a_user_counts_toward_their_effective_admin_capability(): void
+    {
+        // Spatie's HasPermissions trait lets a permission be granted to a
+        // user directly, bypassing roles entirely — actively exercised in
+        // this codebase's own tests (e.g. AccessPrivacyRegressionTest via
+        // $user->givePermissionTo()), so it's a real effective-permission
+        // source the guardrail must account for, not a theoretical one.
+        $organization = $this->organization();
+        $roleA = $this->role($organization, 'Role Updater', ['roles.update']);
+        $user = $this->user($organization, [$roleA]);
+        $this->setPermissionsTeamId($organization->id);
+        $user->givePermissionTo('employees.assign_role');
+
+        // roles.update via the role, employees.assign_role granted
+        // directly — together these make the user admin-capable even
+        // though no single role they hold grants both.
+        $this->assertFalse($this->guardrail()->wouldCauseLockout($organization));
+    }
+
+    public function test_an_unrelated_direct_grant_does_not_manufacture_admin_capability_that_was_not_there(): void
+    {
+        $organization = $this->organization();
+        $combinedRole = $this->role($organization, 'Combined', ['roles.update', 'employees.assign_role']);
+        $user = $this->user($organization, [$combinedRole]);
+        $this->setPermissionsTeamId($organization->id);
+        $user->givePermissionTo('leave_requests.view');
+
+        // Simulating $combinedRole being updated down to just roles.update:
+        // the user's only direct grant (leave_requests.view) is unrelated
+        // and must not be mistaken for covering employees.assign_role.
+        $this->assertTrue($this->guardrail()->wouldCauseLockout(
+            $organization,
+            excludingRole: $combinedRole,
+            replacementPermissionNames: ['roles.update'],
+        ));
+    }
+
     public function test_tenant_boundary_a_second_organizations_admin_capable_user_never_counts(): void
     {
         $organizationA = $this->organization();
