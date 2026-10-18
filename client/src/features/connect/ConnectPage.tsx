@@ -63,7 +63,16 @@ function MeetingForm() {
   const [page, setPage] = useState(1);
   const [members, setMembers] = useState<Person[]>([]);
   const people = useQuery({ queryKey: ['connect', 'people', search, page], queryFn: () => api.get<Page<Person>>('/connect/people', { params: { search, page } }) });
-  const create = useMutation({ mutationFn: () => api.post<{ data: Meeting }>('/connect/meetings', { title: title.trim(), description, member_ids: members.map((p) => p.id), starts_at: scheduled ? new Date(start).toISOString() : null, duration_minutes: duration }), onSuccess: async ({ data }) => { await cache.invalidateQueries({ queryKey: ['connect'] }); navigate(`/connect/${data.id}`); } });
+  const create = useMutation({
+    mutationFn: () => {
+      const startsAt = scheduled ? new Date(start) : null;
+      if (startsAt && (!Number.isFinite(startsAt.getTime()) || startsAt.getTime() <= Date.now())) {
+        throw new Error('Choose a valid start date and time in the future.');
+      }
+      return api.post<{ data: Meeting }>('/connect/meetings', { title: title.trim(), description, member_ids: members.map((p) => p.id), starts_at: startsAt?.toISOString() ?? null, duration_minutes: duration });
+    },
+    onSuccess: async ({ data }) => { await cache.invalidateQueries({ queryKey: ['connect'] }); navigate(`/connect/${data.id}`); },
+  });
   return <form className={panel} onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
     <h2 className="font-display text-lg font-bold">New meeting</h2>
     <label className="block space-y-2 text-sm">Meeting title<Input required maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What are we getting together for?" /></label>
