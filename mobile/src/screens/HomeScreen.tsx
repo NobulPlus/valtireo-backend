@@ -55,6 +55,10 @@ const QUICK_ACCESS = [
   { icon: 'laptop-outline', label: 'My assets', moduleColorKey: 'assets', module: 'assets', go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Assets') },
   { icon: 'document-text-outline', label: 'Documents', moduleColorKey: 'documents', module: 'employee_self_service', go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Documents') },
   { icon: 'cash-outline', label: 'Payslips', moduleColorKey: 'payslips', module: 'payroll', go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Payslips') },
+  // Calendar has no module gate of its own (MoreMenuScreen's `module: null`) and no
+  // other always-available entry point on Home — the Next Holiday card only appears
+  // when there's an upcoming holiday to show, so it isn't a reliable path there.
+  { icon: 'calendar-outline', label: 'Calendar', moduleColorKey: 'calendar', module: null, go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Calendar') },
 ] as const;
 
 const COMPLIANCE_LABELS: Record<string, string> = {
@@ -209,6 +213,7 @@ export function HomeScreen({ navigation }: Props) {
                   bg={tileColor}
                   iconColor="#FFFFFF"
                   onPress={() => item.go(navigation)}
+                  widthPercent="22%"
                 />
               );
             })}
