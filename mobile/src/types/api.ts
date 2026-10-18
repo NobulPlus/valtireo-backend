@@ -370,6 +370,65 @@ export interface AttendanceCorrectionRequest {
   updated_at: string;
 }
 
+export interface ManagerDashboardScope {
+  type: 'department' | 'cluster' | 'direct_reports';
+  department?: LookupRef;
+  cluster?: LookupRef;
+  source: string;
+}
+
+/**
+ * A deliberate SUBSET of what `GET /dashboard/manager` actually returns
+ * (server/app/Services/DashboardService.php:90-174, verified directly) — the full
+ * response also includes `composition`, `recent.new_joiners`, `recent.profile_updates`,
+ * and `people.members`/`people.direct_reports`, each carrying individual employee
+ * names/details. Those are intentionally NOT typed here: Phase B's "Team at a glance"
+ * card is a read-only aggregate summary, never a roster, so there is no code path that
+ * could accidentally render an individual employee's details from this type — enforced
+ * by the type itself, not just by what the screen happens to render.
+ *
+ * `leave`/`attendance` here are READ AS-IS from the endpoint: `pending_requests` and
+ * `corrections_pending` are current-state counts (safe to show at any time), but
+ * `present`/`late`/`absent`/`days_pending`/`days_approved` are all-time cumulative — the
+ * backend methods computing them take no date range at all — so this type still
+ * declares them (for completeness/future use) even though the Phase B UI deliberately
+ * does not display them, to avoid presenting an all-time total as if it meant "today."
+ */
+export interface ManagerDashboard {
+  scope: ManagerDashboardScope;
+  employees: {
+    total: number;
+    active: number;
+    draft: number;
+    invited: number;
+    onboarding: number;
+    suspended: number;
+    exited: number;
+  };
+  team_health: {
+    profiles_pending: number;
+    profiles_submitted: number;
+    profiles_approved: number;
+    incomplete_profiles: number;
+  };
+  leave: {
+    available: boolean;
+    pending_requests: number;
+    approved_requests: number;
+    rejected_requests: number;
+    days_pending: number;
+    days_approved: number;
+  };
+  attendance: {
+    available: boolean;
+    present: number;
+    late: number;
+    absent: number;
+    corrections_pending: number;
+    duration_minutes: number;
+  };
+}
+
 export interface MyDashboard {
   employee: EmployeeSummary | null;
   organization: { id: number; name: string; code: string; status: string } | null;

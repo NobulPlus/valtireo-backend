@@ -230,6 +230,82 @@ test('"Needs your attention" heading only appears when something in the list act
   assert.equal(selectPendingActionsHeading([]), 'Updates');
 });
 
+test('manager eligibility is has_manager_scope alone — nothing else substitutes, and it tracks a mid-session permission change', () => {
+  const { isEligibleForManagerHome } = load('src/lib/managerEligibility.ts', {});
+
+  assert.equal(isEligibleForManagerHome({ has_manager_scope: true }), true);
+  assert.equal(isEligibleForManagerHome({ has_manager_scope: false }), false);
+  assert.equal(isEligibleForManagerHome(null), false);
+  assert.equal(isEligibleForManagerHome(undefined), false);
+
+  // A session with manager-sounding extra fields (designation, department, even an
+  // HR/service-desk permission) must NOT make this true on its own — only the one
+  // field does. Plain JS objects are fine here; the function only reads has_manager_scope.
+  assert.equal(
+    isEligibleForManagerHome({ has_manager_scope: false, designation: 'Engineering Manager', department: 'Engineering', service_desk_view: true, is_hr_admin: true }),
+    false,
+  );
+  assert.equal(
+    isEligibleForManagerHome({ has_manager_scope: true, designation: 'Individual Contributor' }),
+    true,
+  );
+
+  // A mid-session permission change (e.g. after pulling to refresh re-fetches the
+  // session) — the function is pure and re-derives fresh each call, no hidden caching.
+  let session = { has_manager_scope: true };
+  assert.equal(isEligibleForManagerHome(session), true);
+  session = { has_manager_scope: false }; // permission revoked, session re-fetched
+  assert.equal(isEligibleForManagerHome(session), false);
+});
+
+test('team scope label describes exactly what the backend resolved, with a safe fallback', () => {
+  const { describeTeamScope } = load('src/lib/managerTeamSummary.ts', {});
+  assert.equal(describeTeamScope({ type: 'department', department: { id: 1, code: 'ENG', name: 'Engineering' } }), 'Engineering department');
+  assert.equal(describeTeamScope({ type: 'cluster', cluster: { id: 2, code: 'WEST', name: 'West Region' } }), 'West Region cluster');
+  assert.equal(describeTeamScope({ type: 'direct_reports' }), 'Your direct reports');
+  // Malformed combinations (claims department scope but the department object is
+  // missing) fall back safely rather than rendering "undefined department".
+  assert.equal(describeTeamScope({ type: 'department' }), 'Your direct reports');
+  assert.equal(describeTeamScope(null), 'Your team');
+  assert.equal(describeTeamScope(undefined), 'Your team');
+});
+
+test('manager team summary only surfaces current-state counts, defaults missing fields to 0, and never reads the all-time attendance/leave totals', () => {
+  const { selectManagerTeamSummary } = load('src/lib/managerTeamSummary.ts', {});
+
+  const full = {
+    scope: { type: 'department', department: { id: 1, code: 'ENG', name: 'Engineering' } },
+    employees: { total: 12, active: 10, draft: 1, invited: 1, onboarding: 0, suspended: 0, exited: 0 },
+    team_health: { profiles_pending: 2, profiles_submitted: 1, profiles_approved: 7, incomplete_profiles: 3 },
+    leave: { available: true, pending_requests: 4, approved_requests: 50, rejected_requests: 2, days_pending: 6, days_approved: 120 },
+    attendance: { available: true, present: 900, late: 40, absent: 12, corrections_pending: 1, duration_minutes: 50000 },
+  };
+  const summary = plain(selectManagerTeamSummary(full));
+  assert.deepEqual(summary, { scopeLabel: 'Engineering department', teamSize: 10, leavePending: 4, correctionsPending: 1, incompleteProfiles: 3 });
+  // `active`, not `total` — total includes exited/draft employees, not meaningfully "the team".
+  assert.notEqual(summary.teamSize, full.employees.total);
+  // The all-time cumulative fields (present/late/absent/approved_requests/days_*) are
+  // genuinely not read anywhere in the mapping — confirmed by the output object's own
+  // keys, not just by inspection of the source.
+  assert.deepEqual(Object.keys(summary).sort(), ['correctionsPending', 'incompleteProfiles', 'leavePending', 'scopeLabel', 'teamSize']);
+
+  // A genuinely empty team (a newly-promoted manager with no reports yet) — real
+  // zeros, not an error, not hidden.
+  const empty = {
+    scope: { type: 'direct_reports' },
+    employees: { total: 0, active: 0, draft: 0, invited: 0, onboarding: 0, suspended: 0, exited: 0 },
+    team_health: { profiles_pending: 0, profiles_submitted: 0, profiles_approved: 0, incomplete_profiles: 0 },
+    leave: { available: true, pending_requests: 0, approved_requests: 0, rejected_requests: 0, days_pending: 0, days_approved: 0 },
+    attendance: { available: true, present: 0, late: 0, absent: 0, corrections_pending: 0, duration_minutes: 0 },
+  };
+  assert.deepEqual(plain(selectManagerTeamSummary(empty)), { scopeLabel: 'Your direct reports', teamSize: 0, leavePending: 0, correctionsPending: 0, incompleteProfiles: 0 });
+
+  // Missing/optional sub-objects (a real response surprising the client) default to 0
+  // rather than throwing.
+  const partial = { scope: { type: 'direct_reports' } };
+  assert.deepEqual(plain(selectManagerTeamSummary(partial)), { scopeLabel: 'Your direct reports', teamSize: 0, leavePending: 0, correctionsPending: 0, incompleteProfiles: 0 });
+});
+
 test('notification deep-linking: the explicit allowlist covers every real backend action_url, rejects unauthorized/malformed/unsupported combinations', () => {
   const { resolveNotificationDestination } = load('src/lib/notificationNavigation.ts', {});
   const fullAccess = { leave: true, serviceDesk: true, employeeSelfService: true };

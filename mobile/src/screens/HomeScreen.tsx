@@ -9,12 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { DecorativeAccents } from '../components/DecorativeAccents';
 import { IconTile } from '../components/IconTile';
-import { useMyDashboard } from '../features/dashboard/api';
+import { useManagerDashboard, useMyDashboard } from '../features/dashboard/api';
 import { downloadAndShare } from '../features/leave/api';
 import { useAppreciations, useLifestylePreferences, useMilestones } from '../features/lifestyle/api';
 import { useUnreadNotificationCount } from '../features/notifications/api';
 import { getGreeting, type GreetingPeriod } from '../lib/greeting';
 import { selectLifestyleHomeSummary } from '../lib/lifestyleHomeSummary';
+import { isEligibleForManagerHome } from '../lib/managerEligibility';
+import { selectManagerTeamSummary } from '../lib/managerTeamSummary';
 import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
 import { resolvePendingAction, selectPendingActionsHeading, type PendingActionDestination } from '../lib/pendingActionNavigation';
 import { INFINITE_LIST_PAGE_SIZE } from '../lib/useInfiniteList';
@@ -114,9 +116,16 @@ export function HomeScreen({ navigation }: Props) {
   // forces the icons to crowd the greeting name.
   const headerActionGap = clamp(windowWidth * 0.03, spacing.sm + 4, spacing.md);
   const styles = useMemo(() => makeStyles(v2, headerActionGap), [v2, headerActionGap]);
-  const { session, moduleByKey } = useAuth();
+  const { session, moduleByKey, refresh: refreshSession } = useAuth();
   const { data, isLoading, isRefetching, refetch } = useMyDashboard();
   const { data: unread } = useUnreadNotificationCount();
+
+  // The ONLY signal gating the manager section — see docs/design-system/11's Manager IA
+  // and mobile/src/lib/managerEligibility.ts for why no other field substitutes for it.
+  // Because the query below is only `enabled` when this is true, a non-manager account
+  // never issues a request to /dashboard/manager at all.
+  const hasManagerScope = isEligibleForManagerHome(session);
+  const managerDashboard = useManagerDashboard(hasManagerScope);
   const quickAccess = QUICK_ACCESS.filter((item) => !item.module || moduleByKey(item.module)?.can_access === true);
   const greeting = getGreeting();
   // primaryStrong/primaryDark — the same light/dark text-color split used for
@@ -164,7 +173,22 @@ export function HomeScreen({ navigation }: Props) {
       <ScrollView
         style={styles.flex}
         contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg }]}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={v2.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching || (hasManagerScope && managerDashboard.isRefetching)}
+            onRefresh={() => {
+              void refetch();
+              if (hasManagerScope) void managerDashboard.refetch();
+              // Re-checks has_manager_scope itself — the app has no automatic
+              // mid-session permission re-check (a known, reported limitation, not
+              // something this phase adds new infrastructure for), so pulling to
+              // refresh is the one user-triggerable way to pick up a permission
+              // change without signing out and back in.
+              void refreshSession();
+            }}
+            tintColor={v2.primary}
+          />
+        }
       >
         <View style={styles.headerRow}>
           <View style={styles.greetingBlock}>
@@ -275,6 +299,56 @@ export function HomeScreen({ navigation }: Props) {
                   })}
                 </View>
               </View>
+              );
+            })() : null}
+
+            {/* Manager-only. Positioned after the employee's own pending actions and
+                before their personal stats, per the approved Home hierarchy — a
+                manager's own urgent items always outrank their team's summary, and
+                the team section never displaces or replaces anything below it. */}
+            {hasManagerScope ? (() => {
+              const summary = managerDashboard.data ? selectManagerTeamSummary(managerDashboard.data) : null;
+              return (
+                <View style={styles.card}>
+                  <View style={[styles.rowCard, { marginBottom: spacing.md }]}>
+                    <SectionIcon name="people-outline" color="#FFFFFF" style={{ backgroundColor: v2.primary }} />
+                    <View style={styles.cardBody}>
+                      <Text style={styles.cardTitle}>Team at a glance</Text>
+                      <Text style={styles.caption}>{summary?.scopeLabel ?? 'Your team'}</Text>
+                    </View>
+                  </View>
+                  {managerDashboard.isLoading ? (
+                    <ActivityIndicator color={v2.primary} />
+                  ) : managerDashboard.isError ? (
+                    // Never render stale or fabricated zeros on a failed/unauthorized
+                    // fetch — a quiet message, not a QueryError banner, since this is a
+                    // secondary section, not the screen's primary content.
+                    <Text style={styles.caption}>Couldn&apos;t load your team summary. Pull down to retry.</Text>
+                  ) : summary ? (
+                    <View style={styles.statsRow}>
+                      <View style={styles.statCard}>
+                        <Ionicons name="people-outline" size={16} color={v2.primary} />
+                        <Text style={styles.statValue}>{summary.teamSize}</Text>
+                        <Text style={styles.statLabel}>Team</Text>
+                      </View>
+                      <View style={styles.statCard}>
+                        <Ionicons name="calendar-outline" size={16} color={v2ModuleColors.leave.icon} />
+                        <Text style={[styles.statValue, summary.leavePending > 0 && { color: v2.warning }]}>{summary.leavePending}</Text>
+                        <Text style={styles.statLabel}>Leave pending</Text>
+                      </View>
+                      <View style={styles.statCard}>
+                        <Ionicons name="time-outline" size={16} color={v2ModuleColors.attendance.icon} />
+                        <Text style={[styles.statValue, summary.correctionsPending > 0 && { color: v2.warning }]}>{summary.correctionsPending}</Text>
+                        <Text style={styles.statLabel}>Corrections</Text>
+                      </View>
+                      <View style={styles.statCard}>
+                        <Ionicons name="person-outline" size={16} color={v2ModuleColors.profile.icon} />
+                        <Text style={[styles.statValue, summary.incompleteProfiles > 0 && { color: v2.warning }]}>{summary.incompleteProfiles}</Text>
+                        <Text style={styles.statLabel}>Profiles</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
               );
             })() : null}
 
