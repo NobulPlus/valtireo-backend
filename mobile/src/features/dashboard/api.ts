@@ -34,9 +34,16 @@ export function useMyDashboard(filters: MyDashboardFilters = {}) {
  * non-manager, and the backend still independently re-validates on every request
  * regardless (DashboardService::managerScope(), throws 403 if ineligible).
  */
+/**
+ * Exported so AuthContext can purge this exact cache entry when a session
+ * refresh discovers manager scope was revoked, without the two modules
+ * disagreeing on what the key is (see AuthContext.tsx's bootstrap()).
+ */
+export const MANAGER_DASHBOARD_QUERY_KEY = ['dashboard', 'manager'] as const;
+
 export function useManagerDashboard(enabled: boolean) {
   return useQuery({
-    queryKey: ['dashboard', 'manager'],
+    queryKey: MANAGER_DASHBOARD_QUERY_KEY,
     queryFn: () => api.get<ManagerDashboard>('/dashboard/manager'),
     enabled,
     placeholderData: (previous) => previous,

@@ -14,6 +14,8 @@ import {
 } from '../lib/secureToken';
 import { onSessionChange } from '../lib/sessionEvents';
 import { queryClient } from '../lib/queryClient';
+import { MANAGER_DASHBOARD_QUERY_KEY } from '../features/dashboard/api';
+import { managerScopeWasRevoked } from '../lib/managerEligibility';
 import type { EntitledModule, LoginResponse, SessionPayload } from '../types/api';
 
 interface AuthContextValue {
@@ -24,7 +26,19 @@ interface AuthContextValue {
   session: SessionPayload | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  /**
+   * Re-fetches `/auth/me` and returns the authoritative result: the fresh
+   * session payload, `null` if the token turned out to be invalid (the
+   * caller is now logged out) or storage couldn't be read, or `undefined`
+   * if the call couldn't resolve anything new (superseded by a newer
+   * session transition, or a network/server error that left the existing
+   * session untouched). Callers that must gate a follow-up request on
+   * current eligibility — e.g. Home's pull-to-refresh deciding whether to
+   * re-fetch the manager dashboard — should await this and branch on its
+   * result rather than reading the (possibly stale, pre-refresh) `session`
+   * from render scope.
+   */
+  refresh: () => Promise<SessionPayload | null | undefined>;
   hasPermission: (permission: string) => boolean;
   moduleByKey: (key: string) => EntitledModule | undefined;
   /** The account a saved Face ID / fingerprint sign-in would log into, or null if none is enrolled on this device. */
@@ -89,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setReconnectError(null);
   }, []);
 
-  const bootstrap = useCallback(async () => {
+  const bootstrap = useCallback(async (): Promise<SessionPayload | null | undefined> => {
     const generation = sessionGeneration.current;
     let token: string | null;
     try {
@@ -97,25 +111,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setReconnectError('Could not read secure storage. Please retry.');
       setIsLoading(false);
-      return;
+      return null;
     }
     if (!token) {
       setIsLoading(false);
-      return;
+      return null;
     }
 
     try {
       const payload = await api.get<SessionPayload>('/auth/me');
-      if (generation !== sessionGeneration.current || token !== getStoredToken()) return;
+      if (generation !== sessionGeneration.current || token !== getStoredToken()) return undefined;
       setReconnectError(null);
-      setSession(normalizeSessionPayload(payload));
+      const normalized = normalizeSessionPayload(payload);
+      // A session refresh can be the only signal that manager scope was
+      // revoked mid-session (no push/poll tells us otherwise — see
+      // HomeScreen.tsx's pull-to-refresh comment). Purge the manager
+      // dashboard's cached data on exactly that transition so a former
+      // manager's team data cannot linger in the query cache after access
+      // is gone, independent of whatever any screen chooses to render.
+      setSession((previous) => {
+        if (managerScopeWasRevoked(previous, normalized)) {
+          queryClient.removeQueries({ queryKey: MANAGER_DASHBOARD_QUERY_KEY });
+        }
+        return normalized;
+      });
+      return normalized;
     } catch (error) {
-      if (generation !== sessionGeneration.current || token !== getStoredToken()) return;
+      if (generation !== sessionGeneration.current || token !== getStoredToken()) return undefined;
       if (error instanceof ApiError && error.status !== 401) {
         // Network/server issue: keep the token, let the user retry rather than silently signing them out.
         setReconnectError(error.message || 'Could not reach the server. Check your connection and try again.');
+        return undefined;
       } else {
         clearSession();
+        return null;
       }
     } finally {
       setIsLoading(false);

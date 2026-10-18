@@ -15,7 +15,7 @@ import { useAppreciations, useLifestylePreferences, useMilestones } from '../fea
 import { useUnreadNotificationCount } from '../features/notifications/api';
 import { getGreeting, type GreetingPeriod } from '../lib/greeting';
 import { selectLifestyleHomeSummary } from '../lib/lifestyleHomeSummary';
-import { isEligibleForManagerHome } from '../lib/managerEligibility';
+import { isEligibleForManagerHome, shouldRefetchManagerDashboard } from '../lib/managerEligibility';
 import { selectManagerTeamSummary } from '../lib/managerTeamSummary';
 import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
 import { resolvePendingAction, selectPendingActionsHeading, type PendingActionDestination } from '../lib/pendingActionNavigation';
@@ -178,13 +178,22 @@ export function HomeScreen({ navigation }: Props) {
             refreshing={isRefetching || (hasManagerScope && managerDashboard.isRefetching)}
             onRefresh={() => {
               void refetch();
-              if (hasManagerScope) void managerDashboard.refetch();
               // Re-checks has_manager_scope itself — the app has no automatic
               // mid-session permission re-check (a known, reported limitation, not
               // something this phase adds new infrastructure for), so pulling to
               // refresh is the one user-triggerable way to pick up a permission
               // change without signing out and back in.
-              void refreshSession();
+              //
+              // Resolved BEFORE deciding whether to refetch the manager dashboard,
+              // deliberately not in parallel with it: racing the two meant a
+              // just-revoked session's stale `hasManagerScope` (captured from
+              // render scope, not yet aware of the revocation) could still fire
+              // one more manager-dashboard request. Sequencing means that
+              // decision is always made from the freshest answer available.
+              void (async () => {
+                const freshSession = await refreshSession();
+                if (shouldRefetchManagerDashboard(freshSession, hasManagerScope)) void managerDashboard.refetch();
+              })();
             }}
             tintColor={v2.primary}
           />

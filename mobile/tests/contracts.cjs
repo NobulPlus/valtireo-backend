@@ -306,6 +306,56 @@ test('manager team summary only surfaces current-state counts, defaults missing 
   assert.deepEqual(plain(selectManagerTeamSummary(partial)), { scopeLabel: 'Your direct reports', teamSize: 0, leavePending: 0, correctionsPending: 0, incompleteProfiles: 0 });
 });
 
+test('manager scope revocation is detected only on a true-to-false transition, so the cached manager dashboard is purged exactly then — not on grant, not when nothing changed, not on a session that never existed', () => {
+  const { managerScopeWasRevoked } = load('src/lib/managerEligibility.ts', {});
+
+  // The one case that must purge: a session that WAS a manager no longer is.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: true }, { has_manager_scope: false }), true);
+
+  // Every other transition must NOT purge — a scope grant, no change either way
+  // (true->true or false->false), and no prior session at all (first bootstrap,
+  // nothing stale to purge).
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: false }, { has_manager_scope: true }), false);
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: true }, { has_manager_scope: true }), false);
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: false }, { has_manager_scope: false }), false);
+  assert.equal(managerScopeWasRevoked(null, { has_manager_scope: false }), false);
+  assert.equal(managerScopeWasRevoked(undefined, { has_manager_scope: true }), false);
+  // A session that disappears entirely also counts as revoked — `next: null`
+  // means "no session," which is certainly not manager-eligible. In practice
+  // this exact call site (bootstrap's success branch) never passes null for
+  // `next`, since a full logout instead goes through clearSession's own
+  // queryClient.clear(); this case just confirms the function stays correct
+  // (not merely non-crashing) if it were ever reached that way.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: true }, null), true);
+});
+
+test('manager dashboard refetch after pull-to-refresh is gated on the FRESH session, not a stale pre-refresh value — so a request is never fired the instant scope is revoked, and never skipped the instant it is granted', () => {
+  const { shouldRefetchManagerDashboard } = load('src/lib/managerEligibility.ts', {});
+
+  // Scope just revoked: the fresh session says no, regardless of what the
+  // caller believed before the refresh (this is the exact race the review
+  // flagged — refetching here would be an unnecessary, doomed-to-403 request).
+  assert.equal(shouldRefetchManagerDashboard({ has_manager_scope: false }, true), false);
+
+  // Scope just granted mid-session: the fresh session says yes, even though
+  // the caller's prior render had no reason to believe it was eligible yet.
+  assert.equal(shouldRefetchManagerDashboard({ has_manager_scope: true }, false), true);
+
+  // Steady state, no transition either way: fresh session is authoritative.
+  assert.equal(shouldRefetchManagerDashboard({ has_manager_scope: true }, true), true);
+  assert.equal(shouldRefetchManagerDashboard({ has_manager_scope: false }, false), false);
+
+  // The refresh itself couldn't resolve anything new (network/server error, or
+  // superseded by a newer session transition) — fall back to what was already
+  // known rather than guessing either way.
+  assert.equal(shouldRefetchManagerDashboard(undefined, true), true);
+  assert.equal(shouldRefetchManagerDashboard(undefined, false), false);
+
+  // An explicit logout/invalid-token result (null) is a real answer, not an
+  // unknown — never refetch.
+  assert.equal(shouldRefetchManagerDashboard(null, true), false);
+});
+
 test('notification deep-linking: the explicit allowlist covers every real backend action_url, rejects unauthorized/malformed/unsupported combinations', () => {
   const { resolveNotificationDestination } = load('src/lib/notificationNavigation.ts', {});
   const fullAccess = { leave: true, serviceDesk: true, employeeSelfService: true };
