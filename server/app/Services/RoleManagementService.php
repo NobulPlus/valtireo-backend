@@ -156,7 +156,11 @@ class RoleManagementService
         $currentlyAdminCapable = collect(self::ADMIN_CAPABLE_PERMISSIONS)->every(fn (string $permission) => $currentNames->contains($permission));
         $stillAdminCapable = collect(self::ADMIN_CAPABLE_PERMISSIONS)->every(fn (string $permission) => in_array($permission, $newPermissionNames, true));
 
-        if ($currentlyAdminCapable && ! $stillAdminCapable && $this->guardrail->wouldCauseLockout($actor->organization, excludingRole: $role)) {
+        if (
+            $currentlyAdminCapable
+            && ! $stillAdminCapable
+            && $this->guardrail->wouldCauseLockout($actor->organization, excludingRole: $role, replacementPermissionNames: $newPermissionNames)
+        ) {
             throw ValidationException::withMessages([
                 'permission_names' => ['Removing these permissions would leave the organization with no one able to administer roles.'],
             ]);
