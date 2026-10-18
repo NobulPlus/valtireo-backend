@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\ConnectMeeting;
 use App\Models\Employee;
 use App\Models\User;
+use App\Notifications\ValtireoNotification;
 use App\Services\ConnectMediaService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -20,6 +22,7 @@ class ConnectController extends Controller
     {
         $user = $request->user();
         abort_unless($user->organization_id && Employee::where('organization_id', $user->organization_id)->where('user_id', $user->id)->where('status', 'active')->exists(), 403, 'Connect requires an active employee account.');
+
         return $user;
     }
 
@@ -47,6 +50,7 @@ class ConnectController extends Controller
         $request->validate(['page' => ['sometimes', 'integer', 'min:1']]);
         $meetings = $this->visible($user)->with(['host', 'members'])->orderByDesc('starts_at')->paginate(15)
             ->through(fn ($meeting) => $this->summary($meeting, $user));
+
         return response()->json(['meetings' => $meetings, 'media_ready' => $this->media->ready()]);
     }
 
@@ -54,6 +58,7 @@ class ConnectController extends Controller
     {
         $user = $this->actor($request);
         $data = $request->validate(['search' => ['nullable', 'string', 'max:100'], 'page' => ['sometimes', 'integer', 'min:1']]);
+
         return response()->json(User::where('organization_id', $user->organization_id)->whereKeyNot($user->id)
             ->whereHas('employee', fn ($query) => $query->where('organization_id', $user->organization_id)->where('status', 'active'))
             ->when($data['search'] ?? null, fn ($query, $search) => $query->where('name', 'like', '%'.$search.'%'))
@@ -70,13 +75,17 @@ class ConnectController extends Controller
             'member_ids' => ['required', 'array', 'min:1', 'max:24'],
             'member_ids.*' => ['required', 'integer', 'distinct'],
         ]);
-        if (trim($data['title']) === '') throw ValidationException::withMessages(['title' => 'Enter a meeting title.']);
+        if (trim($data['title']) === '') {
+            throw ValidationException::withMessages(['title' => 'Enter a meeting title.']);
+        }
         $ids = collect($data['member_ids'])->map(fn ($id) => (int) $id)->unique();
         $valid = User::where('organization_id', $user->organization_id)->whereKeyNot($user->id)->whereIn('id', $ids)
             ->whereHas('employee', fn ($query) => $query->where('organization_id', $user->organization_id)->where('status', 'active'))->count();
-        if ($valid !== $ids->count()) throw ValidationException::withMessages(['member_ids' => 'Choose other active employees from your organization.']);
+        if ($valid !== $ids->count()) {
+            throw ValidationException::withMessages(['member_ids' => 'Choose other active employees from your organization.']);
+        }
         $meeting = DB::transaction(function () use ($user, $data, $ids) {
-            $start = isset($data['starts_at']) ? \Carbon\CarbonImmutable::parse($data['starts_at'])->utc() : \Carbon\CarbonImmutable::now();
+            $start = isset($data['starts_at']) ? CarbonImmutable::parse($data['starts_at'])->utc() : CarbonImmutable::now();
             $meeting = ConnectMeeting::create([
                 'organization_id' => $user->organization_id, 'host_user_id' => $user->id,
                 'title' => trim($data['title']), 'description' => $data['description'] ?? null,
@@ -85,7 +94,7 @@ class ConnectController extends Controller
             $meeting->members()->attach($ids->push($user->id)->all());
             foreach ($ids->reject(fn ($id) => $id === $user->id) as $id) {
                 DB::table('notifications')->insert([
-                    'id' => (string) Str::uuid(), 'type' => \App\Notifications\ValtireoNotification::class,
+                    'id' => (string) Str::uuid(), 'type' => ValtireoNotification::class,
                     'notifiable_type' => User::class, 'notifiable_id' => $id,
                     'data' => json_encode(['organization_id' => $user->organization_id, 'category' => 'connect', 'event' => 'connect.invited',
                         'severity' => 'info', 'title' => 'Meeting invitation', 'message' => 'You have been invited to a Connect meeting.',
@@ -93,20 +102,24 @@ class ConnectController extends Controller
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
             }
+
             return $meeting;
         });
+
         return response()->json(['data' => $this->summary($meeting->load(['host', 'members']), $user)], 201);
     }
 
     public function show(Request $request, string $meeting)
     {
         $user = $this->actor($request);
+
         return response()->json(['data' => $this->summary($this->visible($user)->with(['host', 'members'])->findOrFail($meeting), $user), 'media_ready' => $this->media->ready()]);
     }
 
     public function join(Request $request, string $meeting)
     {
         $user = $this->actor($request);
+
         return DB::transaction(function () use ($user, $meeting) {
             $record = $this->visible($user)->lockForUpdate()->findOrFail($meeting);
             abort_unless(in_array($record->status, ['scheduled', 'live']), 409, 'This meeting has ended or was cancelled.');
@@ -119,6 +132,7 @@ class ConnectController extends Controller
             }
             $token = $this->media->joinToken($record, $user);
             DB::table('connect_meeting_members')->where('meeting_id', $record->id)->where('user_id', $user->id)->update(['last_join_requested_at' => now()]);
+
             return response()->json(['token' => $token, 'server_url' => config('connect.url')])->header('Cache-Control', 'no-store, private');
         });
     }
@@ -131,13 +145,17 @@ class ConnectController extends Controller
         $record = DB::transaction(function () use ($user, $meeting) {
             $record = $this->visible($user)->lockForUpdate()->findOrFail($meeting);
             abort_unless($record->host_user_id === $user->id, 403, 'Only the host can end this meeting.');
-            if (! $record->ended_at) $record->update(['status' => $record->started_at ? 'ended' : 'cancelled', 'ended_at' => now()]);
+            if (! $record->ended_at) {
+                $record->update(['status' => $record->started_at ? 'ended' : 'cancelled', 'ended_at' => now()]);
+            }
+
             return $record;
         });
         if ($record->started_at && ! $record->room_closed_at) {
             $this->media->closeRoom($record);
             $record->update(['room_closed_at' => now()]);
         }
+
         return response()->json(['data' => $this->summary($record->load(['host', 'members']), $user)]);
     }
 }

@@ -14,6 +14,8 @@ import {
 } from '../lib/secureToken';
 import { onSessionChange } from '../lib/sessionEvents';
 import { queryClient } from '../lib/queryClient';
+import { MANAGER_DASHBOARD_QUERY_KEY } from '../features/dashboard/api';
+import { managerScopeWasRevoked } from '../lib/managerEligibility';
 import type { EntitledModule, LoginResponse, SessionPayload } from '../types/api';
 
 interface AuthContextValue {
@@ -24,7 +26,19 @@ interface AuthContextValue {
   session: SessionPayload | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  /**
+   * Re-fetches `/auth/me` and returns the authoritative result: the fresh
+   * session payload, `null` if the token turned out to be invalid (the
+   * caller is now logged out) or storage couldn't be read, or `undefined`
+   * if the call couldn't resolve anything new (superseded by a newer
+   * session transition, or a network/server error that left the existing
+   * session untouched). Callers that must gate a follow-up request on
+   * current eligibility — e.g. Home's pull-to-refresh deciding whether to
+   * re-fetch the manager dashboard — should await this and branch on its
+   * result rather than reading the (possibly stale, pre-refresh) `session`
+   * from render scope.
+   */
+  refresh: () => Promise<SessionPayload | null | undefined>;
   hasPermission: (permission: string) => boolean;
   moduleByKey: (key: string) => EntitledModule | undefined;
   /** The account a saved Face ID / fingerprint sign-in would log into, or null if none is enrolled on this device. */
@@ -73,6 +87,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [biometricCredential, setBiometricCredentialState] = useState<BiometricIdentity | null>(null);
   const sessionGeneration = useRef(0);
+  // Mirrors `session`, written synchronously by every commitSession() call —
+  // never via a useEffect, which would lag a render behind. This is what lets
+  // bootstrap() read "the session as of right now" as plain, ordinary code
+  // (no closures, no React state-updater machinery) instead of needing a
+  // functional setState updater — see commitSession() below for why that
+  // matters: a function passed to setState must stay pure (React is free to
+  // invoke it more than once, e.g. under Strict Mode), so a side effect like
+  // queryClient.removeQueries() can never live inside one.
+  const sessionRef = useRef<SessionPayload | null>(null);
+
+  const commitSession = useCallback((next: SessionPayload | null) => {
+    sessionRef.current = next;
+    setSession(next);
+  }, []);
 
   useEffect(() => {
     // Independent of token bootstrap below — this only decides whether the
@@ -85,11 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void setStoredToken(null).catch(() => setReconnectError('Could not clear secure storage. Retry sign-out before closing the app.'));
     void queryClient.cancelQueries();
     queryClient.clear();
-    setSession(null);
+    commitSession(null);
     setReconnectError(null);
-  }, []);
+  }, [commitSession]);
 
-  const bootstrap = useCallback(async () => {
+  const bootstrap = useCallback(async (): Promise<SessionPayload | null | undefined> => {
     const generation = sessionGeneration.current;
     let token: string | null;
     try {
@@ -97,30 +125,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setReconnectError('Could not read secure storage. Please retry.');
       setIsLoading(false);
-      return;
+      return null;
     }
     if (!token) {
       setIsLoading(false);
-      return;
+      return null;
     }
 
     try {
       const payload = await api.get<SessionPayload>('/auth/me');
-      if (generation !== sessionGeneration.current || token !== getStoredToken()) return;
+      if (generation !== sessionGeneration.current || token !== getStoredToken()) return undefined;
       setReconnectError(null);
-      setSession(normalizeSessionPayload(payload));
+      const normalized = normalizeSessionPayload(payload);
+      // A session refresh can be the only signal that manager scope was
+      // revoked mid-session (no push/poll tells us otherwise — see
+      // HomeScreen.tsx's pull-to-refresh comment). Read sessionRef.current —
+      // not the `session` captured in this closure, which can be arbitrarily
+      // stale by the time this await resolves, and not a functional
+      // setSession updater, which must stay pure — as ordinary, synchronous
+      // code immediately before committing, so the side effect runs exactly
+      // once, outside any React-managed function React could re-invoke.
+      if (managerScopeWasRevoked(sessionRef.current, normalized)) {
+        queryClient.removeQueries({ queryKey: MANAGER_DASHBOARD_QUERY_KEY });
+      }
+      commitSession(normalized);
+      return normalized;
     } catch (error) {
-      if (generation !== sessionGeneration.current || token !== getStoredToken()) return;
+      if (generation !== sessionGeneration.current || token !== getStoredToken()) return undefined;
       if (error instanceof ApiError && error.status !== 401) {
         // Network/server issue: keep the token, let the user retry rather than silently signing them out.
         setReconnectError(error.message || 'Could not reach the server. Check your connection and try again.');
+        return undefined;
       } else {
         clearSession();
+        return null;
       }
     } finally {
       setIsLoading(false);
     }
-  }, [clearSession]);
+  }, [clearSession, commitSession]);
 
   useEffect(() => {
     // Bootstrap awaits secure storage and HTTP before updating session state.
@@ -133,8 +176,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => onSessionChange(() => {
     sessionGeneration.current += 1;
-    setSession(null);
-  }), []);
+    commitSession(null);
+  }), [commitSession]);
 
   const login = useCallback(async (email: string, password: string) => {
     clearSession();
@@ -151,8 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const savingGeneration = sessionGeneration.current;
     await saving;
     if (savingGeneration !== sessionGeneration.current || getStoredToken() !== payload.token) throw new ApiError('Sign-in was cancelled. Please retry.', 401);
-    setSession(normalizeSessionPayload(payload));
-  }, [clearSession]);
+    commitSession(normalizeSessionPayload(payload));
+  }, [clearSession, commitSession]);
 
   const logout = useCallback(async () => {
     const token = getStoredToken();

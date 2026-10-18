@@ -74,6 +74,20 @@ changes" line in that file's own revision note — the two documents are not in 
 the scope was deliberately widened by explicit instruction. Nothing in 10-12 is
 implemented; they are proposals awaiting approval, same as this spec was before Revision 3.
 
+**Revision 5 — four review corrections applied to the Home Experience audit.** (1) The
+proposed Home structure now places the employee's own Pending Actions card ahead of the
+manager's Team-at-a-glance card, not the reverse — an urgent personal task always outranks
+a team summary, even on a manager's own Home. (2) `leave_approval`'s meaning is now
+confirmed directly from source (`DashboardService.php:864-868`: "your own leave request is
+awaiting approval," self-scoped) — the earlier "needs verification" hedge is resolved. (3)
+Manager Approvals is split out of the initial manager-dashboard implementation into its
+own, later, separately-gated phase (new Phase C in
+[12](12-home-expansion-plan.md)), pending direct verification of its authorization
+behavior and API shape from a mobile context — only the read-only Team-at-a-glance card
+remains in the initial Phase B. (4) An explicit actionable-vs-informational taxonomy was
+added to [10](10-home-experience-audit.md) and threaded through
+[11](11-home-information-architecture.md)'s ordering decisions, rather than left implicit.
+
 This directory is a planning document, not code. Nothing in `client/`, `mobile/`, `website/`,
 or `server/` has been changed to produce it, and nothing should be changed on the strength
 of it alone — per the brief that commissioned it: *"Do not modify application UI code, change

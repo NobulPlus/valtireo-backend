@@ -16,6 +16,15 @@ function load(relative, stubs, globals = {}) {
   return exports;
 }
 
+// A plain object/array literal returned by a vm.runInNewContext()-loaded module has a
+// DIFFERENT Object/Array prototype than one constructed in this file's own realm — two
+// JSON-serializable values that look identical still fail `assert.deepEqual` (this file's
+// `assert` is `node:assert/strict`, which aliases `deepEqual` to `deepStrictEqual`, and
+// strict equality cares about that prototype identity). Round-tripping through JSON drops
+// it, since every value compared this way here is already plain data (no functions,
+// undefined, or Dates) — this isn't appropriate for values that aren't.
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
 const query = { useQuery: (config) => config, useMutation: (config) => config, useQueryClient: () => ({ invalidateQueries() {} }) };
 const infinite = { INFINITE_LIST_PAGE_SIZE: 10, useInfiniteList: (key, fetchPage) => ({ fetchPage }) };
 test('saved local profile photos use the phone-reachable API origin', () => {
@@ -187,6 +196,257 @@ test('a native biometric-prompt failure stays on the biometric view; only an acc
   const rejectedByServer = classifyBiometricFailure(new FakeApiError('These credentials do not match our records.', 401), 'Face ID');
   assert.equal(rejectedByServer.fallBackToPasswordForm, true);
   assert.equal(rejectedByServer.message, 'These credentials do not match our records.');
+});
+
+test('pending-action navigation: only complete_profile is actionable, module access gates every destination, unknown keys fail gracefully', () => {
+  const { resolvePendingAction } = load('src/lib/pendingActionNavigation.ts', {});
+  const fullAccess = { leave: true, serviceDesk: true };
+  const noAccess = { leave: false, serviceDesk: false };
+
+  assert.deepEqual(plain(resolvePendingAction('complete_profile', fullAccess)), { tone: 'actionable', destination: { kind: 'profile' } });
+  assert.deepEqual(plain(resolvePendingAction('profile_approval', fullAccess)), { tone: 'informational', destination: { kind: 'profile' } });
+  assert.deepEqual(plain(resolvePendingAction('leave_approval', fullAccess)), { tone: 'informational', destination: { kind: 'leaveTab' } });
+  assert.deepEqual(plain(resolvePendingAction('leave_handover_cover', fullAccess)), { tone: 'informational', destination: { kind: 'leaveTab' } });
+  assert.deepEqual(plain(resolvePendingAction('ticket_pending', fullAccess)), { tone: 'informational', destination: { kind: 'ticketsTab' } });
+
+  // Module access revoked after the action was generated — fail gracefully, no destination.
+  assert.deepEqual(plain(resolvePendingAction('leave_approval', noAccess).destination), { kind: 'none' });
+  assert.deepEqual(plain(resolvePendingAction('ticket_pending', noAccess).destination), { kind: 'none' });
+  // Profile has no module gate — unaffected by access.
+  assert.deepEqual(plain(resolvePendingAction('complete_profile', noAccess).destination), { kind: 'profile' });
+
+  // A key this client doesn't recognize yet — informational, not tappable, never throws.
+  assert.deepEqual(plain(resolvePendingAction('future_unknown_key', fullAccess)), { tone: 'informational', destination: { kind: 'none' } });
+});
+
+test('"Needs your attention" heading only appears when something in the list actually is', () => {
+  const { selectPendingActionsHeading } = load('src/lib/pendingActionNavigation.ts', {});
+  // complete_profile present — genuinely something to act on.
+  assert.equal(selectPendingActionsHeading(['actionable', 'informational', 'informational']), 'Needs your attention');
+  // Every item is just a status (e.g. leave_approval, ticket_pending, ...) — must not
+  // be framed as something requiring intervention.
+  assert.equal(selectPendingActionsHeading(['informational', 'informational']), 'Updates');
+  assert.equal(selectPendingActionsHeading(['informational']), 'Updates');
+  assert.equal(selectPendingActionsHeading([]), 'Updates');
+});
+
+test('manager eligibility is has_manager_scope alone — nothing else substitutes, and it tracks a mid-session permission change', () => {
+  const { isEligibleForManagerHome } = load('src/lib/managerEligibility.ts', {});
+
+  assert.equal(isEligibleForManagerHome({ has_manager_scope: true }), true);
+  assert.equal(isEligibleForManagerHome({ has_manager_scope: false }), false);
+  assert.equal(isEligibleForManagerHome(null), false);
+  assert.equal(isEligibleForManagerHome(undefined), false);
+
+  // A session with manager-sounding extra fields (designation, department, even an
+  // HR/service-desk permission) must NOT make this true on its own — only the one
+  // field does. Plain JS objects are fine here; the function only reads has_manager_scope.
+  assert.equal(
+    isEligibleForManagerHome({ has_manager_scope: false, designation: 'Engineering Manager', department: 'Engineering', service_desk_view: true, is_hr_admin: true }),
+    false,
+  );
+  assert.equal(
+    isEligibleForManagerHome({ has_manager_scope: true, designation: 'Individual Contributor' }),
+    true,
+  );
+
+  // A mid-session permission change (e.g. after pulling to refresh re-fetches the
+  // session) — the function is pure and re-derives fresh each call, no hidden caching.
+  let session = { has_manager_scope: true };
+  assert.equal(isEligibleForManagerHome(session), true);
+  session = { has_manager_scope: false }; // permission revoked, session re-fetched
+  assert.equal(isEligibleForManagerHome(session), false);
+});
+
+test('team scope label describes exactly what the backend resolved, with a safe fallback', () => {
+  const { describeTeamScope } = load('src/lib/managerTeamSummary.ts', {});
+  assert.equal(describeTeamScope({ type: 'department', department: { id: 1, code: 'ENG', name: 'Engineering' } }), 'Engineering department');
+  assert.equal(describeTeamScope({ type: 'cluster', cluster: { id: 2, code: 'WEST', name: 'West Region' } }), 'West Region cluster');
+  assert.equal(describeTeamScope({ type: 'direct_reports' }), 'Your direct reports');
+  // Malformed combinations (claims department scope but the department object is
+  // missing) fall back safely rather than rendering "undefined department".
+  assert.equal(describeTeamScope({ type: 'department' }), 'Your direct reports');
+  assert.equal(describeTeamScope(null), 'Your team');
+  assert.equal(describeTeamScope(undefined), 'Your team');
+});
+
+test('manager team summary only surfaces current-state counts, defaults missing fields to 0, and never reads the all-time attendance/leave totals', () => {
+  const { selectManagerTeamSummary } = load('src/lib/managerTeamSummary.ts', {});
+
+  const full = {
+    scope: { type: 'department', department: { id: 1, code: 'ENG', name: 'Engineering' } },
+    employees: { total: 12, active: 10, draft: 1, invited: 1, onboarding: 0, suspended: 0, exited: 0 },
+    team_health: { profiles_pending: 2, profiles_submitted: 1, profiles_approved: 7, incomplete_profiles: 3 },
+    leave: { available: true, pending_requests: 4, approved_requests: 50, rejected_requests: 2, days_pending: 6, days_approved: 120 },
+    attendance: { available: true, present: 900, late: 40, absent: 12, corrections_pending: 1, duration_minutes: 50000 },
+  };
+  const summary = plain(selectManagerTeamSummary(full));
+  assert.deepEqual(summary, { scopeLabel: 'Engineering department', teamSize: 10, leavePending: 4, correctionsPending: 1, incompleteProfiles: 3 });
+  // `active`, not `total` — total includes exited/draft employees, not meaningfully "the team".
+  assert.notEqual(summary.teamSize, full.employees.total);
+  // The all-time cumulative fields (present/late/absent/approved_requests/days_*) are
+  // genuinely not read anywhere in the mapping — confirmed by the output object's own
+  // keys, not just by inspection of the source.
+  assert.deepEqual(Object.keys(summary).sort(), ['correctionsPending', 'incompleteProfiles', 'leavePending', 'scopeLabel', 'teamSize']);
+
+  // A genuinely empty team (a newly-promoted manager with no reports yet) — real
+  // zeros, not an error, not hidden.
+  const empty = {
+    scope: { type: 'direct_reports' },
+    employees: { total: 0, active: 0, draft: 0, invited: 0, onboarding: 0, suspended: 0, exited: 0 },
+    team_health: { profiles_pending: 0, profiles_submitted: 0, profiles_approved: 0, incomplete_profiles: 0 },
+    leave: { available: true, pending_requests: 0, approved_requests: 0, rejected_requests: 0, days_pending: 0, days_approved: 0 },
+    attendance: { available: true, present: 0, late: 0, absent: 0, corrections_pending: 0, duration_minutes: 0 },
+  };
+  assert.deepEqual(plain(selectManagerTeamSummary(empty)), { scopeLabel: 'Your direct reports', teamSize: 0, leavePending: 0, correctionsPending: 0, incompleteProfiles: 0 });
+
+  // Missing/optional sub-objects (a real response surprising the client) default to 0
+  // rather than throwing.
+  const partial = { scope: { type: 'direct_reports' } };
+  assert.deepEqual(plain(selectManagerTeamSummary(partial)), { scopeLabel: 'Your direct reports', teamSize: 0, leavePending: 0, correctionsPending: 0, incompleteProfiles: 0 });
+});
+
+test('manager scope revocation is detected only on a true-to-false transition, so the cached manager dashboard is purged exactly then — not on grant, not when nothing changed, not on a session that never existed', () => {
+  const { managerScopeWasRevoked } = load('src/lib/managerEligibility.ts', {});
+
+  // Retained: still a manager both before and after — no purge.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: true }, { has_manager_scope: true }), false);
+  // Revoked: the one case that must purge.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: true }, { has_manager_scope: false }), true);
+  // Newly granted: no purge — there was nothing of this user's to purge, and
+  // this is a grant, not a revocation.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: false }, { has_manager_scope: true }), false);
+  // Steady state, never a manager: no purge.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: false }, { has_manager_scope: false }), false);
+  // No previous session at all (first bootstrap after app launch) — nothing
+  // stale could exist yet, so no purge, regardless of the new value.
+  assert.equal(managerScopeWasRevoked(null, { has_manager_scope: false }), false);
+  assert.equal(managerScopeWasRevoked(undefined, { has_manager_scope: true }), false);
+  // Logout/invalidated session as the NEXT value also counts as revoked —
+  // `next: null` means "no session," certainly not manager-eligible. In
+  // practice bootstrap's success branch never passes null for `next` (a full
+  // logout instead goes through clearSession's own queryClient.clear()); this
+  // only confirms the function stays correct, not merely non-crashing, if it
+  // were ever reached that way.
+  assert.equal(managerScopeWasRevoked({ has_manager_scope: true }, null), true);
+
+  // Structural guard, not just a behavioral one: this module must stay a pure
+  // decision function with no side effects of its own (the queryClient.
+  // removeQueries() call lives in AuthContext.tsx's bootstrap(), triggered BY
+  // this function's result, never inside it). load() with an EMPTY stubs
+  // object throws on any require() the module attempts — so this file
+  // loading at all with `{}` is itself proof it imports nothing (no
+  // queryClient, no React) that could reintroduce a side effect here.
+  assert.doesNotThrow(() => load('src/lib/managerEligibility.ts', {}));
+});
+
+test('manager dashboard refetch after pull-to-refresh is gated on the FRESH session only, and fails CLOSED — never falls back to a stale pre-refresh belief — when fresh authorization cannot be confirmed', () => {
+  const { shouldRefetchManagerDashboard } = load('src/lib/managerEligibility.ts', {});
+
+  // Successful refresh, manager access confirmed: refetch.
+  assert.equal(shouldRefetchManagerDashboard({ has_manager_scope: true }), true);
+  // Successful refresh, access confirmed revoked: never refetch (this is the
+  // exact race the review flagged — refetching here would be an unnecessary,
+  // doomed-to-403 request against data the user is no longer authorized for).
+  assert.equal(shouldRefetchManagerDashboard({ has_manager_scope: false }), false);
+
+  // Session invalidation / logout (`null`): never refetch. A real, confirmed
+  // answer, not an unknown.
+  assert.equal(shouldRefetchManagerDashboard(null), false);
+
+  // Temporary network/server failure during the refresh itself (`undefined`):
+  // never refetch, EVEN THOUGH the caller may have every reason to believe it
+  // was a manager a moment ago. A failed refresh is not evidence that access
+  // is still fine — it is the absence of evidence either way, and this must
+  // not be confused with confirmed access. The previous signature took a
+  // second "fallback eligibility" argument for exactly this case and used it
+  // to decide `true`; that was the unsafe behavior this test now locks out.
+  assert.equal(shouldRefetchManagerDashboard(undefined), false);
+
+  // A refresh superseded by a newer session transition before it resolved
+  // also surfaces as `undefined` (bootstrap()'s generation guard returns it
+  // for exactly this case) — same reasoning, same answer: nothing new was
+  // confirmed, so don't act as though something was.
+  assert.equal(shouldRefetchManagerDashboard(undefined), false);
+});
+
+test('notification deep-linking: the explicit allowlist covers every real backend action_url, rejects unauthorized/malformed/unsupported combinations', () => {
+  const { resolveNotificationDestination } = load('src/lib/notificationNavigation.ts', {});
+  const fullAccess = { leave: true, serviceDesk: true, employeeSelfService: true };
+  const noAccess = { leave: false, serviceDesk: false, employeeSelfService: false };
+
+  // Supported: a ticket notification whose entity_id agrees with the id embedded in action_url.
+  assert.deepEqual(
+    plain(resolveNotificationDestination({ entity_type: 'ticket', entity_id: 42, action_url: '/service-desk?ticket=42' }, fullAccess)),
+    { kind: 'ticketDetail', ticketId: 42 },
+  );
+  // Malformed: entity_id disagrees with the URL's id — don't guess, fall back to the list.
+  assert.deepEqual(
+    plain(resolveNotificationDestination({ entity_type: 'ticket', entity_id: 7, action_url: '/service-desk?ticket=42' }, fullAccess)),
+    { kind: 'ticketsTab' },
+  );
+  // Supported: the "comment by someone else" ticket notification shape (/me/tickets, no id).
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'ticket', entity_id: null, action_url: '/me/tickets' }, fullAccess)), { kind: 'ticketsTab' });
+  // Unauthorized: same valid ticket shape, but the module was disabled since the notification was sent.
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'ticket', entity_id: 42, action_url: '/service-desk?ticket=42' }, noAccess)), { kind: 'unsupported' });
+
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'leave_request', entity_id: 9, action_url: '/me/leave' }, fullAccess)), { kind: 'leaveTab' });
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'leave_request', entity_id: 9, action_url: '/me/leave' }, noAccess)), { kind: 'unsupported' });
+
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'company_event', entity_id: null, action_url: '/calendar' }, noAccess)), { kind: 'moreScreen', screen: 'Calendar' });
+
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'employee_document', entity_id: 3, action_url: '/me/profile?tab=documents' }, fullAccess)), { kind: 'moreScreen', screen: 'Documents' });
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'employee_appreciation', entity_id: 5, action_url: '/me/lifestyle' }, fullAccess)), { kind: 'moreScreen', screen: 'Lifestyle' });
+
+  // approval_request is self-facing here (decidedActionFor's two employee-subject branches) — routes to Leave or Documents, same as the dedicated entity types above.
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'approval_request', entity_id: 11, action_url: '/me/leave' }, fullAccess)), { kind: 'leaveTab' });
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'approval_request', entity_id: 11, action_url: '/me/profile?tab=documents' }, fullAccess)), { kind: 'moreScreen', screen: 'Documents' });
+  // The reviewer-facing approval_request shape — no manager-approval screen exists on mobile (Phase C, explicitly out of scope) — unsupported, not a crash or a guess.
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'approval_request', entity_id: 11, action_url: '/approvals/11' }, fullAccess)), { kind: 'unsupported' });
+
+  // Admin/HR-facing entity types with no employee-mobile screen at all.
+  for (const entityType of ['organization', 'employee_invitation', 'employee']) {
+    assert.deepEqual(plain(resolveNotificationDestination({ entity_type: entityType, entity_id: 1, action_url: '/anything' }, fullAccess)), { kind: 'unsupported' });
+  }
+  // Unrecognized entity_type, missing fields, and a ticket-shaped entity_type with a URL that doesn't match the known pattern.
+  assert.deepEqual(plain(resolveNotificationDestination({}, fullAccess)), { kind: 'unsupported' });
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'ticket', entity_id: 1, action_url: '/something-else' }, fullAccess)), { kind: 'unsupported' });
+});
+
+test('Lifestyle Home card: feature flags gate content, an empty/disabled result never renders, counts are honest about being capped', () => {
+  const { selectLifestyleHomeSummary } = load('src/lib/lifestyleHomeSummary.ts', {});
+  const today = new Date('2026-10-20T12:00:00');
+  const milestones = [{ employee: { name: 'Amara' }, type: 'birthday', date: '2026-10-23' }];
+
+  // Both features off — never visible even though data is present, and no request should have been needed to know that (the screen is expected to gate the queries themselves on these same flags).
+  assert.equal(selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: false, milestones, receivedAppreciationCount: 5, receivedAppreciationCapped: false, today }).visible, false);
+
+  // Milestones only.
+  const milestonesOnly = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: false, milestones, receivedAppreciationCount: 5, receivedAppreciationCapped: false, today });
+  assert.equal(milestonesOnly.visible, true);
+  assert.equal(milestonesOnly.milestoneLabel, "Amara's birthday is in 3 days");
+  assert.equal(milestonesOnly.appreciationLabel, null); // feature disabled — never shown even though a count was supplied.
+
+  // Appreciation only, exact count (not capped). "received", not "new" — the
+  // received-appreciation query has no read/unread concept, so the label must not
+  // imply one.
+  const appreciationOnly = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 2, receivedAppreciationCapped: false, today });
+  assert.equal(appreciationOnly.milestoneLabel, null);
+  assert.equal(appreciationOnly.appreciationLabel, '2 appreciations received');
+
+  // Capped count is honest ("N+"), singular wording only when both exact and 1.
+  const capped = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 10, receivedAppreciationCapped: true, today });
+  assert.equal(capped.appreciationLabel, '10+ appreciations received');
+  const exactlyOne = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 1, receivedAppreciationCapped: false, today });
+  assert.equal(exactlyOne.appreciationLabel, '1 appreciation received');
+
+  // Nothing to show at all — the card must not render an empty shell.
+  const nothing = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: true, milestones: [], receivedAppreciationCount: 0, receivedAppreciationCapped: false, today });
+  assert.equal(nothing.visible, false);
+
+  // "today" and "tomorrow" wording, and an anniversary's year count.
+  const todayMilestone = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: false, milestones: [{ employee: { name: 'Jordan' }, type: 'anniversary', date: '2026-10-20', years_of_service: 4 }], receivedAppreciationCount: 0, receivedAppreciationCapped: false, today });
+  assert.equal(todayMilestone.milestoneLabel, "Jordan's 4-year work anniversary is today");
 });
 
 test('overnight correction dates survive timezone and year boundaries; invalid times fail', () => {

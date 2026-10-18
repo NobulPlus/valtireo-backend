@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ConnectMeeting;
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 class ConnectMediaService
@@ -11,6 +12,7 @@ class ConnectMediaService
     public function ready(): bool
     {
         $url = (string) config('connect.url');
+
         return (bool) preg_match('#^wss?://[^/]+/?$#', $url)
             && filled(config('connect.api_key')) && filled(config('connect.api_secret'));
     }
@@ -24,6 +26,7 @@ class ConnectMediaService
             'iss' => config('connect.api_key'), 'nbf' => now()->timestamp - 5,
             'iat' => now()->timestamp, 'exp' => now()->timestamp + 60, ...$claims,
         ], JSON_THROW_ON_ERROR));
+
         return $header.'.'.$body.'.'.$encode(hash_hmac('sha256', $header.'.'.$body, config('connect.api_secret'), true));
     }
 
@@ -46,16 +49,28 @@ class ConnectMediaService
         $this->request('DeleteRoom', ['room' => $meeting->roomName()], ['roomCreate' => true], true);
     }
 
-    private function request(string $method, array $body, array $grant, bool $allowMissing = false): void
+    public function participants(ConnectMeeting $meeting): array
+    {
+        return $this->request('ListParticipants', ['room' => $meeting->roomName()], ['roomAdmin' => true, 'room' => $meeting->roomName()], true)['participants'] ?? [];
+    }
+
+    public function removeParticipant(ConnectMeeting $meeting, string $identity): void
+    {
+        $this->request('RemoveParticipant', ['room' => $meeting->roomName(), 'identity' => $identity], ['roomAdmin' => true, 'room' => $meeting->roomName()], true);
+    }
+
+    private function request(string $method, array $body, array $grant, bool $allowMissing = false): array
     {
         $token = $this->token(['video' => $grant]);
         $url = preg_replace('#^ws#', 'http', rtrim(config('connect.url'), '/'));
         try {
             $response = Http::withToken($token)->acceptJson()->timeout(10)->connectTimeout(5)
                 ->post($url.'/twirp/livekit.RoomService/'.$method, $body);
-        } catch (\Illuminate\Http\Client\ConnectionException) {
+        } catch (ConnectionException) {
             abort(503, 'The meeting service is unreachable. Please retry.');
         }
         abort_unless($response->successful() || ($allowMissing && $response->status() === 404 && $response->json('code') === 'not_found'), 503, 'The meeting service could not complete this action. Please retry.');
+
+        return $response->successful() ? ($response->json() ?? []) : [];
     }
 }

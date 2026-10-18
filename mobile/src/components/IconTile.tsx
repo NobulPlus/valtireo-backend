@@ -9,14 +9,16 @@ interface IconTileProps {
   bg: string;
   iconColor: string;
   onPress: () => void;
+  /** Overrides the tile's share of the row (default: `'31%'`, i.e. three per row — unchanged for every existing caller). Home's Quick Access grid passes a narrower value to fit four per row without affecting More menu's own grid. */
+  widthPercent?: `${number}%`;
 }
 
 /** A colored icon chip over a label — the Home dashboard's and More menu's shared navigation unit, so every module reads the same way wherever it appears. */
-export function IconTile({ icon, label, bg, iconColor, onPress }: IconTileProps) {
+export function IconTile({ icon, label, bg, iconColor, onPress, widthPercent }: IconTileProps) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors, typography), [colors, typography]);
   return (
-    <Pressable style={styles.tile} onPress={onPress}>
+    <Pressable style={[styles.tile, widthPercent ? { width: widthPercent } : undefined]} onPress={onPress}>
       <View style={[styles.iconWrap, shadow.tile, { backgroundColor: bg }]}>
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>

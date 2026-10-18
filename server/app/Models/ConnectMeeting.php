@@ -13,6 +13,8 @@ class ConnectMeeting extends Model
 
     protected $guarded = ['id'];
 
+    protected $attributes = ['status' => 'scheduled'];
+
     protected function casts(): array
     {
         return array_fill_keys(['starts_at', 'ends_at', 'started_at', 'ended_at', 'room_closed_at'], 'immutable_datetime');
@@ -21,6 +23,11 @@ class ConnectMeeting extends Model
     public function host(): BelongsTo
     {
         return $this->belongsTo(User::class, 'host_user_id');
+    }
+
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
     }
 
     public function members(): BelongsToMany

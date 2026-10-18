@@ -8,10 +8,11 @@ authorized by this document.
 
 ### Phase A — Employee IA fixes (near-zero backend risk; all data already flows)
 
-1. Make pending-action items tappable, deep-linked per `action.key` — **first verify
-   `leave_approval`'s exact semantic** directly against
-   `DashboardService::pendingActions()` (`server/app/Services/DashboardService.php:846-890`)
-   before wiring that one key; the other four keys' destinations are already unambiguous.
+1. Make pending-action items tappable, deep-linked per `action.key`. **Revised this
+   pass**: `leave_approval`'s semantic is now confirmed directly from source
+   (`DashboardService.php:864-868` — "your own leave request is awaiting approval," a
+   self-scoped signal) — the earlier "verify before wiring" caveat is resolved; all five
+   keys' destinations (Profile ×2, Leave ×2, Tickets tab) are unambiguous and ready to wire.
 2. Wire notification `action_url`/`entity_type`/`entity_id` into real navigation — build the
    web-path-to-mobile-stack mapping as an isolated, pure, unit-testable function (same
    pattern as `mobile/src/lib/biometricErrorPresentation.ts` from this session's Login
@@ -22,38 +23,66 @@ authorized by this document.
 
 **Regression checkpoint after Phase A**: every existing Home card still renders
 identically for an account with no manager scope and no lifestyle features enabled (both
-flags off) — the two new interactive behaviors (deep-links) must not alter any card's
+flags off) — the new interactive behaviors (deep-links) must not alter any card's
 appearance when not tapped.
 
-### Phase B — Manager IA (ported from an existing, proven web pattern)
+### Phase B — Manager IA: Team at a glance only
+
+**Revised this pass**: Approvals is removed from this phase entirely (see Phase C below) —
+Phase B now ships only the informational team-summary card, per
+[11](11-home-information-architecture.md)'s Manager IA correction.
 
 5. Build `useManagerDashboard` on mobile, calling the existing `GET /dashboard/manager`
    endpoint (same contract the web app already consumes via
    `client/src/features/dashboard/api.ts:39-44`) — no backend change.
-6. Add the "Team at a glance" card, gated strictly on `has_manager_scope`, no department
+6. Add the "Team at a glance" card, gated strictly on `has_manager_scope`, positioned
+   **after** the Pending Actions card (per [11](11-home-information-architecture.md)'s
+   corrected ordering — never above a manager's own urgent personal items), no department
    picker in this version.
-7. Add the approvals teaser/count, accepting the non-ideal `GET /approvals?status=pending`
-   list-fetch cost for v1 (see [11](11-home-information-architecture.md)).
 
 **Regression checkpoint after Phase B**: an account WITHOUT `has_manager_scope` sees
 *zero* layout difference from Phase A's end state — no reserved blank space, no flash of
 a loading card that then disappears. An account WITH `has_manager_scope` but zero direct
 reports sees the card simply not render (same "conditional card" pattern the codebase
-already uses everywhere else), not a zeroed-out card.
+already uses everywhere else), not a zeroed-out card. An account WITH `has_manager_scope`
+and a pending action of their own sees that pending-actions card above the new Team at a
+glance card, not below it.
 
-### Phase C — Backend work, explicitly out of this proposal's authorization
+### Phase C — Manager approvals (actionable; gated on verification, not yet authorized)
+
+**New phase, split out of what was previously bundled into Phase B.** Approvals is an
+*actionable* feature (per [10](10-home-experience-audit.md)'s taxonomy) that would let a
+manager take a real, consequential action (approve/reject/request changes) from mobile for
+the first time — this warrants its own verification step before any implementation, not
+inclusion alongside Phase B's read-only card. Not authorized by this document; listed so it
+is tracked as the clear next step after Phase B, not lost.
+
+7. **Verify first, before writing any mobile code**: exercise
+   `GET /approvals?status=pending` from a real manager account against a real workflow
+   configuration and confirm (a) `ApprovalRequestService::ensureActorCanApproveStep()`'s
+   `direct_manager`/`department_head` branches behave as read for the organization's actual
+   workflow setups, not just in the abstract; (b) the response shape/pagination is usable
+   for a lightweight mobile teaser without over-fetching (see the security test plan's
+   data-minimization note below); (c) `POST /approvals/{id}/actions` behaves correctly when
+   called from a context that isn't the web admin UI it was originally built for.
+8. Only once 7 passes: build the approvals teaser/count and, separately, any in-app
+   approve/reject action — these may warrant being split into their own sub-phases once the
+   verification above is done, rather than assumed to ship together.
+
+### Phase D — Backend work, explicitly out of this proposal's authorization
 
 These require new backend development and are **not** authorized by this document — listed
 here only so they're tracked as known follow-ups if the business decides to pursue them
 later, each needing its own separate approval:
 
-8. Manager-scoped ticket visibility, if a genuine "my team's tickets" (not
+9. Manager-scoped ticket visibility, if a genuine "my team's tickets" (not
    "my agent queue") concept is wanted.
-9. Manager-scoped payroll/assets summaries (confirmed absent today, per
-   [10](10-home-experience-audit.md) item 9).
-10. A dedicated lightweight "pending approvals count" endpoint, to replace Phase B's
-    list-fetch workaround.
-11. A combined lifestyle-summary endpoint (optional performance nice-to-have; Phase A's
+10. Manager-scoped payroll/assets summaries (confirmed absent today, per
+    [10](10-home-experience-audit.md) item 9).
+11. A dedicated lightweight "pending approvals count" endpoint, to reduce Phase C's
+    reliance on a full list-fetch for a teaser — worth sequencing ahead of Phase C's mobile
+    work if backend capacity allows, though not a blocking dependency.
+12. A combined lifestyle-summary endpoint (optional performance nice-to-have; Phase A's
     two-call client-side aggregation is acceptable at current scale per the backend
     research).
 
@@ -130,16 +159,19 @@ a screen every employee sees the chrome of):
    tenancy middleware, per audit `01`'s architecture findings — this test simply confirms
    the new mobile consumer doesn't somehow bypass it, e.g. via a cached cross-account
    token).
-5. **Approvals-teaser data minimization.** The light list-fetch for the approvals count
-   (Phase B, item 7) should request the minimum fields needed for a count/teaser, not the
-   full `ApprovalRequest` resource with its nested subject/workflow detail, to avoid
-   over-fetching sensitive request content (e.g. leave reason text) onto a summary card
-   that only needs a number.
+5. **Approvals-teaser data minimization** (applies to Phase C, once authorized — not
+   Phase B). The light list-fetch for the approvals count should request the minimum
+   fields needed for a count/teaser, not the full `ApprovalRequest` resource with its
+   nested subject/workflow detail, to avoid over-fetching sensitive request content (e.g.
+   leave reason text) onto a summary card that only needs a number. This is exactly the
+   kind of API-behavior question Phase C's verification step (item 7) exists to answer
+   before any mobile code is written.
 
 ## What this file still does not do
 
-- It does not authorize Phase A, B, or C to begin — all three remain proposals pending
-  approval.
+- It does not authorize Phase A, B, C, or D to begin — all four remain proposals pending
+  approval, with Phase C additionally gated on its own verification step before any
+  mobile code is written, independent of whether Phase A/B are approved.
 - It does not modify `06-accessibility-and-responsive-requirements.md` itself (this file
   extends it by reference, not by edit, to avoid two documents claiming the same content).
 - It does not touch any application code, Login, Home, backend APIs, or any other mobile
