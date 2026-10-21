@@ -154,7 +154,7 @@ class DefaultRoleSeedingService
                 'permissions' => [
                     'organizations.view', 'workspace_settings.view', 'organization_locations.view',
                     'departments.view', 'units.view', 'designations.view', 'grade_levels.view', 'employment_types.view',
-                    'employees.view', 'employees.view_team', 'employees.view_department',
+                    'employees.view', 'employees.view_team', 'employees.view_department', 'employees.manage_team',
                     'employee_documents.view',
                     'approvals.view', 'approvals.action',
                     'leave_requests.view', 'leave_requests.approve',
@@ -169,7 +169,7 @@ class DefaultRoleSeedingService
                 'permissions' => [
                     'organizations.view', 'workspace_settings.view', 'organization_locations.view',
                     'departments.view', 'units.view', 'designations.view', 'grade_levels.view', 'employment_types.view',
-                    'employees.view', 'employees.view_team',
+                    'employees.view', 'employees.view_team', 'employees.manage_team',
                     'approvals.view', 'approvals.action',
                     'leave_requests.view', 'leave_requests.approve',
                     'attendance.view', 'attendance.correct',

@@ -151,6 +151,90 @@ class AuthenticationTest extends TestCase
             ->assertJsonPath('has_manager_scope', true);
     }
 
+    public function test_session_has_manager_scope_true_for_department_head(): void
+    {
+        // Phase 2A: has_manager_scope now checks employees.manage_team, not
+        // employees.view_team — this proves Department Head's own default
+        // grant of the new permission still resolves correctly, not just
+        // Supervisor's (the only role the pre-existing test above covered).
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $deptHeadUser = User::factory()->create(['organization_id' => $admin->organization_id]);
+        $this->setPermissionsTeamId($admin->organization_id);
+        $deptHeadUser->assignRole('Department Head');
+        $head = Employee::factory()->create([
+            'organization_id' => $admin->organization_id,
+            'department_id' => \App\Models\Department::where('organization_id', $admin->organization_id)->value('id'),
+            'user_id' => $deptHeadUser->id,
+            'status' => 'active',
+        ]);
+        $head->department->update(['head_employee_id' => $head->id]);
+
+        Sanctum::actingAs($deptHeadUser);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('has_manager_scope', true);
+    }
+
+    /**
+     * Phase 2A's core correction: HR Director, HR Officer, and Compliance
+     * Officer each hold broad employee-viewing permissions
+     * (employees.view_all / employees.view_team / employees.view_department)
+     * for their own HR/compliance purposes, but none of those are
+     * employees.manage_team — holding them was never evidence of actually
+     * managing people, so none of these three qualify for Manager Home.
+     */
+    public function test_session_has_manager_scope_false_for_hr_director_despite_broad_employee_visibility(): void
+    {
+        $this->seed();
+
+        $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($hrDirector->organization_id);
+        $this->assertTrue($hrDirector->can('employees.view_all'));
+        $this->assertTrue($hrDirector->can('employees.view_team'));
+        $this->assertFalse($hrDirector->can('employees.manage_team'));
+
+        Sanctum::actingAs($hrDirector);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('has_manager_scope', false);
+    }
+
+    public function test_session_has_manager_scope_false_for_hr_officer_despite_team_visibility(): void
+    {
+        $this->seed();
+
+        $hrOfficer = User::query()->where('email', 'kelechi.nwosu@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($hrOfficer->organization_id);
+        $this->assertTrue($hrOfficer->can('employees.view_team'));
+        $this->assertFalse($hrOfficer->can('employees.manage_team'));
+
+        Sanctum::actingAs($hrOfficer);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('has_manager_scope', false);
+    }
+
+    public function test_session_has_manager_scope_false_for_compliance_officer_despite_organization_wide_employee_visibility(): void
+    {
+        $this->seed();
+
+        $complianceOfficer = User::query()->where('email', 'fatima.yusuf@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($complianceOfficer->organization_id);
+        $this->assertTrue($complianceOfficer->can('employees.view_all'));
+        $this->assertFalse($complianceOfficer->can('employees.manage_team'));
+
+        Sanctum::actingAs($complianceOfficer);
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('has_manager_scope', false);
+    }
+
     public function test_forgot_password_emails_a_code_for_a_known_account(): void
     {
         Notification::fake();

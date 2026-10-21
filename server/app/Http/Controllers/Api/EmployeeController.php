@@ -353,7 +353,7 @@ class EmployeeController extends Controller
                 $roleAssignment->updateAssignedRole($request->user(), $employee, $employee->user, $pendingRoleId);
             } elseif ($pendingRoleId !== null) {
                 $role = Role::query()->where('organization_id', $organizationId)->findOrFail($pendingRoleId);
-                $roleAssignment->assertCanAssign($request->user(), $role);
+                $roleAssignment->assertCanSelectRole($request->user(), $role);
                 $employee->update(['pending_role_id' => $pendingRoleId]);
             } else {
                 // Reset: clear any staged custom selection — the employee

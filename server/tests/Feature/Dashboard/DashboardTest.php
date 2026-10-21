@@ -6,11 +6,18 @@ use App\Models\ApprovalRequest;
 use App\Models\AttendanceRecord;
 use App\Models\Cluster;
 use App\Models\Department;
+use App\Models\Designation;
 use App\Models\Employee;
+use App\Models\EmploymentType;
+use App\Models\GradeLevel;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\Organization;
 use App\Models\OrganizationLocation;
+use App\Models\Role;
+use App\Models\Unit;
 use App\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -529,6 +536,132 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertJsonPath('scope.type', 'department')
             ->assertJsonPath('scope.department.code', 'OPS');
+    }
+
+    /**
+     * Phase 2A: holding employees.view_team/view_all/view_department (all
+     * still fully intact for these roles — unchanged by this phase) is NOT
+     * employees.manage_team, and must not grant access to /dashboard/manager,
+     * which — unlike the ordinary employee list — is specifically a
+     * people-MANAGEMENT view, not merely an employee-VISIBILITY one.
+     */
+    public function test_hr_officer_cannot_view_manager_dashboard_despite_team_visibility(): void
+    {
+        $this->seed();
+
+        $hrOfficer = User::query()->where('email', 'kelechi.nwosu@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($hrOfficer->organization_id);
+        $this->assertTrue($hrOfficer->can('employees.view_team'));
+
+        Sanctum::actingAs($hrOfficer);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertForbidden();
+    }
+
+    public function test_compliance_officer_cannot_view_manager_dashboard_despite_organization_wide_employee_visibility(): void
+    {
+        $this->seed();
+
+        $complianceOfficer = User::query()->where('email', 'fatima.yusuf@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($complianceOfficer->organization_id);
+        $this->assertTrue($complianceOfficer->can('employees.view_all'));
+
+        Sanctum::actingAs($complianceOfficer);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertForbidden();
+    }
+
+    /**
+     * Tenant isolation for the manager dashboard, specifically for the new
+     * permission: two freshly created, unrelated organizations each get
+     * their own Department Head (same role key, same permission, entirely
+     * separate Role rows per Organization's own tenant). Each must see only
+     * their own organization's employees — never the other's — proving the
+     * organization-scoped query in DashboardService::manager() stays
+     * correctly bounded regardless of which permission gates entry to it.
+     */
+    public function test_manager_dashboard_scope_never_crosses_into_a_different_organizations_employees(): void
+    {
+        $this->seed(RolePermissionSeeder::class);
+
+        $organizationA = Organization::query()->create([
+            'name' => 'Tenant A', 'code' => 'TENANTA'.uniqid(), 'status' => 'active', 'country' => 'Nigeria', 'settings' => [],
+        ]);
+        $organizationB = Organization::query()->create([
+            'name' => 'Tenant B', 'code' => 'TENANTB'.uniqid(), 'status' => 'active', 'country' => 'Nigeria', 'settings' => [],
+        ]);
+
+        [$headA, $otherA] = $this->seedDepartmentHeadWithReports($organizationA, reportCount: 2);
+        [$headB] = $this->seedDepartmentHeadWithReports($organizationB, reportCount: 5);
+
+        Sanctum::actingAs($headA);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertOk()
+            ->assertJsonPath('employees.total', 3); // the head themself + 2 reports, never B's 6
+
+        Sanctum::actingAs($headB);
+
+        $this->getJson('/api/dashboard/manager')
+            ->assertOk()
+            ->assertJsonPath('employees.total', 6); // the head themself + 5 reports, never A's 3
+    }
+
+    /**
+     * @return array{0: User, 1: array<int, Employee>}
+     */
+    private function seedDepartmentHeadWithReports(Organization $organization, int $reportCount): array
+    {
+        $this->setPermissionsTeamId($organization->id);
+        $role = Role::create(['organization_id' => $organization->id, 'guard_name' => 'web', 'key' => null, 'name' => 'Department Head']);
+        $role->syncPermissions(['employees.manage_team', 'employees.view_department']);
+
+        // Several lookup factories (Unit, EmploymentType, GradeLevel, ...)
+        // draw from a small fake()->unique() pool (as few as 5 values) that
+        // a Faker "unique" tracker never resets mid-process — creating one
+        // shared set per organization and passing it explicitly to every
+        // Employee::factory() call below avoids each employee silently
+        // triggering its own fresh nested factory call, which would
+        // exhaust that pool after only a handful of employees.
+        $unit = Unit::factory()->create(['organization_id' => $organization->id]);
+        $designation = Designation::factory()->create(['organization_id' => $organization->id]);
+        $gradeLevel = GradeLevel::factory()->create(['organization_id' => $organization->id]);
+        $employmentType = EmploymentType::factory()->create(['organization_id' => $organization->id]);
+        $location = OrganizationLocation::factory()->create(['organization_id' => $organization->id]);
+
+        $headUser = User::factory()->create(['organization_id' => $organization->id]);
+        $headUser->syncRoles([$role]);
+        $department = Department::factory()->create(['organization_id' => $organization->id]);
+        $headEmployee = Employee::factory()->create([
+            'organization_id' => $organization->id,
+            'user_id' => $headUser->id,
+            'department_id' => $department->id,
+            'unit_id' => $unit->id,
+            'designation_id' => $designation->id,
+            'grade_level_id' => $gradeLevel->id,
+            'employment_type_id' => $employmentType->id,
+            'organization_location_id' => $location->id,
+            'status' => 'active',
+        ]);
+        $department->update(['head_employee_id' => $headEmployee->id]);
+
+        $reports = [];
+        for ($i = 0; $i < $reportCount; $i++) {
+            $reports[] = Employee::factory()->create([
+                'organization_id' => $organization->id,
+                'department_id' => $department->id,
+                'unit_id' => $unit->id,
+                'designation_id' => $designation->id,
+                'grade_level_id' => $gradeLevel->id,
+                'employment_type_id' => $employmentType->id,
+                'organization_location_id' => $location->id,
+                'status' => 'active',
+            ]);
+        }
+
+        return [$headUser, $reports];
     }
 
     public function test_employee_cannot_view_organization_dashboard(): void

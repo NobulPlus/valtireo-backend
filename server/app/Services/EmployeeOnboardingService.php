@@ -31,7 +31,7 @@ class EmployeeOnboardingService
     {
         if (! empty($data['pending_role_id'])) {
             $role = Role::query()->where('organization_id', $actor->organization_id)->findOrFail($data['pending_role_id']);
-            $this->roleAssignment->assertCanAssign($actor, $role);
+            $this->roleAssignment->assertCanSelectRole($actor, $role);
         }
 
         return DB::transaction(function () use ($actor, $data, $sendInvitation): array {

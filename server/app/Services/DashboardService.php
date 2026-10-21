@@ -96,7 +96,8 @@ class DashboardService
         $filters = $this->filters($request);
         $scope = $this->managerScope($user, $employee, $request);
 
-        $employeeQuery = $this->employeeQuery($organization, $filters);
+        $employeeQuery = $this->employeeQuery($organization, $filters)
+            ->whereIn('employees.id', app(EmployeeVisibility::class)->ids($user));
 
         if ($scope['type'] === 'department') {
             $employeeQuery->where('department_id', $scope['department']['id']);
@@ -161,6 +162,7 @@ class DashboardService
                 'direct_reports' => $employee ? Employee::query()
                     ->with(['department:id,code,name', 'location:id,code,name'])
                     ->where('organization_id', $organization->id)
+                    ->whereIn('employees.id', app(EmployeeVisibility::class)->ids($user))
                     ->where('reporting_manager_id', $employee->id)
                     ->orderBy('first_name')
                     ->limit($filters['recent_limit'])
@@ -733,13 +735,13 @@ class DashboardService
             ];
         }
 
-        $cluster = Cluster::query()
+        $cluster = $user->can('employees.view_team') ? Cluster::query()
             ->where('organization_id', $user->organization_id)
             ->where('is_active', true)
             ->where(fn (Builder $query) => $query
                 ->where('manager_employee_id', $employee->id)
                 ->orWhere('supervisor_employee_id', $employee->id))
-            ->first(['id', 'code', 'name']);
+            ->first(['id', 'code', 'name']) : null;
 
         if ($cluster) {
             return [
@@ -749,7 +751,7 @@ class DashboardService
             ];
         }
 
-        if (Employee::query()->where('reporting_manager_id', $employee->id)->exists()) {
+        if ($user->can('employees.view_team') && Employee::query()->where('organization_id', $user->organization_id)->where('reporting_manager_id', $employee->id)->exists()) {
             return [
                 'type' => 'direct_reports',
                 'manager' => $this->employeeSummary($employee),
@@ -757,23 +759,48 @@ class DashboardService
             ];
         }
 
-        return [
-            'type' => 'direct_reports',
-            'manager' => $this->employeeSummary($employee),
-            'source' => 'no_reports_yet',
-        ];
+        throw new HttpException(403, 'You do not have a department or team dashboard scope.');
     }
 
     /**
      * Role/permission + organizational scope, combined: eligible only if the
-     * user is themselves an employee AND holds team-visibility permission —
-     * neither alone is sufficient (see managerScope()).
+     * user is themselves an employee AND holds structural people-management
+     * authority, the matching visibility permission, and an actual department,
+     * active cluster or direct-report assignment (see managerScope()).
+     *
+     * Deliberately `employees.manage_team`, NOT `employees.view_team`. The
+     * two are different concerns: view_team only gates EmployeeVisibility's
+     * data-SCOPING (which employee rows a query returns) and is held by
+     * HR Director/HR Officer/Compliance Officer purely for HR/compliance
+     * purposes — it says nothing about whether someone is actually anyone's
+     * manager. manage_team is the narrower permission introduced
+     * specifically for this check, granted by default only to Organization
+     * Admin, Department Head, and Supervisor (DefaultRoleSeedingService),
+     * so an HR/Compliance role no longer qualifies for the mobile/web
+     * Manager Home just because it can see team-scoped employee records.
      */
     public function hasManagerScope(User $user, ?Employee $employee = null): bool
     {
-        $employee ??= $user->employee()->first();
+        $employee ??= $user->employee()->where('organization_id', $user->organization_id)->first();
 
-        return $employee !== null && $user->can('employees.view_team');
+        if (! $employee || $employee->organization_id !== $user->organization_id
+            || $employee->user_id !== $user->id || $employee->status !== 'active'
+            || ! $user->can('employees.manage_team')) {
+            return false;
+        }
+
+        if ($user->can('employees.view_department') && Department::query()
+            ->where('organization_id', $user->organization_id)
+            ->whereKey($employee->department_id)->where('head_employee_id', $employee->id)->exists()) {
+            return true;
+        }
+
+        return $user->can('employees.view_team') && (
+            Cluster::query()->where('organization_id', $user->organization_id)->where('is_active', true)
+                ->where(fn (Builder $query) => $query->where('manager_employee_id', $employee->id)->orWhere('supervisor_employee_id', $employee->id))->exists()
+            || Employee::query()->where('organization_id', $user->organization_id)
+                ->where('reporting_manager_id', $employee->id)->exists()
+        );
     }
 
     /**
