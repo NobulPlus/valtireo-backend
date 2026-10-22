@@ -17,6 +17,7 @@ class ApprovalRequestResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            ...app(\App\Services\ApprovalDecisionAuthorizationService::class)->capabilities($request->user(), $this->resource),
             'id' => $this->id,
             'organization_id' => $this->organization_id,
             'approval_workflow_id' => $this->approval_workflow_id,

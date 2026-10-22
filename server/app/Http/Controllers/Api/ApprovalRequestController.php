@@ -49,7 +49,8 @@ class ApprovalRequestController extends Controller
             $request->user(),
             $approvalRequest,
             $request->string('action')->toString(),
-            $request->input('note')
+            $request->input('note'),
+            $request->input('expected_step_order')
         );
 
         return response()->json([

@@ -2156,6 +2156,8 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
   const [note, setNote] = useState('');
   const actMutation = useActOnApprovalRequest(request?.id ?? 0);
   const isPending = request?.status === 'pending';
+  const decisionOptions = DECISION_OPTIONS.filter((option) => !request?.allowed_actions || request.allowed_actions.includes(option.value));
+  const selectedAction = decisionOptions.some((option) => option.value === decisionAction) ? decisionAction : decisionOptions[0]?.value;
 
   useEffect(() => {
     if (request) {
@@ -2189,9 +2191,10 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
   }
 
   async function handleSubmit() {
+    if (!selectedAction) return;
     try {
-      await actMutation.mutateAsync({ action: decisionAction, note: note.trim() || undefined });
-      toast.success('Decision recorded', `The request has been ${decisionAction === 'approve' ? 'approved' : decisionAction === 'reject' ? 'rejected' : 'sent back for changes'}.`);
+      await actMutation.mutateAsync({ action: selectedAction, note: note.trim() || undefined, expected_step_order: request?.current_step_order });
+      toast.success('Decision recorded', `The request has been ${selectedAction === 'approve' ? 'approved' : selectedAction === 'reject' ? 'rejected' : selectedAction === 'cancel' ? 'cancelled' : 'sent back for changes'}.`);
       onClose();
     } catch (error) {
       toast.error('Could not record decision', error instanceof ApiError ? error.message : 'Could not record this decision.');
@@ -2207,7 +2210,7 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
         isPending ? (
           <>
             <ModalCancelAction onClick={onClose} />
-            <ModalSendAction title="Record decision" isLoading={actMutation.isPending} onClick={handleSubmit} />
+            <ModalSendAction title="Record decision" disabled={!selectedAction} isLoading={actMutation.isPending} onClick={handleSubmit} />
           </>
         ) : (
           <ModalCancelAction title="Close" onClick={onClose} />
@@ -2272,12 +2275,13 @@ function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | n
 
           {isPending ? (
             <>
+              {request.action_restrictions?.approve && <p className="text-sm text-muted">{['self_approval_not_allowed', 'payroll_submitter_cannot_approve'].includes(request.action_restrictions.approve) ? 'You cannot approve a request you submitted or a personal request made on your behalf. Another eligible reviewer must approve it.' : 'Approval is unavailable for your account or the current request state.'}</p>}
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-medium text-muted">Decision</span>
                 <SelectMenu
-                  value={decisionAction}
+                  value={selectedAction ?? ''}
                   onChange={(value) => setDecisionAction(value as ApprovalDecisionAction)}
-                  options={DECISION_OPTIONS}
+                  options={decisionOptions}
                 />
               </label>
               <label className="block text-sm">

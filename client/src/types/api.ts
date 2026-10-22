@@ -720,6 +720,8 @@ export interface ApprovalDecision {
 }
 
 export interface ApprovalRequest {
+  allowed_actions?: Array<'approve' | 'reject' | 'request_changes' | 'cancel'>;
+  action_restrictions?: Record<string, string>;
   id: number;
   requester?: { id: number; name: string; email: string } | null;
   subject_employee?: { id: number; employee_number: string; full_name: string; work_email: string } | null;

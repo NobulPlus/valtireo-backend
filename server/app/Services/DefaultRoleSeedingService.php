@@ -85,7 +85,7 @@ class DefaultRoleSeedingService
                     'reports.view', 'audit_logs.view',
                     'operations.view', 'operations.manage', 'operations.configure',
                     'payroll.view', 'payroll.settings.view',
-                    'payroll.compensation.view', 'payroll.runs.view', 'payroll.reports.view',
+                    'payroll.compensation.view', 'payroll.runs.view', 'payroll.runs.approve', 'payroll.reports.view',
                 ],
             ],
             'hr_officer' => [

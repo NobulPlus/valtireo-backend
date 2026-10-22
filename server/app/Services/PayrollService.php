@@ -280,6 +280,11 @@ class PayrollService
         }
 
         DB::transaction(function () use ($actor, $run): void {
+            $run = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
+            abort_unless($actor->fresh()->can('payroll.runs.submit'), 403);
+            if ($run->status !== 'calculated' || $run->items()->where('status', 'exception')->exists()) {
+                throw ValidationException::withMessages(['status' => ['Refresh the run and resolve any exceptions before submitting.']]);
+            }
             $run->update(['status' => 'pending_approval', 'submitted_at' => now()]);
             $this->approvals->submit($actor, $run, 'payroll', 'approve_run', "Approve payroll {$run->reference}", null, [
                 'period_start' => $run->period_start->toDateString(),

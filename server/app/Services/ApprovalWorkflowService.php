@@ -25,6 +25,7 @@ class ApprovalWorkflowService
             ]);
 
             $this->replaceSteps($workflow, $steps);
+            $this->assertPayrollRequiresHumanApproval($workflow);
 
             return $workflow->load('steps.approverRole');
         });
@@ -52,13 +53,20 @@ class ApprovalWorkflowService
                 $this->replaceSteps($workflow, $steps);
             }
 
+            $this->assertPayrollRequiresHumanApproval($workflow);
             return $workflow->refresh()->load('steps.approverRole');
         });
     }
 
-    /**
-     * @param array<int, array<string, mixed>> $steps
-     */
+    private function assertPayrollRequiresHumanApproval(ApprovalWorkflow $workflow): void
+    {
+        if ($workflow->module === 'payroll' && ($workflow->auto_approve_when_no_steps
+            || ! $workflow->steps()->where('is_active', true)->exists())) {
+            throw ValidationException::withMessages(['steps' => ['Payroll requires an active human approval step with automatic approval disabled.']]);
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $steps */
     private function replaceSteps(ApprovalWorkflow $workflow, array $steps): void
     {
         foreach ($steps as $step) {

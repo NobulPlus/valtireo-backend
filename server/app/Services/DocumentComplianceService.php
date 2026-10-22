@@ -174,6 +174,7 @@ class DocumentComplianceService
         }
 
         return DB::transaction(function () use ($actor, $document, $action, $note): EmployeeDocument {
+            $document = EmployeeDocument::query()->whereKey($document->id)->lockForUpdate()->firstOrFail();
             $previousStatus = $document->status;
             $approvalRequest = $document->approvalRequests()
                 ->where('status', 'pending')
@@ -181,15 +182,24 @@ class DocumentComplianceService
                 ->first();
 
             if (! $approvalRequest) {
+                $owner = $document->uploadedBy;
+                if ($document->status !== 'submitted' || $document->approvalRequests()->exists()
+                    || ! $owner || $owner->organization_id !== $document->organization_id) {
+                    throw ValidationException::withMessages(['action' => ['A valid original submission is required. Please resubmit this document.']]);
+                }
                 $approvalRequest = $this->approvals->submit(
-                    $actor,
+                    $owner,
                     $document,
                     'employee_documents',
                     'submit',
                     "Review {$document->title}",
                     $document->employee,
-                    ['document_type_id' => $document->document_type_id, 'document_requirement_id' => $document->document_requirement_id]
+                    ['document_type_id' => $document->document_type_id, 'document_requirement_id' => $document->document_requirement_id, 'recovered_by_id' => $actor->id]
                 );
+                // An explicitly configured automatic workflow has already synchronized the document.
+                if ($approvalRequest->status === 'approved') {
+                    return $document->refresh();
+                }
             }
 
             $this->approvals->act($actor, $approvalRequest, $action, $note);
