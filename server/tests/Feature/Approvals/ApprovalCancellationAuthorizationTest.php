@@ -116,4 +116,57 @@ class ApprovalCancellationAuthorizationTest extends TestCase
         $this->postJson("/api/approvals/{$request->id}/actions", ['action' => 'approve', 'note' => 'Recovery reviewed'])->assertOk();
         $this->assertTrue($request->decisions()->firstOrFail()->metadata['administrative_recovery']);
     }
+
+    /**
+     * The lifecycle correction: an ApprovalRequest left 'pending' while its
+     * own source record has already advanced past the pre-decision state
+     * (a data-consistency precondition violation — simulated here by
+     * updating the source directly, bypassing the normal decision flow,
+     * the only way this state can arise) must reject cancellation rather
+     * than drag the source backwards. Covers all five approvable modules;
+     * requester/subject/admin identity is irrelevant to this check, so the
+     * requester path alone is sufficient to prove it.
+     */
+    public function test_cancellation_is_rejected_when_the_source_has_already_advanced_past_its_pending_state(): void
+    {
+        $advancedStatus = [
+            'leave' => 'approved',
+            'payroll' => 'finalized',
+            'employee_documents' => 'approved',
+            'service_desk' => 'in_progress',
+            'attendance' => 'approved',
+        ];
+
+        foreach ($advancedStatus as $kind => $status) {
+            $request = $this->requestFor($kind, $this->employee, $this->employee->employee);
+            $source = $request->approvable()->firstOrFail();
+            $source->update(['status' => $status]);
+
+            $capabilities = app(ApprovalDecisionAuthorizationService::class)->capabilities($this->employee, $request->refresh());
+            $this->assertNotContains('cancel', $capabilities['allowed_actions'], "cancel should not be allowed for {$kind}");
+            $this->assertSame('source_not_pending', $capabilities['action_restrictions']['cancel'], "wrong restriction reason for {$kind}");
+
+            $this->postJson("/api/approvals/{$request->id}/actions", ['action' => 'cancel'])->assertForbidden();
+
+            $this->assertSame($status, $source->refresh()->status, "{$kind}'s already-advanced status must be untouched");
+            $this->assertSame(0, $request->decisions()->count(), "{$kind} must not record a decision for the rejected attempt");
+            $this->assertSame('pending', $request->refresh()->status, "{$kind}'s approval request must remain pending, not cancelled");
+        }
+    }
+
+    public function test_cancellation_still_succeeds_once_the_source_is_genuinely_back_in_its_pending_state(): void
+    {
+        // Confirms the new check is a precondition, not a permanent lock —
+        // once a stale source is corrected back to its pending state,
+        // ordinary requester cancellation works exactly as before.
+        $request = $this->requestFor('leave', $this->employee, $this->employee->employee);
+        $source = $request->approvable()->firstOrFail();
+        $source->update(['status' => 'approved']);
+        $this->assertNotContains('cancel', app(ApprovalDecisionAuthorizationService::class)->capabilities($this->employee, $request->refresh())['allowed_actions']);
+
+        $source->update(['status' => 'submitted']);
+        $this->assertContains('cancel', app(ApprovalDecisionAuthorizationService::class)->capabilities($this->employee, $request->refresh())['allowed_actions']);
+        $this->postJson("/api/approvals/{$request->id}/actions", ['action' => 'cancel'])->assertOk();
+        $this->assertSame('cancelled', $source->refresh()->status);
+    }
 }

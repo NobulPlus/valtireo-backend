@@ -13,6 +13,28 @@ final class ApprovalDecisionAuthorizationService
 {
     public const ACTIONS = ['approve', 'reject', 'request_changes', 'cancel'];
 
+    /**
+     * Each approvable module's pre-decision status — the only state a
+     * cancellation may legitimately act on. PayrollRun's is
+     * 'pending_approval' (PayrollService::submit()); every other module
+     * defaults to, and is explicitly set to, 'submitted' when it enters an
+     * approval workflow (confirmed against each module's own migration
+     * default and, for tickets specifically, TicketService's explicit
+     * non-direct-routed status). An ApprovalRequest can be left 'pending'
+     * while its source has already moved past this state — e.g. a stale
+     * duplicate, or the source advancing through some other path — and
+     * cancelling it in that condition would drag an already-decided record
+     * backwards (a finalized payroll run back to 'calculated', an approved
+     * document back to 'submitted', and so on). This is a data-consistency
+     * precondition, not a privilege: it applies identically regardless of
+     * who is attempting the cancellation.
+     */
+    private const CANCELLABLE_SOURCE_STATUSES = [
+        PayrollRun::class => ['pending_approval'],
+    ];
+
+    private const DEFAULT_CANCELLABLE_SOURCE_STATUS = 'submitted';
+
     public function restriction(User $actor, ApprovalRequest $request, string $action): ?string
     {
         $request->loadMissing(['workflow.steps.approverRole', 'subjectEmployee.department', 'approvable']);
@@ -27,6 +49,9 @@ final class ApprovalDecisionAuthorizationService
         }
         if ($request->status !== 'pending') {
             return 'not_pending';
+        }
+        if ($action === 'cancel' && ! $this->isCancellableSourceState($request)) {
+            return 'source_not_pending';
         }
         if ($action === 'approve') {
             $sourceEmployeeId = $request->approvable->getAttribute('employee_id');
@@ -83,6 +108,19 @@ final class ApprovalDecisionAuthorizationService
             default => false,
         };
         return $allowed ? null : 'not_current_approver';
+    }
+
+    private function isCancellableSourceState(ApprovalRequest $request): bool
+    {
+        $approvable = $request->approvable;
+
+        if (! $approvable) {
+            return false;
+        }
+
+        $validStatuses = self::CANCELLABLE_SOURCE_STATUSES[$approvable::class] ?? [self::DEFAULT_CANCELLABLE_SOURCE_STATUS];
+
+        return in_array($approvable->status, $validStatuses, true);
     }
 
     public function currentStep(ApprovalRequest $request): ?ApprovalWorkflowStep
