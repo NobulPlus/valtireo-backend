@@ -102,6 +102,8 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     });
 
     Route::get('/workspace', [WorkspaceController::class, 'show']);
+    Route::post('/push-tokens', [\App\Http\Controllers\Api\DevicePushTokenController::class, 'store']);
+    Route::delete('/push-tokens', [\App\Http\Controllers\Api\DevicePushTokenController::class, 'destroy']);
     Route::prefix('connect')->middleware(EnsureModuleIsSubscribed::class.':connect')->group(function () {
         Route::get('/people', [\App\Http\Controllers\Api\ConnectController::class, 'people']);
         Route::get('/meetings', [\App\Http\Controllers\Api\ConnectController::class, 'index']);
