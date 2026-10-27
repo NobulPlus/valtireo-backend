@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ export function MainTabs() {
   // only its own colors/typography move to v2, per explicit request, while no
   // individual tab's screen content is touched.
   const v2 = useV2Colors();
+  const insets = useSafeAreaInsets();
   // A hidden tabBarButton still reserves its flex slot (see the comment above) —
   // an unsubscribed module's tab must not be registered at all, not just hidden.
   const showLeave = moduleByKey('leave')?.can_access === true;
@@ -72,8 +74,15 @@ export function MainTabs() {
         tabBarStyle: {
           backgroundColor: v2.surface,
           borderTopWidth: 0,
-          height: Platform.select({ ios: 84, default: 64 }),
+          // iOS already gets the library's own safe-area-aware bottom padding merged
+          // in underneath this style (we never set paddingBottom here, so it isn't
+          // overridden) — untouched, since it isn't the platform reported broken.
+          // Android needs it forced explicitly: with an explicit `height` set here,
+          // that merge can't be trusted to leave enough room for the gesture-nav bar,
+          // which is what put the tab bar flush against it with no breathing room.
+          height: Platform.select({ ios: 84, default: 56 + insets.bottom }),
           paddingTop: 8,
+          ...(Platform.OS === 'android' ? { paddingBottom: Math.max(insets.bottom, 8) } : null),
           borderTopLeftRadius: radius.lg,
           borderTopRightRadius: radius.lg,
           ...shadow.soft,
@@ -85,7 +94,25 @@ export function MainTabs() {
       {showLeave ? <Tab.Screen name="LeaveTab" component={LeaveStack} options={{ title: 'Leave' }} /> : null}
       {showAttendance ? <Tab.Screen name="AttendanceTab" component={AttendanceStack} options={{ title: 'Attendance' }} /> : null}
       {showTickets ? <Tab.Screen name="TicketsTab" component={TicketsStack} options={{ title: 'Tickets' }} /> : null}
-      <Tab.Screen name="MoreTab" component={MoreStack} options={{ title: 'More' }} />
+      <Tab.Screen
+        name="MoreTab"
+        component={MoreStack}
+        options={{ title: 'More' }}
+        listeners={({ navigation }) => ({
+          // "More" is a menu, not a content screen — bottom-tabs keeps a tab's
+          // nested stack alive across switches (see navigation.ts's
+          // currentMoreTabScreen docblock), so without this, pressing the tab
+          // bar button directly (not a Home shortcut, which already resets via
+          // goIntoMoreTab) just shows whatever sub-screen was last left open —
+          // reported directly from a device test as "the More button only
+          // shows the Lifestyle screen". Every explicit press of this tab,
+          // whether switching into it or tapping it while already on it,
+          // should land back on the menu.
+          tabPress: () => {
+            navigation.navigate('MoreTab', { screen: 'MoreMenu' });
+          },
+        })}
+      />
     </Tab.Navigator>
   );
 }

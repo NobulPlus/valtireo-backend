@@ -1,6 +1,7 @@
-import { Alert, Pressable, Text } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Avatar } from '../components/Avatar';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
@@ -24,11 +25,17 @@ export type HomeStackParamList = {
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
-/** The org's own short name, not the Valtireo product name — this is the employee's workspace, not an ad for the platform. Falls back to "Valtireo" only if the org hasn't set one. */
+/** The org's own short name, not the Valtireo product name — this is the employee's workspace, not an ad for the platform. Falls back to "Valtireo" only if the org hasn't set one. The logo sits here, next to the name, instead of being repeated again in the Home screen body. */
 function HomeHeaderTitle() {
   const { session } = useAuth();
   const { typography } = useTheme();
-  return <Text style={typography.heading}>{session?.workspace?.identity.short_name || 'Valtireo'}</Text>;
+  const workspace = session?.workspace;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      {workspace ? <Avatar uri={workspace.identity.logo_url} name={workspace.workspace_name} size={22} /> : null}
+      <Text style={typography.heading}>{workspace?.identity.short_name || 'Valtireo'}</Text>
+    </View>
+  );
 }
 
 function HomeHeaderRight() {

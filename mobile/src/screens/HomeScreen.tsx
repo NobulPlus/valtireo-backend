@@ -8,16 +8,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
 import { DecorativeAccents } from '../components/DecorativeAccents';
-import { IconTile } from '../components/IconTile';
+import { QuickAccessRow } from '../components/QuickAccessRow';
 import { useManagerDashboard, useMyDashboard } from '../features/dashboard/api';
 import { downloadAndShare } from '../features/leave/api';
 import { useAppreciations, useLifestylePreferences, useMilestones } from '../features/lifestyle/api';
 import { useUnreadNotificationCount } from '../features/notifications/api';
 import { getGreeting, type GreetingPeriod } from '../lib/greeting';
+import { selectImportantLeaveBalances } from '../lib/leaveBalances';
 import { selectLifestyleHomeSummary } from '../lib/lifestyleHomeSummary';
 import { isEligibleForManagerHome, shouldRefetchManagerDashboard } from '../lib/managerEligibility';
 import { selectManagerTeamSummary } from '../lib/managerTeamSummary';
-import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
+import { goIntoMoreTab, goToAppreciationRecipient, type HomeAreaNavigation } from '../lib/navigation';
 import { resolvePendingAction, selectPendingActionsHeading, type PendingActionDestination } from '../lib/pendingActionNavigation';
 import { INFINITE_LIST_PAGE_SIZE } from '../lib/useInfiniteList';
 import { radius, shadow, spacing, useTheme, useV2Colors, v2ModuleColors, V2_FONTS, type ThemePreference, type V2Colors } from '../theme';
@@ -47,21 +48,6 @@ function navigateForPendingAction(destination: PendingActionDestination, navigat
   }
 }
 
-/**
- * Only modules that have no other home on this screen go here: Leave,
- * Attendance and Tickets already have their own bottom tab, and
- * Directory/Alerts already have header shortcuts, so repeating them here
- * would just be the same destination behind a second button.
- */
-const QUICK_ACCESS = [
-  { icon: 'laptop-outline', label: 'My assets', moduleColorKey: 'assets', module: 'assets', go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Assets') },
-  { icon: 'document-text-outline', label: 'Documents', moduleColorKey: 'documents', module: 'employee_self_service', go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Documents') },
-  { icon: 'cash-outline', label: 'Payslips', moduleColorKey: 'payslips', module: 'payroll', go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Payslips') },
-  // Calendar has no module gate of its own (MoreMenuScreen's `module: null`) and no
-  // other always-available entry point on Home — the Next Holiday card only appears
-  // when there's an upcoming holiday to show, so it isn't a reliable path there.
-  { icon: 'calendar-outline', label: 'Calendar', moduleColorKey: 'calendar', module: null, go: (nav: Props['navigation']) => goIntoMoreTab(nav, 'Calendar') },
-] as const;
 
 const COMPLIANCE_LABELS: Record<string, string> = {
   missing: 'Missing',
@@ -119,6 +105,7 @@ export function HomeScreen({ navigation }: Props) {
   const { session, moduleByKey, refresh: refreshSession } = useAuth();
   const { data, isLoading, isRefetching, refetch } = useMyDashboard();
   const { data: unread } = useUnreadNotificationCount();
+  const importantLeaveBalances = selectImportantLeaveBalances(data?.leave?.balances ?? []);
 
   // The ONLY signal gating the manager section — see docs/design-system/11's Manager IA
   // and mobile/src/lib/managerEligibility.ts for why no other field substitutes for it.
@@ -126,7 +113,6 @@ export function HomeScreen({ navigation }: Props) {
   // never issues a request to /dashboard/manager at all.
   const hasManagerScope = isEligibleForManagerHome(session);
   const managerDashboard = useManagerDashboard(hasManagerScope);
-  const quickAccess = QUICK_ACCESS.filter((item) => !item.module || moduleByKey(item.module)?.can_access === true);
   const greeting = getGreeting();
   // primaryStrong/primaryDark — the same light/dark text-color split used for
   // Login's links, since this is the identical "small teal text on bg/surface"
@@ -236,23 +222,7 @@ export function HomeScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.quickAccessCard}>
-          <Text style={styles.sectionLabel}>Quick access</Text>
-          <View style={styles.grid}>
-            {quickAccess.map((item) => {
-              const tileColor = v2ModuleColors[item.moduleColorKey].icon;
-              return (
-                <IconTile
-                  key={item.label}
-                  icon={item.icon}
-                  label={item.label}
-                  bg={tileColor}
-                  iconColor="#FFFFFF"
-                  onPress={() => item.go(navigation)}
-                  widthPercent="22%"
-                />
-              );
-            })}
-          </View>
+          <QuickAccessRow onNavigate={(key) => goIntoMoreTab(navigation, key)} />
         </View>
 
         {isLoading ? (
@@ -477,15 +447,15 @@ export function HomeScreen({ navigation }: Props) {
               </View>
             ) : null}
 
-            {data.leave?.balances.length ? (
+            {importantLeaveBalances.length ? (
               <View style={[styles.card, styles.rowCard]}>
                 <SectionIcon name="calendar-outline" color="#FFFFFF" style={{ backgroundColor: v2ModuleColors.leave.icon }} />
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle}>Leave balances</Text>
-                  <View style={styles.chipRow}>
-                    {data.leave.balances.map((balance) => (
+                  <View style={styles.leaveBalanceGrid}>
+                    {importantLeaveBalances.map((balance) => (
                       <View key={balance.leave_type.id} style={styles.leaveBalanceChip}>
-                        <Text style={styles.leaveBalanceLabel}>{balance.leave_type.name}</Text>
+                        <Text style={styles.leaveBalanceLabel} numberOfLines={1}>{balance.leave_type.name}</Text>
                         <Text style={[styles.leaveBalanceValue, { color: v2ModuleColors.leave.icon }]}>{balance.days_available} days</Text>
                       </View>
                     ))}
@@ -495,24 +465,42 @@ export function HomeScreen({ navigation }: Props) {
             ) : null}
 
             {lifestyleSummary.visible ? (
-              <Pressable
-                onPress={() => goIntoMoreTab(navigation, 'Lifestyle')}
-                style={[styles.card, styles.rowCard]}
-                accessibilityRole="button"
-                accessibilityLabel="Birthdays, anniversaries, and appreciation"
-              >
-                <SectionIcon name="heart-outline" color="#FFFFFF" style={{ backgroundColor: v2ModuleColors.lifestyle.icon }} />
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>Life at work</Text>
-                  {lifestyleSummary.milestoneLabel ? <Text style={styles.body}>{lifestyleSummary.milestoneLabel}</Text> : null}
-                  {lifestyleSummary.appreciationLabel ? (
-                    <Text style={[styles.body, lifestyleSummary.milestoneLabel ? { marginTop: spacing.xs } : undefined]}>
-                      {lifestyleSummary.appreciationLabel}
-                    </Text>
-                  ) : null}
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={v2.muted} />
-              </Pressable>
+              <View style={styles.card}>
+                <Pressable
+                  onPress={() => goIntoMoreTab(navigation, 'Lifestyle')}
+                  style={styles.rowCard}
+                  accessibilityRole="button"
+                  accessibilityLabel="Birthdays, anniversaries, and appreciation"
+                >
+                  <SectionIcon name="heart-outline" color="#FFFFFF" style={{ backgroundColor: v2ModuleColors.lifestyle.icon }} />
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>Life at work</Text>
+                    {lifestyleSummary.appreciationLabel ? <Text style={styles.body}>{lifestyleSummary.appreciationLabel}</Text> : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={v2.muted} />
+                </Pressable>
+                {lifestyleSummary.milestoneLabel && lifestyleSummary.milestoneEmployee ? (
+                  // A separate tap target from the row above: tapping the specific person
+                  // named here goes straight to appreciating THEM, not the general
+                  // Lifestyle list — the whole reason this is split out at all.
+                  (() => {
+                    const milestoneEmployee = lifestyleSummary.milestoneEmployee;
+                    return (
+                      <Pressable
+                        onPress={() => goToAppreciationRecipient(navigation, milestoneEmployee)}
+                        style={[styles.rowCard, { marginTop: spacing.sm, alignItems: 'center' }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${lifestyleSummary.milestoneLabel}. Send them an appreciation.`}
+                      >
+                        <Text style={[styles.body, { flex: 1 }]}>{lifestyleSummary.milestoneLabel}</Text>
+                        <Ionicons name="gift-outline" size={16} color={v2ModuleColors.lifestyle.icon} />
+                      </Pressable>
+                    );
+                  })()
+                ) : lifestyleSummary.milestoneLabel ? (
+                  <Text style={[styles.body, { marginTop: spacing.sm }]}>{lifestyleSummary.milestoneLabel}</Text>
+                ) : null}
+              </View>
             ) : null}
 
             {data.next_holiday ? (
@@ -605,13 +593,16 @@ const makeStyles = (v2: V2Colors, headerActionGap: number) => StyleSheet.create(
   link: { fontFamily: V2_FONTS.interSemiBold, fontSize: 13 },
   pill: { borderRadius: radius.pill, paddingHorizontal: spacing.sm + 2, paddingVertical: 3 },
   pillText: { fontSize: 11, fontFamily: V2_FONTS.interBold },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  leaveBalanceChip: { backgroundColor: v2.chip, borderRadius: radius.sm, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.xs + 4 },
-  // Bumped from 12/interRegular — too faint relative to the value below it.
-  leaveBalanceLabel: { fontFamily: V2_FONTS.interMedium, fontSize: 13, color: v2.muted },
-  // Strengthened from 15 to 18 (and added a small top gap) so the number reads
-  // as the chip's primary content and the label above it as clearly
-  // subordinate — the same "big number, small label" hierarchy the stat cards
-  // above already use, now applied consistently to the leave-balance chips.
-  leaveBalanceValue: { fontFamily: V2_FONTS.interBold, fontSize: 18, marginTop: 2 },
+  // Fixed 3-column grid, not a wrapping row of full-size chips — an org with
+  // many leave types (6+ is real, not hypothetical: Annual/Sick/Compassionate/
+  // Study/Maternity/Paternity) used to wrap into 3 rows of oversized chips
+  // that dwarfed every other card on Home. 3 columns at this size reads as one
+  // deliberate block regardless of count — a 9th or 10th type is just another
+  // row in the same grid, not a new kind of mess. Mocked up and confirmed on
+  // the design canvas before this change (docs/design-system's Mobile — Home
+  // artboard) rather than guessed at.
+  leaveBalanceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 },
+  leaveBalanceChip: { flexBasis: '30%', flexGrow: 1, backgroundColor: v2.chip, borderRadius: radius.sm, paddingHorizontal: spacing.xs + 4, paddingVertical: spacing.xs + 3, overflow: 'hidden' },
+  leaveBalanceLabel: { fontFamily: V2_FONTS.interMedium, fontSize: 10.5, color: v2.muted },
+  leaveBalanceValue: { fontFamily: V2_FONTS.interBold, fontSize: 13, marginTop: 2 },
 });

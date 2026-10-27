@@ -7,6 +7,7 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { ReconnectScreen } from '../screens/ReconnectScreen';
 import { MainTabs, type MainTabParamList } from './MainTabs';
 import { useTheme } from '../theme';
+import { ConnectCallWatcher } from '../features/connect/ConnectCallWatcher';
 import { navigationRef } from './navigationRef';
 import { usePushNotifications } from '../lib/pushNotifications';
 
@@ -63,6 +64,7 @@ export function RootNavigator() {
           </>
         )}
       </Stack.Navigator>
+      {isAuthenticated ? <ConnectCallWatcher /> : null}
     </NavigationContainer>
   );
 }

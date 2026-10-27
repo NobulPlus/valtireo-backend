@@ -196,6 +196,7 @@ export const v2ModuleColors: Record<string, ModuleColorPair> = {
   learning: { bg: '#DEE6F5', icon: '#3A5FA0' },
   financial_admin: { bg: '#F2E9D2', icon: '#96762A' },
   ai_assistant: { bg: '#EDE4FB', icon: '#8B5FD9' },
+  connect: { bg: '#D9EEEC', icon: '#2F8F8A' },
 };
 
 export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };

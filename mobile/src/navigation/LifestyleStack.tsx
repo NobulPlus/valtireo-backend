@@ -6,7 +6,10 @@ import { navigatorScreenOptions, useTheme } from '../theme';
 
 export type LifestyleStackParamList = {
   LifestyleHome: undefined;
-  SendAppreciation: undefined;
+  /** Optional pre-filled recipient — set when reached via a deep link (e.g. Home's
+   * milestone row) that already knows who this is for, so the form doesn't make the
+   * person search from scratch for someone they just tapped. */
+  SendAppreciation: { recipientEmployeeId: number; recipientName: string } | undefined;
   LifestylePreferences: undefined;
 };
 

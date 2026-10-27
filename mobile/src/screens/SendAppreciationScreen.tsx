@@ -9,16 +9,20 @@ import type { LifestyleStackParamList } from '../navigation/LifestyleStack';
 
 type Props = NativeStackScreenProps<LifestyleStackParamList, 'SendAppreciation'>;
 
-export function SendAppreciationScreen({ navigation }: Props) {
+export function SendAppreciationScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState('');
-  const [recipientLabel, setRecipientLabel] = useState('');
+  const [recipientLabel, setRecipientLabel] = useState(route.params?.recipientName ?? '');
+  // Deliberately false even when arriving pre-filled: the deep link only knows the
+  // recipient's id/name, not whether they've opted into SHARED appreciation visibility —
+  // defaulting to private (always allowed) is the only safe choice without that
+  // information. Re-picking the same person via search recovers the real value.
   const [recipientCanShare, setRecipientCanShare] = useState(false);
   const recipientsQuery = useAppreciationRecipients(search);
   const sendAppreciation = useSendAppreciation();
 
-  const [recipientId, setRecipientId] = useState<number | null>(null);
+  const [recipientId, setRecipientId] = useState<number | null>(route.params?.recipientEmployeeId ?? null);
   const [message, setMessage] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'shared'>('private');
 
