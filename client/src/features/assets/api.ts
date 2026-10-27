@@ -71,7 +71,10 @@ export function useAsset(assetId: number | null) {
 export function useMyAssets() {
   return useQuery({
     queryKey: ['assets', 'mine'],
-    queryFn: () => api.get<Paginated<Asset>>('/assets?per_page=50'),
+    // Explicit, not just implicit via lacking assets.view — someone who holds that
+    // permission (an HR/ops admin) viewing their own self-service page must still
+    // only see their own assigned equipment here, not the org-wide list.
+    queryFn: () => api.get<Paginated<Asset>>('/assets?per_page=50&mine=1'),
   });
 }
 
