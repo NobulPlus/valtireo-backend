@@ -41,6 +41,7 @@ const DECISION_OPTIONS: Array<{ value: ApprovalDecisionAction; label: string }> 
   { value: 'approve', label: 'Approve' },
   { value: 'reject', label: 'Reject' },
   { value: 'request_changes', label: 'Request changes' },
+  { value: 'cancel', label: 'Cancel' },
 ];
 
 const PRIORITY_OPTIONS = [

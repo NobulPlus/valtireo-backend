@@ -2147,6 +2147,7 @@ const DECISION_OPTIONS: { value: ApprovalDecisionAction; label: string }[] = [
   { value: 'approve', label: 'Approve' },
   { value: 'reject', label: 'Reject' },
   { value: 'request_changes', label: 'Request changes' },
+  { value: 'cancel', label: 'Cancel' },
 ];
 
 function ActOnApprovalModal({ request, onClose }: { request: ApprovalRequest | null; onClose: () => void }) {
