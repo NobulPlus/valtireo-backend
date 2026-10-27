@@ -105,6 +105,25 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
     Route::post('/push-tokens', [\App\Http\Controllers\Api\DevicePushTokenController::class, 'store']);
     Route::delete('/push-tokens', [\App\Http\Controllers\Api\DevicePushTokenController::class, 'destroy']);
     Route::prefix('connect')->middleware(EnsureModuleIsSubscribed::class.':connect')->group(function () {
+        $chat = \App\Http\Controllers\Api\ConnectChatController::class;
+        $voice = \App\Http\Controllers\Api\ConnectVoiceController::class;
+        Route::get('/colleagues', [$chat, 'people']);
+        Route::get('/people/{person}/photo', [$chat, 'photo'])->whereNumber('person');
+        Route::get('/conversations', [$chat, 'index']);
+        Route::post('/conversations', [$chat, 'store'])->middleware('throttle:20,1,connect-chat-create:');
+        Route::get('/channels', [$chat, 'channels']);
+        Route::get('/conversations/{conversation}', [$chat, 'show'])->whereUuid('conversation');
+        Route::patch('/conversations/{conversation}/membership', [$chat, 'membership'])->whereUuid('conversation');
+        Route::get('/conversations/{conversation}/messages', [$chat, 'messages'])->whereUuid('conversation');
+        Route::post('/conversations/{conversation}/messages', [$chat, 'send'])->whereUuid('conversation')->middleware('throttle:60,1,connect-send:');
+        Route::patch('/conversations/{conversation}/messages/{message}', [$chat, 'changeMessage'])->whereUuid('conversation')->whereNumber('message')->middleware('throttle:60,1,connect-message-action:');
+        Route::get('/conversations/{conversation}/messages/{message}/file', [$chat, 'file'])->whereUuid('conversation')->whereNumber('message');
+        Route::match(['get', 'patch'], '/preferences', [$chat, 'preferences']);
+        Route::get('/reports', [$chat, 'reports']);
+        Route::patch('/reports/{report}', [$chat, 'moderate'])->whereNumber('report');
+        Route::get('/calls', [$voice, 'index']);
+        Route::post('/calls', [$voice, 'store'])->middleware('throttle:6,1,connect-call:');
+        Route::post('/calls/{call}/actions', [$voice, 'action'])->whereUuid('call')->middleware('throttle:30,1,connect-call-action:');
         Route::get('/people', [\App\Http\Controllers\Api\ConnectController::class, 'people']);
         Route::get('/meetings', [\App\Http\Controllers\Api\ConnectController::class, 'index']);
         Route::post('/meetings', [\App\Http\Controllers\Api\ConnectController::class, 'store'])->middleware('throttle:10,1,connect-create:');
