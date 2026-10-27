@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "225810007866",
+    "project_id": "valtireo",
+    "storage_bucket": "valtireo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:225810007866:android:898a983349eb6c3cbab203",
+        "android_client_info": {
+          "package_name": "com.valtireo.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBB5tktrGtPNor02ITzJ8oH_QX9G2-Iw_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

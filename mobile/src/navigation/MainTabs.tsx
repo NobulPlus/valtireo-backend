@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { HomeStack } from './HomeStack';
+import { HomeStack, type HomeStackParamList } from './HomeStack';
 import { LeaveStack } from './LeaveStack';
 import { AttendanceStack } from './AttendanceStack';
 import { TicketsStack, type TicketsStackParamList } from './TicketsStack';
@@ -17,7 +17,11 @@ import { radius, shadow, useV2Colors, V2_FONTS } from '../theme';
  * HomeStack/MoreStack instead of being registered as tabs at all.
  */
 export type MainTabParamList = {
-  HomeTab: undefined;
+  // Widened from `undefined` so a tapped push notification can deep-link into
+  // Profile from the root navigationRef (see its own comment on RootStackParamList's
+  // `Main`) — every in-screen caller still navigates here with no params, which
+  // the `| undefined` branch keeps working exactly as before.
+  HomeTab: NavigatorScreenParams<HomeStackParamList> | undefined;
   LeaveTab: undefined;
   AttendanceTab: undefined;
   // Widened from `undefined` (Phase A) so Home's pending-actions card and the

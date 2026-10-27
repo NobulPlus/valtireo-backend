@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.valtireo.mobile",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#123F3A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -36,7 +37,20 @@
       ],
       "expo-document-picker",
       "expo-local-authentication",
-      "expo-font"
-    ]
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#123F3A"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5a20e455-ba48-4e36-9423-40c03a767ca9"
+      }
+    },
+    "owner": "nobul"
   }
 }
