@@ -33,7 +33,7 @@ function Failure({ retry }: { retry: () => void }) {
 
 export function LifestylePage() {
   const { moduleByKey, hasPermission } = useAuth();
-  const enabled = moduleByKey('employee_self_service')?.visibility === 'enabled';
+  const enabled = moduleByKey('employee_self_service')?.can_access === true;
   return <>
     <PageHeader title="Life at work" subtitle="Celebrate milestones and thank the people who make a difference." actions={hasPermission('workspace_settings.update') ? <Link to="/settings/lifestyle" className="text-sm text-teal underline">Manage lifestyle</Link> : undefined} />
     {enabled ? <EmployeeLifestyle /> : <p>Employee self-service is not available in your workspace.</p>}
@@ -103,7 +103,7 @@ function EmployeeLifestyle() {
 
 export function LifestyleAdminPage() {
   const { hasPermission, moduleByKey } = useAuth();
-  return <><PageHeader title="Lifestyle controls" subtitle="Enable optional employee experiences and review reported appreciation." />{hasPermission('workspace_settings.update') && moduleByKey('employee_self_service')?.visibility === 'enabled' ? <LifestyleAdmin /> : <p>Organization administration and employee self-service access are required.</p>}</>;
+  return <><PageHeader title="Lifestyle controls" subtitle="Enable optional employee experiences and review reported appreciation." />{hasPermission('workspace_settings.update') && moduleByKey('employee_self_service')?.can_access === true ? <LifestyleAdmin /> : <p>Organization administration and employee self-service access are required.</p>}</>;
 }
 
 function LifestyleAdmin() {
