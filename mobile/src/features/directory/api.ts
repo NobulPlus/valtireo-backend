@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/apiClient';
 import { INFINITE_LIST_PAGE_SIZE, useInfiniteList } from '../../lib/useInfiniteList';
 import type { EmployeeDirectoryResponse } from '../../types/api';
@@ -28,5 +28,30 @@ export function useDepartmentOptions() {
     queryFn: () => api.get<{ data: { id: number; name: string }[] }>('/setup/departments'),
     staleTime: 5 * 60_000,
     select: (response) => response.data,
+  });
+}
+
+/**
+ * Message and Call from the Directory both start from the same direct
+ * conversation — Connect dedupes it server-side, so reopening an existing
+ * thread with this colleague is as cheap as creating a new one. Mirrors the
+ * web Directory page's own two mutations exactly.
+ */
+export function useMessageColleague() {
+  return useMutation({
+    mutationFn: async (userId: number) => {
+      const { data } = await api.post<{ data: { id: string } }>('/connect/conversations', { kind: 'direct', member_ids: [userId] });
+      return data.id;
+    },
+  });
+}
+
+export function useCallColleague() {
+  return useMutation({
+    mutationFn: async (userId: number) => {
+      const { data } = await api.post<{ data: { id: string } }>('/connect/conversations', { kind: 'direct', member_ids: [userId] });
+      await api.post('/connect/calls', { conversation_id: data.id });
+      return data.id;
+    },
   });
 }

@@ -119,7 +119,7 @@ export function LoginScreen({ navigation }: Props) {
   return (
     <View style={styles.root}>
       <DecorativeAccents scheme={scheme} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           contentContainerStyle={[styles.scrollContent, { paddingTop: topGap, paddingBottom: bottomGap }]}
           keyboardShouldPersistTaps="handled"
