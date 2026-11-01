@@ -279,3 +279,13 @@ export function navigatorScreenOptions(colors: ThemeColors) {
     contentStyle: { backgroundColor: colors.paper },
   };
 }
+
+/** Design System v2 counterpart of `navigatorScreenOptions` — for a stack whose pushed screens keep the native back-button header (unlike a tab root such as MoreMenu, which hides it and builds its own in-screen title) but reskin it onto the v2 palette/type. */
+export function navigatorScreenOptionsV2(v2: V2Colors) {
+  return {
+    headerTintColor: v2.primary,
+    headerStyle: { backgroundColor: v2.surface },
+    headerTitleStyle: { color: v2.ink, fontFamily: V2_FONTS.interSemiBold },
+    contentStyle: { backgroundColor: v2.bg },
+  };
+}

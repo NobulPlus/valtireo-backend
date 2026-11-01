@@ -10,7 +10,7 @@ class ReconcileConnectVoiceCalls extends Command
     public function handle(ConnectVoiceService $voice): int {
         $failures = 0;
         ConnectVoiceCall::whereNull('room_closed_at')->each(function ($call) use ($voice, &$failures) {
-            try { $voice->reconcile($call); } catch (\Throwable $e) { report($e); $failures++; }
+            try { $voice->reconcile($call, checkPresence: true); } catch (\Throwable $e) { report($e); $failures++; }
         });
         return $failures ? self::FAILURE : self::SUCCESS;
     }

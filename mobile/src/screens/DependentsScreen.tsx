@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useDeleteDependent, useMyProfileOverview } from '../features/profile/api';
+import { ProductIconField } from '../components/ProductIconField';
 import { ApiError } from '../lib/apiClient';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 import type { HomeStackParamList } from '../navigation/HomeStack';
@@ -65,6 +66,7 @@ export function DependentsScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <ScrollView contentContainerStyle={styles.list}>
         {!isLoading && dependents.length === 0 ? (
           <Text style={styles.caption}>No dependents on file yet.</Text>

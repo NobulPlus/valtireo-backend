@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
+import { ProductIconField } from '../components/ProductIconField';
 import { useConnectConversation, useConnectPeople, useConversationMembership } from '../features/connect/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 import type { ConnectStackParamList } from '../navigation/ConnectStack';
@@ -29,9 +30,16 @@ export function ConnectMembersScreen({ route, navigation }: Props) {
   if (!c) return <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} />;
 
   const addable = people.items.filter((p) => !c.members.some((m) => m.id === p.id));
+  // Adding someone to a direct conversation is how it becomes a group (see
+  // ConnectChatController@membership) — either participant can do that,
+  // there being no real "owner" of a 1:1; every other management action
+  // (rename, archive, remove, transfer) stays owner-only once it's a group.
+  const canManageGroup = isOwner && c.kind !== 'direct';
+  const canAddMembers = c.kind === 'direct' || canManageGroup;
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <Text style={styles.notice}>New members can read existing history. Removed members lose conversation and attachment access.</Text>
       <FlatList
         data={c.members}
@@ -50,9 +58,9 @@ export function ConnectMembersScreen({ route, navigation }: Props) {
             ) : null}
           </View>
         )}
-        ListFooterComponent={isOwner && c.kind !== 'direct' ? (
+        ListFooterComponent={canAddMembers ? (
           <View style={styles.footer}>
-            {renaming ? (
+            {canManageGroup && renaming ? (
               <View style={styles.renameRow}>
                 <TextInput value={name} onChangeText={setName} placeholder={c.name} placeholderTextColor={colors.muted} style={styles.renameInput} autoFocus />
                 <Pressable accessibilityLabel="Save name" style={styles.iconButton} onPress={() => { if (name.trim()) { void membership.mutateAsync({ action: 'rename', name: name.trim() }); setRenaming(false); } }}><Ionicons name="checkmark" size={18} color={colors.pine} /></Pressable>
@@ -60,6 +68,7 @@ export function ConnectMembersScreen({ route, navigation }: Props) {
               </View>
             ) : null}
 
+            {c.kind === 'direct' ? <Text style={styles.sectionNote}>Adding someone turns this into a group, visible to everyone in it.</Text> : null}
             <Text style={styles.sectionLabel}>Add a member</Text>
             <TextInput value={search} onChangeText={setSearch} placeholder="Find a colleague" placeholderTextColor={colors.muted} style={styles.renameInput} />
             {addable.map((p) => (
@@ -71,10 +80,12 @@ export function ConnectMembersScreen({ route, navigation }: Props) {
             ))}
             {people.isFetchingNextPage ? <ActivityIndicator color={colors.pine} /> : null}
 
-            <View style={styles.actionsRow}>
-              <Pressable accessibilityLabel="Rename conversation" style={styles.iconButton} onPress={() => { setName(c.name); setRenaming(true); }}><Ionicons name="pencil-outline" size={20} color={colors.pine} /></Pressable>
-              <Pressable accessibilityLabel={c.archived ? 'Reopen conversation' : 'Archive conversation'} style={styles.iconButton} onPress={() => void membership.mutateAsync({ action: 'archive', enabled: !c.archived })}><Ionicons name={c.archived ? 'folder-open-outline' : 'archive-outline'} size={20} color={colors.pine} /></Pressable>
-            </View>
+            {canManageGroup ? (
+              <View style={styles.actionsRow}>
+                <Pressable accessibilityLabel="Rename conversation" style={styles.iconButton} onPress={() => { setName(c.name); setRenaming(true); }}><Ionicons name="pencil-outline" size={20} color={colors.pine} /></Pressable>
+                <Pressable accessibilityLabel={c.archived ? 'Reopen conversation' : 'Archive conversation'} style={styles.iconButton} onPress={() => void membership.mutateAsync({ action: 'archive', enabled: !c.archived })}><Ionicons name={c.archived ? 'folder-open-outline' : 'archive-outline'} size={20} color={colors.pine} /></Pressable>
+              </View>
+            ) : null}
           </View>
         ) : c.kind !== 'direct' ? (
           <Pressable
@@ -95,6 +106,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   notice: { fontSize: 12, color: colors.muted, padding: spacing.lg, paddingBottom: 0 },
   list: { padding: spacing.lg, gap: spacing.sm },
   sectionLabel: { fontSize: 12, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', marginTop: spacing.md, marginBottom: spacing.xs },
+  sectionNote: { fontSize: 12, color: colors.muted, marginTop: spacing.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs + 2 },
   rowLabel: { flex: 1, fontSize: 14, color: colors.ink },
   iconButton: { padding: 6 },

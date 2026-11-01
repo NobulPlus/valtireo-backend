@@ -204,7 +204,8 @@ class PlatformAdminService
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('created_at', '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('created_at', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $sortDirection);
+            ->orderBy($sortBy, $sortDirection)
+            ->orderBy('id', $sortDirection);
     }
 
     /**

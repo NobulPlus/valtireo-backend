@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { useAppreciationRecipients, useSendAppreciation } from '../features/lifestyle/api';
 import { ApiError } from '../lib/apiClient';
@@ -48,6 +49,8 @@ export function SendAppreciationScreen({ navigation, route }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={96}>
     <ScrollView style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
       <Text style={styles.label}>Who is this for?</Text>
@@ -106,11 +109,13 @@ export function SendAppreciationScreen({ navigation, route }: Props) {
       </Pressable>
     </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs, marginTop: spacing.md },
   caption: { fontSize: 12, color: colors.muted },

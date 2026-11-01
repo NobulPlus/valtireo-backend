@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { FileText, Plus, Users, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -24,6 +24,7 @@ import {
 import { useMyProfileOverview } from '@/features/profile/api';
 import { ApiError } from '@/lib/apiClient';
 import { useDateFormatter } from '@/lib/dateFormat';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES } from '@/lib/fileSize';
 import type { LeaveRequest } from '@/types/api';
 
 function actionError(error: unknown, fallback: string): string {
@@ -122,6 +123,28 @@ function MyLeaveContent() {
   const [handoverDocument, setHandoverDocument] = useState<File | null>(null);
   const [handoverScope, setHandoverScope] = useState<'department' | 'all'>('department');
   const myEmployeeId = profileQuery.data?.employee?.id ?? null;
+
+  function pickEvidenceFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return setEvidenceFile(null);
+    if (isFileTooLarge(file, MAX_UPLOAD_BYTES.leaveEvidence)) {
+      event.target.value = '';
+      toast.error('File too large', `Evidence must be ${formatMaxSize(MAX_UPLOAD_BYTES.leaveEvidence)} or smaller.`);
+      return;
+    }
+    setEvidenceFile(file);
+  }
+
+  function pickHandoverDocument(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return setHandoverDocument(null);
+    if (isFileTooLarge(file, MAX_UPLOAD_BYTES.leaveHandoverDocument)) {
+      event.target.value = '';
+      toast.error('File too large', `The handover document must be ${formatMaxSize(MAX_UPLOAD_BYTES.leaveHandoverDocument)} or smaller.`);
+      return;
+    }
+    setHandoverDocument(file);
+  }
   const directoryQuery = useEmployeeDirectory(
     handoverScope === 'all' ? { department_id: 'all', per_page: 100 } : { per_page: 100 },
   );
@@ -417,7 +440,7 @@ function MyLeaveContent() {
             <input
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
+              onChange={pickEvidenceFile}
               className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong"
             />
             {evidenceFile && <span className="mt-1 block text-xs text-muted">{evidenceFile.name}</span>}
@@ -477,7 +500,7 @@ function MyLeaveContent() {
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,.csv,.txt"
-                    onChange={(event) => setHandoverDocument(event.target.files?.[0] ?? null)}
+                    onChange={pickHandoverDocument}
                     className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong"
                   />
                   {handoverDocument && <span className="mt-1 block text-xs text-muted">{handoverDocument.name}</span>}

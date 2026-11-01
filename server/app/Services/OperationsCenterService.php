@@ -49,6 +49,7 @@ class OperationsCenterService
 
         return $query->orderByRaw($sort === 'due_at' ? 'due_at IS NULL' : '0')
             ->orderBy($sort, $direction)
+            ->orderBy('id')
             ->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 

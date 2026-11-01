@@ -75,12 +75,21 @@ class ConnectChatController extends Controller
                 $c->members()->syncWithoutDetaching([$actor->id]);
             } else {
                 abort_unless($c->members()->where('users.id', $actor->id)->exists(), 404);
-                if (in_array($action, ['add', 'remove', 'transfer', 'archive', 'rename'])) abort_unless($c->owner_id === $actor->id && $c->kind !== 'direct', 403);
+                // Adding someone to a direct conversation is how a 1:1 becomes a group
+                // (Teams' own "add people" behavior) — either participant can do this,
+                // there being no meaningful "owner" of a 2-person direct conversation.
+                // Every other owner-only action is unaffected.
+                $addingToDirect = $action === 'add' && $c->kind === 'direct';
+                if (in_array($action, ['add', 'remove', 'transfer', 'archive', 'rename'])) abort_unless($addingToDirect || ($c->owner_id === $actor->id && $c->kind !== 'direct'), 403);
                 $target = (int) ($data['user_id'] ?? 0);
                 if (in_array($action, ['add', 'transfer'])) abort_unless($this->chat->activeUsers($actor)->whereKey($target)->exists(), 422, 'Choose an active colleague.');
                 if ($action === 'add') {
                     abort_if($c->archived || $c->members()->count() >= 100, 409, 'Conversation is archived or full.');
                     $c->members()->syncWithoutDetaching([$target]);
+                    if ($addingToDirect) {
+                        $name = trim($data['name'] ?? '') !== '' ? trim($data['name']) : $c->members()->pluck('name')->implode(', ');
+                        $c->update(['kind' => 'group', 'direct_key' => null, 'name' => $name]);
+                    }
                 }
                 if ($action === 'transfer') {
                     abort_unless($c->members()->where('users.id', $target)->exists(), 422, 'The new owner must already be a member.');
@@ -129,7 +138,7 @@ class ConnectChatController extends Controller
                 abort_if($c->archived, 409, 'This conversation is archived.');
                 if ($existing = $c->messages()->where('sender_id', $actor->id)->where('client_id', $data['client_id'])->first()) return $existing;
                 if ($data['reply_to_id'] ?? null) abort_unless($c->messages()->whereKey($data['reply_to_id'])->exists(), 422, 'Reply to a message in this conversation.');
-                $mentions = $data['mentions'] ?? [];
+                $mentions = $c->kind === 'direct' ? [] : ($data['mentions'] ?? []);
                 abort_unless($c->members()->whereIn('users.id', $mentions)->count() === count($mentions), 422, 'Mention conversation members only.');
                 $file = $request->file('file');
                 $voice = (bool) ($data['voice_note'] ?? false);
@@ -139,7 +148,7 @@ class ConnectChatController extends Controller
                     'file_path' => $path, 'file_name' => $file ? mb_substr(basename($file->getClientOriginalName()), 0, 200) : null, 'file_mime' => $file?->getMimeType(), 'file_size' => $file?->getSize()]);
                 $c->touch();
                 foreach ($c->members()->where('users.id', '!=', $actor->id)->wherePivot('muted', false)->get() as $recipient) {
-                    if ($this->chat->activeUsers($actor)->whereKey($recipient->id)->exists()) $this->chat->notify($actor, $recipient->id, in_array($recipient->id, $mentions) ? 'connect.mentioned' : 'connect.message', $c->id);
+                    if ($this->chat->activeUsers($actor)->whereKey($recipient->id)->exists()) $this->chat->notify($actor, $recipient, in_array($recipient->id, $mentions) ? 'connect.mentioned' : 'connect.message', $c->id);
                 }
                 return $m;
             });
@@ -158,7 +167,10 @@ class ConnectChatController extends Controller
             $action = $data['action'];
             if (in_array($action, ['edit', 'delete'])) abort_unless($m->sender_id === $actor->id, 403);
             if ($action === 'edit') { abort_if(trim($data['body'] ?? '') === '' && !$m->file_path, 422); $m->update(['body' => trim($data['body'] ?? ''), 'edited_at' => now()]); }
-            if ($action === 'delete') $m->update(['body' => null, 'mentions' => [], 'pinned' => false, 'deleted_at' => now()]);
+            if ($action === 'delete') {
+                abort_if($m->created_at->diffInMinutes(now()) > 15, 403, 'This message can only be deleted within 15 minutes of sending.');
+                $m->update(['body' => null, 'mentions' => [], 'pinned' => false, 'deleted_at' => now()]);
+            }
             if ($action === 'pin') { abort_unless($c->kind === 'direct' || $c->owner_id === $actor->id, 403); $m->update(['pinned' => (bool) ($data['enabled'] ?? true)]); }
             if ($action === 'react') {
                 abort_unless($data['reaction'] ?? null, 422);

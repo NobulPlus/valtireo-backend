@@ -4,6 +4,8 @@ Created locally on 13 October 2026. Organization code: **LASHMA-DEMO**. Display 
 
 All people, contacts, office addresses, reporting structures, salaries and policies are synthetic. They do not represent the agency's actual staff or policies. Email addresses use the reserved `.test` domain. No invitations or emails are sent by this seeder.
 
+Mobile enrichment adds 21 named personas: **184 employees and six clusters** in the current local workspace. See [the mobile demo guide](lashma-mobile-demo.md) for managers, HR Director, Compliance Officer, employment types, privacy and lifecycle scenarios. The original fixture inventory below describes the initial 163 employees.
+
 ## Sign in
 
 Shared local test password: **`LashmaDemo2026!`**

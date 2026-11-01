@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -66,10 +67,11 @@ function LeaveRow({ item, colors, typography, styles }: { item: LeaveRequest; co
 export function LeaveListScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { items, isLoading, isError, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyLeaveRequests();
+  const { items, isLoading, isError, error, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyLeaveRequests();
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <FlatList
         data={items}
         keyExtractor={(item) => String(item.id)}
@@ -79,7 +81,7 @@ export function LeaveListScreen({ navigation }: Props) {
         onRefresh={refetch}
         onEndReached={fetchMore}
         onEndReachedThreshold={0.5}
-        ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
+        ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
       ListFooterComponent={<ListFooterLoader visible={isFetchingNextPage} />}
       ListEmptyComponent={
           isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No leave requests yet.</Text>

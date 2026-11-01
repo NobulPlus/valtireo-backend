@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ProductIconField } from '../components/ProductIconField';
 import { useConnectReports, useModerateReport } from '../features/connect/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 
@@ -19,6 +20,7 @@ export function ConnectReportsScreen() {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <Text style={styles.notice}>Only reported excerpts are shown. Private conversations remain membership-only.</Text>
       <FlatList
         data={query.items}

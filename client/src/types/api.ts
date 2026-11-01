@@ -1068,6 +1068,7 @@ export interface OrgChartNode {
 
 export interface EmployeeDirectoryEntry {
   id: number;
+  user_id: number | null;
   full_name: string;
   employee_number: string;
   work_email: string;

@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({
   open,
@@ -16,16 +18,63 @@ export function Modal({
   footer?: ReactNode;
   size?: 'md' | 'lg';
 }) {
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Base accessibility for every modal in the app (28 call sites): focus the
+  // dialog on open, restore focus to whatever opened it on close, trap Tab
+  // cycling inside the dialog, and close on Escape — none of this existed
+  // before, so a keyboard user could tab out into the page behind an open
+  // modal and a screen reader got no dialog role at all.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !panelRef.current) return;
+      const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const sizeClass = size === 'lg' ? 'max-w-4xl' : 'max-w-md';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 py-6">
-      <div className={`flex max-h-[calc(100vh-3rem)] w-full flex-col ${sizeClass} rounded-lg border border-border bg-surface shadow-xl`}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`flex max-h-[calc(100vh-3rem)] w-full flex-col ${sizeClass} rounded-lg border border-border bg-surface shadow-xl`}
+      >
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-strong">{title}</h2>
-          <button onClick={onClose} className="text-muted hover:text-strong">
+          <h2 id={titleId} className="text-sm font-semibold text-strong">{title}</h2>
+          <button type="button" onClick={onClose} className="text-muted hover:text-strong" aria-label="Close">
             <X className="h-4 w-4" />
           </button>
         </div>

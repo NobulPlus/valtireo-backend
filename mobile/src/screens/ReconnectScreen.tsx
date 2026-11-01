@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { ProductIconField } from '../components/ProductIconField';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 
 /** Shown instead of Login when a stored token exists but startup could not reach the server — the token is still valid, this is a network problem, not a signed-out state. */
@@ -22,6 +23,7 @@ export function ReconnectScreen() {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <Ionicons name="cloud-offline-outline" size={48} color={colors.pine} />
       <Text style={[typography.title, { marginTop: spacing.lg, textAlign: 'center' }]}>Can&apos;t reach Valtireo</Text>
       <Text style={[typography.caption, styles.message]}>{reconnectError ?? 'Check your connection and try again.'}</Text>

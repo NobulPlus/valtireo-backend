@@ -1,4 +1,5 @@
-import { uploadFile } from '../lib/uploadFile';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -15,7 +16,7 @@ type Props = NativeStackScreenProps<DocumentsStackParamList, 'UploadDocument'>;
 export function UploadDocumentScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { data: documentTypes, isLoading: loadingTypes, isError: typesError, refetch: retryTypes } = useMyDocumentTypes();
+  const { data: documentTypes, isLoading: loadingTypes, isError: typesError, error: typesErrorDetail, refetch: retryTypes } = useMyDocumentTypes();
   const submitDocument = useSubmitMyDocument();
 
   const [documentTypeId, setDocumentTypeId] = useState<number | null>(null);
@@ -27,6 +28,10 @@ export function UploadDocumentScreen({ navigation }: Props) {
     const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
+      if (isFileTooLarge(asset, MAX_UPLOAD_BYTES.document)) {
+        Alert.alert('File too large', `Documents must be ${formatMaxSize(MAX_UPLOAD_BYTES.document)} or smaller.`);
+        return;
+      }
       setFile(uploadFile(asset));
       if (!title) setTitle(asset.name.replace(/\.[^.]+$/, ''));
     }
@@ -50,9 +55,11 @@ export function UploadDocumentScreen({ navigation }: Props) {
     }
   }
 
-  if (typesError) return <QueryError retry={retryTypes} />;
+  if (typesError) return <QueryError retry={retryTypes} error={typesErrorDetail} />;
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Document type</Text>
       {loadingTypes ? (
@@ -81,11 +88,13 @@ export function UploadDocumentScreen({ navigation }: Props) {
         {submitDocument.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Upload</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs, marginTop: spacing.md },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, fontSize: 14, color: colors.ink, backgroundColor: colors.white },

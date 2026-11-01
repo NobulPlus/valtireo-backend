@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { ActivityIndicator, Alert, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -73,7 +74,7 @@ function TicketRow({
 export function TicketsListScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors, typography), [colors, typography]);
-  const { items, isLoading, isError, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyTickets();
+  const { items, isLoading, isError, error, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyTickets();
 
   const tickets = items;
   const sections = [
@@ -83,6 +84,7 @@ export function TicketsListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <SectionList
         sections={sections}
         keyExtractor={(item) => String(item.id)}
@@ -95,7 +97,7 @@ export function TicketsListScreen({ navigation }: Props) {
         onRefresh={refetch}
         onEndReached={fetchMore}
         onEndReachedThreshold={0.5}
-        ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
+        ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
         ListFooterComponent={<ListFooterLoader visible={isFetchingNextPage} />}
         ListEmptyComponent={
           isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No tickets yet.</Text>

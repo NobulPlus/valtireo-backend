@@ -33,7 +33,7 @@ class AttendanceRecordController extends Controller
             $query->where('employee_id', $request->integer('employee_id'));
         }
 
-        return AttendanceRecordResource::collection($query->latest('attendance_date')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
+        return AttendanceRecordResource::collection($query->latest('attendance_date')->orderBy('id', 'desc')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
     }
 
     public function store(StoreAttendanceRecordRequest $request, AttendanceService $attendance): JsonResponse

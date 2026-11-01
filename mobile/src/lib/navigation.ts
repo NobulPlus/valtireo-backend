@@ -1,4 +1,5 @@
 import type { MoreStackParamList } from '../navigation/MoreStack';
+import type { ApprovalsStackParamList } from '../navigation/ApprovalsStack';
 
 /**
  * Shared by every screen nested under the Home tab (Home itself, Notifications, ...)
@@ -19,6 +20,8 @@ export interface HomeAreaNavigation {
   navigate(screen: 'LeaveTab'): void;
   navigate(screen: 'TicketsTab'): void;
   navigate(screen: 'TicketsTab', params: { screen: 'TicketDetail'; params: { ticketId: number } }): void;
+  navigate(screen: 'ApprovalsTab'): void;
+  navigate(screen: 'ApprovalsTab', params: { screen: 'ApprovalDetail'; params: ApprovalsStackParamList['ApprovalDetail'] }): void;
   navigate(screen: 'MoreTab', params: { screen: 'Lifestyle'; params: MoreStackParamList['Lifestyle'] }): void;
   navigate(screen: 'MoreTab', params: { screen: 'Connect'; params: MoreStackParamList['Connect'] }): void;
   navigate(screen: 'MoreTab', params: { screen: keyof MoreStackParamList }): void;

@@ -182,6 +182,37 @@ class ConnectChatTest extends TestCase
         $this->getJson('/api/connect/conversations/'.$id)->assertJsonPath('data.muted', true);
     }
 
+    public function test_adding_a_member_to_a_direct_conversation_upgrades_it_to_a_group(): void
+    {
+        $id = $this->directWith($this->guest);
+
+        // Either participant can add — there's no meaningful "owner" of a 1:1,
+        // and $this->guest never created this conversation.
+        $this->actingAsInOrganization($this->guest);
+        $this->patchJson('/api/connect/conversations/'.$id.'/membership', ['action' => 'add', 'user_id' => $this->third->id])->assertOk();
+
+        $this->assertDatabaseHas('connect_conversations', ['id' => $id, 'kind' => 'group', 'direct_key' => null]);
+        $response = $this->getJson('/api/connect/conversations/'.$id)->assertOk();
+        $response->assertJsonPath('data.kind', 'group');
+        $memberNames = collect($response->json('data.members'))->pluck('name')->sort()->values()->all();
+        $this->assertEquals(collect([$this->host->name, $this->guest->name, $this->third->name])->sort()->values()->all(), $memberNames);
+
+        // Now a real group: the owner-only actions that were blocked for "direct" apply again.
+        $this->patchJson('/api/connect/conversations/'.$id.'/membership', ['action' => 'rename', 'name' => 'Renamed'])->assertForbidden();
+        $this->actingAsInOrganization($this->host);
+        $this->patchJson('/api/connect/conversations/'.$id.'/membership', ['action' => 'rename', 'name' => 'Renamed'])->assertOk();
+    }
+
+    public function test_adding_a_member_to_a_direct_conversation_auto_names_it_from_members(): void
+    {
+        $id = $this->directWith($this->guest);
+        $this->patchJson('/api/connect/conversations/'.$id.'/membership', ['action' => 'add', 'user_id' => $this->third->id])->assertOk();
+        $name = $this->getJson('/api/connect/conversations/'.$id)->json('data.name');
+        $this->assertStringContainsString($this->host->name, $name);
+        $this->assertStringContainsString($this->guest->name, $name);
+        $this->assertStringContainsString($this->third->name, $name);
+    }
+
     public function test_read_and_unread_tracking_drives_unread_count(): void
     {
         $id = $this->directWith($this->guest);
@@ -209,11 +240,18 @@ class ConnectChatTest extends TestCase
         $this->assertSame(1, \App\Models\ConnectMessage::where('conversation_id', $id)->count());
 
         $this->postJson('/api/connect/conversations/'.$id.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Bad reply', 'reply_to_id' => 999999])->assertUnprocessable();
-        $this->postJson('/api/connect/conversations/'.$id.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Bad mention', 'mentions' => [$this->outsider->id]])->assertUnprocessable();
+
+        // Mentions are meaningless in a direct message (there's only the one other
+        // member, who already sees everything), so they're dropped rather than
+        // validated there — sending still succeeds even with a bogus mention.
+        $direct = $this->postJson('/api/connect/conversations/'.$id.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Ignored mention', 'mentions' => [$this->outsider->id]])->assertCreated()->json('data');
+        $this->assertSame([], $direct['mentions']);
 
         // Archiving is group/channel-only (direct conversations reject it, covered
-        // separately), so exercise the archived-blocks-sending rule on a group.
+        // separately), so exercise the archived-blocks-sending rule, and mention
+        // validation (which does apply to groups), on a group.
         $groupId = $this->groupWith([$this->guest->id]);
+        $this->postJson('/api/connect/conversations/'.$groupId.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Bad mention', 'mentions' => [$this->outsider->id]])->assertUnprocessable();
         $this->patchJson('/api/connect/conversations/'.$groupId.'/membership', ['action' => 'archive', 'enabled' => true])->assertOk();
         $this->postJson('/api/connect/conversations/'.$groupId.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'After archive'])->assertStatus(409);
     }
@@ -231,6 +269,26 @@ class ConnectChatTest extends TestCase
         $this->assertDatabaseHas('notifications', ['notifiable_id' => $this->third->id]);
         $notification = \Illuminate\Support\Facades\DB::table('notifications')->where('notifiable_id', $this->third->id)->first();
         $this->assertStringContainsString('connect.mentioned', $notification->data);
+    }
+
+    public function test_sending_a_message_pushes_to_a_recipients_registered_device(): void
+    {
+        // Regression: ConnectChatService::notify() used to insert the
+        // notifications row directly, bypassing ValtireoNotification's via()
+        // entirely — the in-app row looked identical either way, so nothing
+        // about this was visibly broken, but it meant Connect push never
+        // actually fired through ExpoPushChannel.
+        \Illuminate\Support\Facades\Http::fake(['exp.host/*' => \Illuminate\Support\Facades\Http::response(['data' => []], 200)]);
+
+        $id = $this->directWith($this->guest);
+        \App\Models\DevicePushToken::query()->create(['user_id' => $this->guest->id, 'token' => 'ExponentPushToken[regression-check]', 'platform' => 'android']);
+
+        $this->postJson('/api/connect/conversations/'.$id.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Hello'])->assertCreated();
+
+        \Illuminate\Support\Facades\Http::assertSent(function ($request) {
+            return $request->url() === 'https://exp.host/--/api/v2/push/send'
+                && in_array('ExponentPushToken[regression-check]', array_column($request->data(), 'to'), true);
+        });
     }
 
     public function test_message_editing_deleting_pinning_reacting_and_reporting(): void
@@ -258,6 +316,16 @@ class ConnectChatTest extends TestCase
         $this->patchJson("/api/connect/conversations/{$id}/messages/{$other}", ['action' => 'report', 'reason' => 'Inappropriate'])->assertOk();
         $this->patchJson("/api/connect/conversations/{$id}/messages/{$other}", ['action' => 'report', 'reason' => 'Again'])->assertOk();
         $this->assertSame(1, \Illuminate\Support\Facades\DB::table('connect_reports')->where('message_id', $other)->count());
+    }
+
+    public function test_message_deletion_is_blocked_past_the_fifteen_minute_window(): void
+    {
+        $id = $this->directWith($this->guest);
+        $messageId = $this->postJson('/api/connect/conversations/'.$id.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Stale'])->json('data.id');
+        \App\Models\ConnectMessage::whereKey($messageId)->update(['created_at' => now()->subMinutes(16)]);
+
+        $this->patchJson("/api/connect/conversations/{$id}/messages/{$messageId}", ['action' => 'delete'])->assertForbidden();
+        $this->assertDatabaseHas('connect_messages', ['id' => $messageId, 'body' => 'Stale']);
     }
 
     public function test_group_non_owner_cannot_pin_but_direct_members_can(): void

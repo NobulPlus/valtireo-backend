@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAgenda, type AgendaItem } from '../features/calendar/api';
@@ -31,10 +32,11 @@ function AgendaRow({ item, colors, typography, styles }: { item: AgendaItem; col
 export function CalendarScreen() {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { items, isLoading, isError, isRefetching, refetch, canLoadMore, loadMore } = useAgenda();
+  const { items, isLoading, isError, error, isRefetching, refetch, canLoadMore, loadMore } = useAgenda();
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <FlatList
         data={items}
         keyExtractor={(item) => item.key}
@@ -42,7 +44,7 @@ export function CalendarScreen() {
         renderItem={({ item }) => <AgendaRow item={item} colors={colors} typography={typography} styles={styles} />}
         refreshing={isRefetching}
         onRefresh={refetch}
-        ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
+        ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
         ListFooterComponent={
           canLoadMore ? (
             <Pressable onPress={loadMore} disabled={isRefetching} style={{ paddingVertical: spacing.md, alignItems: 'center' }}>

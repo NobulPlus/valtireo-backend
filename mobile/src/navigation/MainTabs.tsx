@@ -7,8 +7,10 @@ import { HomeStack, type HomeStackParamList } from './HomeStack';
 import { LeaveStack } from './LeaveStack';
 import { AttendanceStack } from './AttendanceStack';
 import { TicketsStack, type TicketsStackParamList } from './TicketsStack';
+import { ApprovalsStack, type ApprovalsStackParamList } from './ApprovalsStack';
 import { MoreStack, type MoreStackParamList } from './MoreStack';
 import { useAuth } from '../context/AuthContext';
+import { isEligibleForManagerHome } from '../lib/managerEligibility';
 import { radius, shadow, useV2Colors, V2_FONTS } from '../theme';
 
 /**
@@ -31,6 +33,12 @@ export type MainTabParamList = {
   // shape already used for MoreTab below — TicketsTab itself is unchanged, still a
   // plain tab with no params when navigated to bare.
   TicketsTab: NavigatorScreenParams<TicketsStackParamList> | undefined;
+  // Manager-only (see isEligibleForManagerHome) — same `has_manager_scope` gate as
+  // Home's "Team at a glance" card, not a module entitlement, so it isn't part of
+  // the showLeave/showAttendance/showTickets moduleByKey() checks below. Widened
+  // the same way TicketsTab is, so a tapped approval push notification
+  // (navigationRef.ts) can deep-link straight to a specific request.
+  ApprovalsTab: NavigatorScreenParams<ApprovalsStackParamList> | undefined;
   MoreTab: NavigatorScreenParams<MoreStackParamList> | undefined;
 };
 
@@ -41,11 +49,13 @@ const ICONS: Record<keyof MainTabParamList, { active: keyof typeof Ionicons.glyp
   LeaveTab: { active: 'calendar', inactive: 'calendar-outline' },
   AttendanceTab: { active: 'time', inactive: 'time-outline' },
   TicketsTab: { active: 'ticket', inactive: 'ticket-outline' },
+  ApprovalsTab: { active: 'checkmark-done', inactive: 'checkmark-done-outline' },
   MoreTab: { active: 'grid', inactive: 'grid-outline' },
 };
 
 export function MainTabs() {
-  const { moduleByKey } = useAuth();
+  const { moduleByKey, session } = useAuth();
+  const showApprovals = isEligibleForManagerHome(session);
   // Design System v2 — the bar itself is shared chrome under every screen
   // (most of which are still on the legacy palette), not a screen redesign;
   // only its own colors/typography move to v2, per explicit request, while no
@@ -94,6 +104,7 @@ export function MainTabs() {
       {showLeave ? <Tab.Screen name="LeaveTab" component={LeaveStack} options={{ title: 'Leave' }} /> : null}
       {showAttendance ? <Tab.Screen name="AttendanceTab" component={AttendanceStack} options={{ title: 'Attendance' }} /> : null}
       {showTickets ? <Tab.Screen name="TicketsTab" component={TicketsStack} options={{ title: 'Tickets' }} /> : null}
+      {showApprovals ? <Tab.Screen name="ApprovalsTab" component={ApprovalsStack} options={{ title: 'Approvals' }} /> : null}
       <Tab.Screen
         name="MoreTab"
         component={MoreStack}

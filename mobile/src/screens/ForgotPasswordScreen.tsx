@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { useForgotPassword, useResetPassword } from '../features/auth/api';
 import { ApiError } from '../lib/apiClient';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
@@ -50,6 +51,8 @@ export function ForgotPasswordScreen({ navigation }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Pressable onPress={() => navigation.goBack()} style={styles.back} accessibilityRole="button" accessibilityLabel="Back to sign in">
@@ -132,11 +135,13 @@ export function ForgotPasswordScreen({ navigation }: Props) {
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
   back: { position: 'absolute', top: spacing.xl, left: spacing.lg, padding: spacing.xs },
   subtitle: { marginTop: spacing.sm, marginBottom: spacing.lg },

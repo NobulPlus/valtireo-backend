@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { MobileNavDrawer } from '@/components/shell/MobileNavDrawer';
 import { Topbar } from '@/components/shell/Topbar';
+import { ConnectCallDock } from '@/features/connect/ConnectCallDock';
+import { IdleLogoutWatcher } from '@/components/shell/IdleLogoutWatcher';
 
 export function AppShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -10,6 +12,8 @@ export function AppShell() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-canvas">
       <Sidebar />
+      <ConnectCallDock />
+      <IdleLogoutWatcher />
       <MobileNavDrawer open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onOpenMobileNav={() => setMobileNavOpen(true)} />

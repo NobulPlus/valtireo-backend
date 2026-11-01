@@ -93,6 +93,9 @@ export function useCancelLeaveRequest(leaveRequestId: number) {
   });
 }
 
+/** Generous relative to apiClient's 30s API timeout — this downloads an actual file body, not a JSON response, so it's expected to take longer; it still must end eventually instead of hanging on a stalled connection with no way to cancel short of killing the app. */
+const DOWNLOAD_TIMEOUT_MS = 60_000;
+
 /**
  * Downloads an authenticated file to local cache, then hands it to the OS
  * share sheet (view/save/send) — the mobile equivalent of the web's
@@ -103,10 +106,21 @@ export async function downloadAndShare(path: string, suggestedName: string): Pro
   const token = getStoredToken();
   const url = `${apiClient.defaults.baseURL}${path}`;
   const safeName = suggestedName.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const file = await File.downloadFileAsync(url, new File(Paths.cache, `${Date.now()}-${safeName}`), {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    idempotent: true,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+  let file;
+  try {
+    file = await File.downloadFileAsync(url, new File(Paths.cache, `${Date.now()}-${safeName}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      idempotent: true,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('This is taking longer than expected. Check your connection and try again.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   try {
     if (token !== getStoredToken()) throw new Error('Your session changed. Please try again.');
     await Sharing.shareAsync(file.uri);

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from '../context/AuthContext';
 import { navigateFromRoot } from '../navigation/navigationRef';
+import { isEligibleForManagerHome } from './managerEligibility';
 import { registerPushToken } from './pushTokenRegistration';
 import { resolveNotificationDestination, type NotificationAccess, type NotificationLike } from './notificationNavigation';
 
@@ -13,12 +14,13 @@ import { resolveNotificationDestination, type NotificationAccess, type Notificat
  * lib/notificationNavigation.ts).
  */
 export function usePushNotifications(enabled: boolean): void {
-  const { moduleByKey } = useAuth();
+  const { moduleByKey, session } = useAuth();
   const currentAccess: NotificationAccess = {
     leave: moduleByKey('leave')?.can_access === true,
     serviceDesk: moduleByKey('service_desk')?.can_access === true,
     employeeSelfService: moduleByKey('employee_self_service')?.can_access === true,
     connect: moduleByKey('connect')?.can_access === true,
+    approvals: isEligibleForManagerHome(session),
   };
   // A ref, not state: the tap listener below is set up once and must read
   // whatever access the person currently has, not whatever it was when the

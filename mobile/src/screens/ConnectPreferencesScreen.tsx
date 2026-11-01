@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { ProductIconField } from '../components/ProductIconField';
 import { useConnectPreferences, useSaveConnectPreferences } from '../features/connect/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 import type { ConnectStackParamList } from '../navigation/ConnectStack';
@@ -25,6 +26,8 @@ export function ConnectPreferencesScreen({ navigation }: Props) {
   if (query.isLoading || !query.data) return <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} />;
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.sectionLabel}>Availability</Text>
       <View style={styles.pillRow}>
@@ -54,11 +57,13 @@ export function ConnectPreferencesScreen({ navigation }: Props) {
         </Pressable>
       ) : null}
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, gap: spacing.md },
   sectionLabel: { fontSize: 13, fontWeight: '700', color: colors.ink },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

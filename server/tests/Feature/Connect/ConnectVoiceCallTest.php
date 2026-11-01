@@ -61,6 +61,27 @@ class ConnectVoiceCallTest extends TestCase
         return $this->postJson('/api/connect/conversations', ['kind' => 'direct', 'member_ids' => [$other->id]])->assertCreated()->json('data.id');
     }
 
+    public function test_an_incoming_call_pushes_to_the_callees_registered_device(): void
+    {
+        // Regression: ConnectChatService::notify() (shared by messages and
+        // calls) used to bypass ValtireoNotification's channels entirely via a
+        // raw notifications-table insert — an incoming call looked like it
+        // notified, but never actually pushed.
+        Http::fake([
+            'media.example.test/*' => fn () => Http::response([], 200),
+            'exp.host/*' => Http::response(['data' => []], 200),
+        ]);
+        \App\Models\DevicePushToken::query()->create(['user_id' => $this->guest->id, 'token' => 'ExponentPushToken[incoming-call]', 'platform' => 'ios']);
+
+        $id = $this->directWith($this->guest);
+        $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated();
+
+        Http::assertSent(function ($request) {
+            return $request->url() === 'https://exp.host/--/api/v2/push/send'
+                && in_array('ExponentPushToken[incoming-call]', array_column($request->data(), 'to'), true);
+        });
+    }
+
     public function test_calls_only_support_direct_conversations(): void
     {
         $groupId = $this->postJson('/api/connect/conversations', ['kind' => 'group', 'name' => 'Team', 'member_ids' => [$this->guest->id, $this->third->id]])->assertCreated()->json('data.id');
@@ -175,6 +196,66 @@ class ConnectVoiceCallTest extends TestCase
         OrganizationModule::where('organization_id', $this->org->id)->update(['status' => 'suspended']);
         $this->artisan('connect:reconcile-voice')->assertExitCode(0);
         $this->assertDatabaseHas('connect_voice_calls', ['id' => $call2, 'status' => 'ended']);
+    }
+
+    public function test_an_abandoned_active_call_is_ended_by_the_scheduled_sweep_once_the_room_is_empty(): void
+    {
+        $id = $this->directWith($this->guest);
+        $callId = $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated()->json('data.id');
+        $this->actingAsInOrganization($this->guest);
+        $this->postJson("/api/connect/calls/{$callId}/actions", ['action' => 'accept'])->assertOk();
+
+        // Immediately after accepting, the grace period protects a callee whose
+        // client just hasn't finished connecting to the room yet.
+        $this->artisan('connect:reconcile-voice')->assertExitCode(0);
+        $this->assertDatabaseHas('connect_voice_calls', ['id' => $callId, 'status' => 'active']);
+
+        // Past the grace period, an empty room (the default fake ListParticipants
+        // response — see setUp) means both sides are genuinely gone.
+        $this->travel(21)->seconds();
+        $this->artisan('connect:reconcile-voice')->assertExitCode(0);
+        $this->assertDatabaseHas('connect_voice_calls', ['id' => $callId, 'status' => 'ended']);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/ListParticipants'));
+    }
+
+    public function test_an_active_call_still_occupied_is_not_ended_by_the_scheduled_sweep(): void
+    {
+        $id = $this->directWith($this->guest);
+        $callId = $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated()->json('data.id');
+        $this->actingAsInOrganization($this->guest);
+        $this->postJson("/api/connect/calls/{$callId}/actions", ['action' => 'accept'])->assertOk();
+
+        // Mocking the service boundary rather than re-faking Http mid-test:
+        // setUp()'s own Http::fake() already owns the media.example.test/*
+        // pattern for the rest of this test's lifetime (a later Http::fake()
+        // call for the same pattern does not take over resolution order —
+        // confirmed directly, not assumed), so a clean way to make only
+        // ListParticipants answer differently here is to stub the method itself.
+        $guestId = $this->guest->id;
+        $this->partialMock(\App\Services\ConnectMediaService::class, function ($mock) use ($guestId) {
+            $mock->shouldReceive('voiceParticipants')->andReturn([['identity' => 'user-'.$guestId]]);
+        });
+
+        $this->travel(21)->seconds();
+        $this->artisan('connect:reconcile-voice')->assertExitCode(0);
+        $this->assertDatabaseHas('connect_voice_calls', ['id' => $callId, 'status' => 'active']);
+    }
+
+    public function test_the_four_second_poll_path_never_pays_for_a_presence_check(): void
+    {
+        // The interactive path (GET /connect/calls, polled every ~4s while a
+        // call is up) must stay cheap — only the once-a-minute scheduled sweep
+        // opts into checking LiveKit at all. An empty room here must NOT end
+        // the call, and ListParticipants must never even be called.
+        $id = $this->directWith($this->guest);
+        $callId = $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated()->json('data.id');
+        $this->actingAsInOrganization($this->guest);
+        $this->postJson("/api/connect/calls/{$callId}/actions", ['action' => 'accept'])->assertOk();
+
+        $this->travel(21)->seconds();
+        $this->getJson('/api/connect/calls')->assertOk();
+        $this->assertDatabaseHas('connect_voice_calls', ['id' => $callId, 'status' => 'active']);
+        Http::assertNotSent(fn ($request) => str_ends_with($request->url(), '/ListParticipants'));
     }
 
     public function test_calls_are_private_to_their_two_participants(): void

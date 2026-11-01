@@ -10,6 +10,7 @@ import { queryClient } from './src/lib/queryClient';
 import { loadStoredToken } from './src/lib/secureToken';
 import { AuthProvider } from './src/context/AuthContext';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { IdleLogoutWatcher } from './src/components/IdleLogoutWatcher';
 import { QueryError } from './src/components/QueryError';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -19,7 +20,9 @@ function AppContent() {
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <RootNavigator />
+      <IdleLogoutWatcher>
+        <RootNavigator />
+      </IdleLogoutWatcher>
     </>
   );
 }

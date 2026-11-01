@@ -6,7 +6,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
-import { uploadFile } from '../lib/uploadFile';
+import { ProductIconField } from '../components/ProductIconField';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
 import { uuid } from '../lib/uuid';
 import { VoiceRecorder, MobileAttachment } from '../features/connect/ConnectAudio';
 import {
@@ -82,6 +83,11 @@ export function ConnectConversationScreen({ route, navigation }: Props) {
   if (conversation.isLoading) return <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} />;
   if (!c) return <Text style={styles.error}>{conversation.error instanceof Error ? conversation.error.message : 'Could not load this conversation.'}</Text>;
 
+  // Oldest-to-newest, same as the web client — a short conversation starts at
+  // the top of the screen instead of clinging to the bottom the way an
+  // `inverted` FlatList would anchor it.
+  const ordered = [...(messages.data ?? [])].reverse();
+
   function toggleMention(id: number) {
     setMentions((current) => current.includes(id) ? current.filter((m) => m !== id) : [...current, id]);
   }
@@ -89,7 +95,12 @@ export function ConnectConversationScreen({ route, navigation }: Props) {
   async function attach() {
     const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf', 'text/*', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'], copyToCacheDirectory: true });
     if (result.canceled || !result.assets[0]) return;
-    sendMessage({ file: uploadFile(result.assets[0]) });
+    const asset = result.assets[0];
+    if (isFileTooLarge(asset, MAX_UPLOAD_BYTES.connectAttachment)) {
+      Alert.alert('File too large', `Attachments must be ${formatMaxSize(MAX_UPLOAD_BYTES.connectAttachment)} or smaller.`);
+      return;
+    }
+    sendMessage({ file: uploadFile(asset) });
   }
 
   function sendMessage(extra: { file?: ReturnType<typeof uploadFile>; voiceNote?: boolean } = {}) {
@@ -104,18 +115,24 @@ export function ConnectConversationScreen({ route, navigation }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.select({ ios: 'padding', default: undefined })} keyboardVerticalOffset={90}>
+    <View style={styles.root}>
+    <ProductIconField />
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={90}>
       {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
       {c.archived ? <Text style={styles.archivedNotice}>This conversation is archived.</Text> : null}
 
+      {messages.data?.length === 50 || before ? (
+        <View style={styles.pagerRow}>
+          {messages.data?.length === 50 ? <Pressable onPress={() => setBefore(ordered[0]?.id)}><Text style={styles.pagerLink}>Older messages</Text></Pressable> : null}
+          {before ? <Pressable onPress={() => setBefore(undefined)}><Text style={styles.pagerLink}>Latest</Text></Pressable> : null}
+        </View>
+      ) : null}
+
       <FlatList
-        data={messages.data ?? []}
+        data={ordered}
         keyExtractor={(item) => String(item.id)}
-        inverted
         contentContainerStyle={styles.messages}
-        onEndReached={() => { if (messages.data?.length === 50) setBefore(messages.data.at(-1)?.id); }}
-        onEndReachedThreshold={0.4}
-        ListFooterComponent={before ? <Pressable onPress={() => setBefore(undefined)}><Text style={styles.jumpToLatest}>Jump to latest</Text></Pressable> : null}
+        ListEmptyComponent={<Text style={styles.emptyNote}>No messages here yet.</Text>}
         renderItem={({ item }: { item: Message }) => (
           <MessageRow
             message={item}
@@ -139,7 +156,11 @@ export function ConnectConversationScreen({ route, navigation }: Props) {
               <Pressable onPress={() => setReply(null)}><Ionicons name="close" size={14} color={colors.muted} /></Pressable>
             </View>
           ) : null}
-          {c.members.length > 1 ? (
+          {/* Direct conversations have exactly one other member, who already sees
+              every message — the backend silently drops mentions sent there
+              (see ConnectChatController@send), so don't offer a picker that
+              would look like it did something. */}
+          {c.kind !== 'direct' && c.members.length > 1 ? (
             <View style={styles.mentionRow}>
               {c.members.filter((m) => m.id !== userId).map((m) => (
                 <Pressable key={m.id} style={[styles.mentionChip, mentions.includes(m.id) && styles.mentionChipActive]} onPress={() => toggleMention(m.id)}>
@@ -167,6 +188,7 @@ export function ConnectConversationScreen({ route, navigation }: Props) {
         </View>
       )}
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -180,13 +202,20 @@ function MessageRow({ message, isMine, canModerate, onReply, onReact, onEdit, on
   const [draft, setDraft] = useState(message.body ?? '');
   const [reporting, setReporting] = useState(false);
   const [reason, setReason] = useState('');
+  // Six action icons rendered under every single message read as cluttered at
+  // any real message volume — hidden until the message itself is tapped,
+  // the mobile counterpart of web's hover-to-reveal toolbar (no hover on
+  // touch, so a deliberate tap stands in for it).
+  const [revealed, setRevealed] = useState(false);
 
   return (
-    <View style={styles.messageRow}>
+    <View style={[styles.messageRow, isMine && styles.messageRowMine]}>
       <Avatar name={message.sender.name} uri={message.sender.photo_url} size={32} fallbackColor={colors.chip} fallbackTextColor={colors.pine} />
-      <View style={styles.messageBody}>
+      <Pressable style={[styles.messageBody, isMine && styles.messageBodyMine]} onPress={() => setRevealed((current) => !current)}>
         <View style={styles.messageHeader}>
-          <Text style={styles.senderName}>{message.sender.name}</Text>
+          {/* Own messages skip the name label — the right-alignment and
+              highlighted bubble already say "you", same as the web client. */}
+          {isMine ? null : <Text style={styles.senderName}>{message.sender.name}</Text>}
           <Text style={styles.messageTime}>{new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
           {message.pinned ? <Ionicons name="pin" size={11} color={colors.pine} /> : null}
         </View>
@@ -208,7 +237,7 @@ function MessageRow({ message, isMine, canModerate, onReply, onReact, onEdit, on
             <Pressable accessibilityLabel="Cancel report" style={styles.actionButton} onPress={() => setReporting(false)}><Ionicons name="close" size={16} color={colors.muted} /></Pressable>
           </View>
         ) : null}
-        {!message.deleted && !editing ? (
+        {!message.deleted && !editing && revealed ? (
           <View style={styles.actionsRow}>
             <Pressable accessibilityLabel="Reply" style={styles.actionButton} onPress={onReply}><Ionicons name="arrow-undo-outline" size={15} color={colors.muted} /></Pressable>
             {REACTIONS.map((reactionOption) => {
@@ -228,19 +257,30 @@ function MessageRow({ message, isMine, canModerate, onReply, onReact, onEdit, on
             <Pressable accessibilityLabel="Report message" style={styles.actionButton} onPress={() => setReporting(true)}><Ionicons name="flag-outline" size={15} color={colors.muted} /></Pressable>
           </View>
         ) : null}
-      </View>
+      </Pressable>
     </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   error: { color: colors.danger, fontSize: 13, padding: spacing.md },
   archivedNotice: { fontSize: 12, color: colors.muted, textAlign: 'center', paddingVertical: spacing.sm },
   messages: { padding: spacing.lg, gap: spacing.md },
-  jumpToLatest: { textAlign: 'center', color: colors.pine, fontWeight: '600', fontSize: 13, paddingVertical: spacing.sm },
+  pagerRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.md, paddingVertical: spacing.sm },
+  pagerLink: { textAlign: 'center', color: colors.pine, fontWeight: '600', fontSize: 13 },
+  emptyNote: { textAlign: 'center', color: colors.muted, paddingVertical: spacing.xl },
   messageRow: { flexDirection: 'row', gap: spacing.sm },
-  messageBody: { flex: 1, backgroundColor: colors.white, borderRadius: radius.md, padding: spacing.sm + 2, borderWidth: 1, borderColor: colors.line },
+  // Mirrors the web client: your own messages sit on the right (avatar
+  // trailing instead of leading) in a highlighted bubble, so at a glance you
+  // can tell who sent what without reading every name label.
+  messageRowMine: { flexDirection: 'row-reverse' },
+  // Shrink-wraps to its own content, capped at 78% of the row — both sides
+  // of a conversation, same as web, instead of the incoming bubble stretching
+  // to fill nearly the whole row regardless of how short the message is.
+  messageBody: { flex: 0, maxWidth: '78%', backgroundColor: colors.white, borderRadius: radius.md, padding: spacing.sm + 2, borderWidth: 1, borderColor: colors.line },
+  messageBodyMine: { backgroundColor: colors.chip, borderColor: colors.chip },
   messageHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   senderName: { fontSize: 13, fontWeight: '700', color: colors.ink },
   messageTime: { fontSize: 11, color: colors.muted },

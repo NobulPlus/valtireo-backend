@@ -11,9 +11,7 @@
  * pattern below is copied from the real values `server/app/Services/
  * NotificationDispatchService.php` actually dispatches (confirmed by direct grep, not
  * inferred) — nothing here is a guess at a URL shape. Anything that doesn't match one
- * of these exact pairs — including a currently-unreachable combination like
- * `approval_request` + `/approvals/{id}` (no manager-approval screen exists on mobile;
- * that's Phase C, explicitly out of scope here) — resolves to `unsupported`.
+ * of these exact pairs resolves to `unsupported`.
  */
 
 export type NotificationDestination =
@@ -22,6 +20,8 @@ export type NotificationDestination =
   | { kind: 'ticketsTab' }
   | { kind: 'ticketDetail'; ticketId: number }
   | { kind: 'moreScreen'; screen: 'Documents' | 'Calendar' | 'Lifestyle' }
+  | { kind: 'connectConversation'; conversationId: string }
+  | { kind: 'approvalDetail'; approvalRequestId: number }
   | { kind: 'unsupported' };
 
 export interface NotificationAccess {
@@ -29,6 +29,10 @@ export interface NotificationAccess {
   serviceDesk: boolean;
   /** Documents/Lifestyle are both gated on the `employee_self_service` module, matching MoreMenuScreen's own gating convention. */
   employeeSelfService: boolean;
+  /** Gates `connect_conversation` notifications (messages, mentions, missed calls) the same way MoreMenuScreen gates the Connect tile: on module access, not a permission. */
+  connect: boolean;
+  /** Reviewer-facing approval notifications only make sense for someone with a manager-eligible session — same `has_manager_scope` gate as the Approvals tab (see MainTabs.tsx's `showApprovals`), not a module. */
+  approvals: boolean;
 }
 
 export interface NotificationLike {
@@ -38,6 +42,8 @@ export interface NotificationLike {
 }
 
 const TICKET_DETAIL_PATTERN = /^\/service-desk\?ticket=(\d+)$/;
+const CONNECT_CHAT_PATTERN = /^\/connect\/chat\/([\w-]+)$/;
+const APPROVAL_DETAIL_PATTERN = /^\/approvals\/(\d+)$/;
 
 function asPositiveInt(value: unknown): number | null {
   const n = typeof value === 'number' ? value : Number(value);
@@ -85,13 +91,29 @@ export function resolveNotificationDestination(notification: NotificationLike, a
     return access.employeeSelfService ? { kind: 'moreScreen', screen: 'Lifestyle' } : { kind: 'unsupported' };
   }
 
+  if (type === 'connect_conversation') {
+    // Covers every Connect event this backend dispatches under this entity_type —
+    // new message, @mention, incoming/missed call — they all point at the same
+    // conversation, so one destination kind covers all of them.
+    const match = CONNECT_CHAT_PATTERN.exec(url);
+    if (match) return access.connect ? { kind: 'connectConversation', conversationId: match[1] } : { kind: 'unsupported' };
+    return { kind: 'unsupported' };
+  }
+
   if (type === 'approval_request') {
-    // These two are the self-facing outcomes (`decidedActionFor()`,
-    // server/app/Services/NotificationDispatchService.php:209-224) — the employee's
-    // own leave/document request was decided. Anything else under this entity_type
-    // (e.g. `/approvals/{id}`, the reviewer-facing case) has no mobile screen yet.
+    // `/me/leave` and `/me/profile?tab=documents` are the self-facing outcomes
+    // (`decidedActionFor()`, server/app/Services/NotificationDispatchService.php:
+    // 209-224) — the employee's own leave/document request was decided.
+    // `/approvals/{id}` (NotificationDispatchService.php:211-212) is the
+    // reviewer-facing case, only ever sent to someone who `can('approvals.view')`.
     if (url === '/me/leave') return access.leave ? { kind: 'leaveTab' } : { kind: 'unsupported' };
     if (url === '/me/profile?tab=documents') return access.employeeSelfService ? { kind: 'moreScreen', screen: 'Documents' } : { kind: 'unsupported' };
+    const match = APPROVAL_DETAIL_PATTERN.exec(url);
+    if (match) {
+      if (!access.approvals) return { kind: 'unsupported' };
+      const approvalRequestId = asPositiveInt(match[1]);
+      return approvalRequestId !== null ? { kind: 'approvalDetail', approvalRequestId } : { kind: 'unsupported' };
+    }
     return { kind: 'unsupported' };
   }
 

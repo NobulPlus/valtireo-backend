@@ -10,4 +10,5 @@ class ConnectMessage extends Model
     protected function casts(): array { return ['mentions' => 'array', 'pinned' => 'boolean', 'voice_note' => 'boolean', 'deleted_at' => 'datetime', 'edited_at' => 'datetime']; }
     public function sender() { return $this->belongsTo(User::class, 'sender_id'); }
     public function conversation() { return $this->belongsTo(ConnectConversation::class, 'conversation_id'); }
+    public function replyTo() { return $this->belongsTo(self::class, 'reply_to_id'); }
 }

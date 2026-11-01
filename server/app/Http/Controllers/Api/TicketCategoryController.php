@@ -31,6 +31,7 @@ class TicketCategoryController extends Controller
             })
             ->when($request->filled('is_active'), fn ($query) => $query->where('is_active', $request->boolean('is_active')))
             ->orderBy('name')
+            ->orderBy('id')
             ->paginate(min(max($request->integer('per_page', 15), 1), 100));
 
         return TicketCategoryResource::collection($categories);

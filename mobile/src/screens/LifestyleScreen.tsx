@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text,
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import {
   useAppreciations,
@@ -141,6 +142,7 @@ export function LifestyleScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <FlatList
         refreshing={preferencesQuery.isRefetching || milestonesQuery.isRefetching || appreciationsQuery.isRefetching}
         onRefresh={() => {
@@ -158,7 +160,7 @@ export function LifestyleScreen({ navigation }: Props) {
         onEndReachedThreshold={0.5}
         ListHeaderComponent={
           <View>
-            {preferencesQuery.isError ? <QueryError retry={preferencesQuery.refetch} /> : null}
+            {preferencesQuery.isError ? <QueryError retry={preferencesQuery.refetch} error={preferencesQuery.error} /> : null}
             {preferencesQuery.isLoading ? <ActivityIndicator color={colors.pine} /> : null}
             <View style={styles.headerRow}>
               <Text style={styles.sectionTitle}>Milestones</Text>
@@ -170,7 +172,7 @@ export function LifestyleScreen({ navigation }: Props) {
               <Text style={[styles.caption, { marginBottom: spacing.lg }]}>Milestones aren&apos;t turned on for your organization yet.</Text>
             ) : milestonesQuery.isLoading ? (
               <ActivityIndicator color={colors.pine} />
-            ) : milestonesQuery.isError ? <QueryError retry={milestonesQuery.refetch} /> : (milestonesQuery.data ?? []).length === 0 ? (
+            ) : milestonesQuery.isError ? <QueryError retry={milestonesQuery.refetch} error={milestonesQuery.error} /> : (milestonesQuery.data ?? []).length === 0 ? (
               <Text style={[styles.caption, { marginBottom: spacing.lg }]}>Nothing coming up in the next 30 days.</Text>
             ) : (
               <View style={styles.milestonesCard}>
@@ -197,7 +199,7 @@ export function LifestyleScreen({ navigation }: Props) {
         ListFooterComponent={appreciationEnabled ? <ListFooterLoader visible={appreciationsQuery.isFetchingNextPage} /> : null}
         ListEmptyComponent={
           !appreciationEnabled ? null : appreciationsQuery.isError ? (
-            <QueryError retry={appreciationsQuery.refetch} />
+            <QueryError retry={appreciationsQuery.refetch} error={appreciationsQuery.error} />
           ) : appreciationsQuery.isLoading ? (
             <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} />
           ) : (

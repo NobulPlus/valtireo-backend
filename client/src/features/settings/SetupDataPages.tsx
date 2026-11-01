@@ -384,7 +384,7 @@ function InlineRowAction({
 
   if (!isOpen) {
     return (
-      <Button type="button" size="sm" onClick={() => setIsOpen(true)} title="Edit">
+      <Button type="button" size="sm" onClick={() => setIsOpen(true)} title="Edit" aria-label="Edit">
         <Pencil className="h-3.5 w-3.5" />
       </Button>
     );

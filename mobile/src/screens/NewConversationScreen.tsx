@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { Avatar } from '../components/Avatar';
+import { ProductIconField } from '../components/ProductIconField';
 import { useDepartmentOptions } from '../features/directory/api';
 import { useConnectPeople, useCreateConversation } from '../features/connect/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
@@ -49,6 +50,7 @@ export function NewConversationScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <View style={styles.kindRow}>
         {(['direct', 'group', 'channel'] as const).map((option) => (
           <Pressable key={option} style={[styles.kindPill, kind === option && styles.kindPillActive]} onPress={() => { setKind(option); setMemberIds([]); }}>

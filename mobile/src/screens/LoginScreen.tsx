@@ -23,7 +23,9 @@ function clamp(value: number, min: number, max: number): number {
  * Design System v2 ("Warm & Human") Login — see docs/design-system/04-screen-specifications-login-home.md
  * (Revision 2). No gradient hero, no floating card: a single calm page background,
  * centered branding, pill-shaped fields/buttons, and the shared `DecorativeAccents`
- * treatment (see mobile/src/components/DecorativeAccents.tsx).
+ * treatment (see mobile/src/components/DecorativeAccents.tsx) — kept on its own
+ * soft-blob look rather than the ProductIconField background every other screen
+ * uses, at the user's explicit request after reviewing both on-device.
  */
 export function LoginScreen({ navigation }: Props) {
   const { scheme } = useTheme();

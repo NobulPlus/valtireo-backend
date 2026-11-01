@@ -10,8 +10,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.valtireo.mobile",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Valtireo uses Face ID to sign you back in quickly and securely."
-      }
+        "NSFaceIDUsageDescription": "Valtireo uses Face ID to sign you back in quickly and securely.",
+        "NSMicrophoneUsageDescription": "Valtireo needs your microphone to make and receive Connect voice calls."
+      },
+      "bitcode": false
     },
     "android": {
       "package": "com.valtireo.mobile",
@@ -21,7 +23,21 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.WAKE_LOCK",
+        "android.permission.BLUETOOTH"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,13 +54,16 @@
       "expo-document-picker",
       "expo-local-authentication",
       "expo-font",
+      "expo-audio",
       [
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
           "color": "#123F3A"
         }
-      ]
+      ],
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc"
     ],
     "extra": {
       "eas": {

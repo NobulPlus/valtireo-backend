@@ -45,6 +45,7 @@ class SystemErrorLogController extends Controller
             ->when($validated['date_from'] ?? null, fn ($query, string $date) => $query->whereDate('created_at', '>=', $date))
             ->when($validated['date_to'] ?? null, fn ($query, string $date) => $query->whereDate('created_at', '<=', $date))
             ->latest()
+            ->orderBy('id', 'desc')
             ->paginate($validated['per_page'] ?? 15);
 
         return SystemErrorLogResource::collection($logs);

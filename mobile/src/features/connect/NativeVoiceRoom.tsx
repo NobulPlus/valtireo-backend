@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, PermissionsAndroid, Platform, Text, View } from 'react-native';
-import { AudioSession, LiveKitRoom, registerGlobals, useRoomContext } from '@livekit/react-native';
+import { AudioSession, LiveKitRoom, registerGlobals, useConnectionState, useRoomContext } from '@livekit/react-native';
+import { ConnectionState } from 'livekit-client';
 
 registerGlobals();
 
@@ -53,15 +54,28 @@ export default function NativeVoiceRoom({ credentials }: { credentials: { token:
   );
 }
 
+// The audit's own words: this used to render "Voice call connected"
+// unconditionally — true the instant the LiveKit room object exists, not
+// once a media connection is actually up, so a still-connecting or silently
+// reconnecting call read as fully connected the whole time.
+const CONNECTION_LABEL: Record<ConnectionState, string> = {
+  [ConnectionState.Connecting]: 'Connecting…',
+  [ConnectionState.Connected]: 'Voice call connected',
+  [ConnectionState.Reconnecting]: 'Reconnecting…',
+  [ConnectionState.SignalReconnecting]: 'Reconnecting…',
+  [ConnectionState.Disconnected]: 'Disconnected',
+};
+
 function Controls() {
   const room = useRoomContext();
+  const connectionState = useConnectionState(room);
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(false);
   const [error, setError] = useState('');
 
   return (
     <View>
-      <Text>Voice call connected</Text>
+      <Text accessibilityLiveRegion="polite">{CONNECTION_LABEL[connectionState] ?? 'Connecting…'}</Text>
       <Button
         title={muted ? 'Unmute' : 'Mute'}
         onPress={() => void room.localParticipant.setMicrophoneEnabled(muted).then(() => setMuted(!muted)).catch((e) => setError(String(e)))}

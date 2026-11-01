@@ -28,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('valtireo:send-reminders')->daily();
         $schedule->command('valtireo:run-operational-automations')->hourly()->withoutOverlapping();
         $schedule->command('connect:reconcile')->everyMinute()->withoutOverlapping();
+        $schedule->command('connect:reconcile-voice')->everyMinute()->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (\Throwable $exception) {

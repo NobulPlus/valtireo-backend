@@ -35,7 +35,7 @@ class ConnectVoiceController extends Controller
             User::whereIn('id', [$actor->id, $callee->id])->orderBy('id')->lockForUpdate()->get();
             abort_if(ConnectVoiceCall::where('organization_id', $actor->organization_id)->whereIn('status', ['ringing', 'active'])->where(fn ($q) => $q->whereIn('caller_id', [$actor->id, $callee->id])->orWhereIn('callee_id', [$actor->id, $callee->id]))->exists(), 409, 'One participant is already on a call.');
             $call = ConnectVoiceCall::create(['organization_id' => $actor->organization_id, 'conversation_id' => $conversation->id, 'caller_id' => $actor->id, 'callee_id' => $callee->id, 'status' => 'ringing', 'expires_at' => now()->addSeconds(60)]);
-            $this->chat->notify($actor, $callee->id, 'connect.call.incoming', $conversation->id);
+            $this->chat->notify($actor, $callee, 'connect.call.incoming', $conversation->id);
             $this->chat->audit($actor, 'call.started', $call->id);
             return $call;
         });

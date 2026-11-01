@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '../components/Avatar';
+import { ProductIconField } from '../components/ProductIconField';
 import { useConnectCalls } from '../features/connect/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 
@@ -12,6 +13,7 @@ export function ConnectCallsScreen() {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       {query.data && !query.data.media_ready ? (
         <Text style={styles.notice}>Live audio is awaiting media-service configuration. Messaging and voice notes remain available.</Text>
       ) : null}

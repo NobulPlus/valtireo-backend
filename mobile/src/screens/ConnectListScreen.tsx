@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/apiClient';
 import { useConnectChannels, useConnectConversations } from '../features/connect/api';
 import { Avatar } from '../components/Avatar';
+import { ProductIconField } from '../components/ProductIconField';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 import type { ConnectStackParamList } from '../navigation/ConnectStack';
 import type { Conversation } from '../features/connect/types';
@@ -51,6 +52,7 @@ export function ConnectListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <View style={styles.tabs}>
         <Pressable style={[styles.tab, tab === 'messages' && styles.tabActive]} onPress={() => setTab('messages')}>
           <Text style={[styles.tabLabel, tab === 'messages' && styles.tabLabelActive]}>Messages</Text>

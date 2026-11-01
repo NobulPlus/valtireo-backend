@@ -23,6 +23,7 @@ class DocumentRequirementController extends Controller
             ->when($request->integer('department_id'), fn ($query, int $id) => $query->where('department_id', $id))
             ->when($request->filled('is_active'), fn ($query) => $query->where('is_active', $request->boolean('is_active')))
             ->orderBy('name')
+            ->orderBy('id')
             ->paginate(min(max($request->integer('per_page', 15), 1), 100));
 
         return DocumentRequirementResource::collection($requirements);

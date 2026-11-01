@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -140,6 +141,7 @@ class EmployeeController extends Controller
             })
             ->when($departmentId, fn (Builder $query, int $id) => $query->where('department_id', $id))
             ->orderBy('first_name')
+            ->orderBy('id')
             ->paginate($perPage);
 
         return EmployeeDirectoryResource::collection($employees)->additional([
@@ -482,32 +484,43 @@ class EmployeeController extends Controller
 
     public function updateMyProfile(UpdateEmployeeProfileRequest $request, EmployeeProfileActivityService $activities): JsonResponse
     {
-        $employee = $request->user()->employee()->with('profile')->firstOrFail();
-        $profile = $employee->profile()->firstOrCreate([
-            'employee_id' => $employee->id,
-        ]);
+        $newPath = null;
+        $oldPath = null;
+        try {
+            [$employee, $profile] = DB::transaction(function () use ($request, $activities, &$newPath, &$oldPath) {
+                // Serialize replacements, including the first profile creation.
+                $employee = $request->user()->employee()->where('organization_id', $request->user()->organization_id)->lockForUpdate()->firstOrFail();
+                $profile = $employee->profile()->firstOrCreate(['employee_id' => $employee->id]);
+                $data = $request->safe()->except('passport_photo');
+                if ($request->hasFile('passport_photo')) {
+                    $newPath = $request->file('passport_photo')->store("organizations/{$employee->organization_id}/employees/{$employee->id}/passport", 'local');
+                    abort_unless(is_string($newPath) && $newPath !== '', 503, 'Your photo could not be stored. Please try again.');
+                    $oldPath = $profile->passport_photo_path;
+                    $data['passport_photo_path'] = $newPath;
+                }
+                $profile->update([...$data, 'completion_status' => 'submitted']);
+                $activities->record($employee, $request->user(), 'profile_updated', 'Profile information updated', 'Employee submitted profile information.', $profile);
 
-        $data = $request->safe()->except('passport_photo');
-
-        if ($request->hasFile('passport_photo')) {
-            if ($profile->passport_photo_path) {
-                Storage::disk('local')->delete($profile->passport_photo_path);
+                return [$employee, $profile];
+            });
+        } catch (\Throwable $error) {
+            if ($newPath) {
+                try {
+                    Storage::disk('local')->delete($newPath);
+                } catch (\Throwable $cleanupError) {
+                    report($cleanupError);
+                }
             }
-
-            // Stored on the private 'local' disk and served only through photo()'s
-            // authenticated, organization-scoped endpoint below — never a public URL.
-            $data['passport_photo_path'] = $request->file('passport_photo')->store(
-                "organizations/{$employee->organization_id}/employees/{$employee->id}/passport",
-                'local'
-            );
+            throw $error;
         }
-
-        $profile->update([
-            ...$data,
-            'completion_status' => 'submitted',
-        ]);
-
-        $activities->record($employee, $request->user(), 'profile_updated', 'Profile information updated', 'Employee submitted profile information.', $profile);
+        // Only retire the previous file after its replacement is committed.
+        if ($oldPath && $oldPath !== $newPath) {
+            try {
+                Storage::disk('local')->delete($oldPath);
+            } catch (\Throwable $cleanupError) {
+                report($cleanupError);
+            }
+        }
 
         return response()->json([
             'employee' => new EmployeeResource($employee->refresh()),
@@ -533,7 +546,8 @@ class EmployeeController extends Controller
         return response()->file(Storage::disk('local')->path($path), [
             'Content-Type' => Storage::disk('local')->mimeType($path) ?: 'application/octet-stream',
             'Content-Disposition' => 'inline; filename="passport-photo"',
-            'Cache-Control' => 'private, max-age=3600',
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 

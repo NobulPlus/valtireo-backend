@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { ActivityIndicator, Alert, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -115,6 +116,7 @@ export function DirectoryScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <View style={styles.toolbar}>
         <TextInput
           value={search}
@@ -156,7 +158,7 @@ export function DirectoryScreen({ navigation }: Props) {
         onRefresh={query.refetch}
         onEndReached={query.fetchMore}
         onEndReachedThreshold={0.5}
-        ListHeaderComponent={query.isError ? <QueryError retry={query.refetch} /> : null}
+        ListHeaderComponent={query.isError ? <QueryError retry={query.refetch} error={query.error} /> : null}
         ListFooterComponent={<ListFooterLoader visible={query.isFetchingNextPage} />}
         ListEmptyComponent={
           query.isError ? null : query.isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No colleagues found.</Text>

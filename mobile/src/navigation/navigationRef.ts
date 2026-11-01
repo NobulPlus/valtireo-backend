@@ -38,6 +38,9 @@ export function navigateFromRoot(destination: NotificationDestination): void {
     case 'connectConversation':
       navigationRef.navigate('Main', { screen: 'MoreTab', params: { screen: 'Connect', params: { screen: 'ConnectConversation', params: { conversationId: destination.conversationId } } } });
       return;
+    case 'approvalDetail':
+      navigationRef.navigate('Main', { screen: 'ApprovalsTab', params: { screen: 'ApprovalDetail', params: { approvalRequestId: destination.approvalRequestId } } });
+      return;
     case 'unsupported':
       return;
   }

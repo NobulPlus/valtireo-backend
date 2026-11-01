@@ -156,7 +156,7 @@ class OperationsCenterController extends Controller
     {
         $this->authorizeConfigure($request->user());
 
-        return response()->json(['data' => OperationAutomationRule::query()->where('organization_id', $request->user()->organization_id)->withCount('runs')->orderBy('execution_order')->paginate(50)]);
+        return response()->json(['data' => OperationAutomationRule::query()->where('organization_id', $request->user()->organization_id)->withCount('runs')->orderBy('execution_order')->orderBy('id')->paginate(50)]);
     }
 
     public function automationCatalog(Request $request): JsonResponse

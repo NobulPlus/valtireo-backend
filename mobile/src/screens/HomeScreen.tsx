@@ -291,13 +291,19 @@ export function HomeScreen({ navigation }: Props) {
               const summary = managerDashboard.data ? selectManagerTeamSummary(managerDashboard.data) : null;
               return (
                 <View style={styles.card}>
-                  <View style={[styles.rowCard, { marginBottom: spacing.md }]}>
+                  <Pressable
+                    onPress={() => navigation.navigate('ApprovalsTab')}
+                    style={[styles.rowCard, { marginBottom: spacing.md }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Go to approvals"
+                  >
                     <SectionIcon name="people-outline" color="#FFFFFF" style={{ backgroundColor: v2.primary }} />
                     <View style={styles.cardBody}>
                       <Text style={styles.cardTitle}>Team at a glance</Text>
                       <Text style={styles.caption}>{summary?.scopeLabel ?? 'Your team'}</Text>
                     </View>
-                  </View>
+                    <Ionicons name="chevron-forward" size={16} color={v2.ink} />
+                  </Pressable>
                   {managerDashboard.isLoading ? (
                     <ActivityIndicator color={v2.primary} />
                   ) : managerDashboard.isError ? (

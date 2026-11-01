@@ -303,7 +303,15 @@ class PayrollService
         if ($run->status !== 'approved') {
             throw ValidationException::withMessages(['status' => ['Only an approved payroll run can be finalized.']]);
         }
-        $run->update(['status' => 'finalized', 'finalized_by_id' => $actor->id, 'finalized_at' => now()]);
+
+        DB::transaction(function () use ($actor, $run): void {
+            $run = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
+            if ($run->status !== 'approved') {
+                throw ValidationException::withMessages(['status' => ['Only an approved payroll run can be finalized.']]);
+            }
+            $run->update(['status' => 'finalized', 'finalized_by_id' => $actor->id, 'finalized_at' => now()]);
+        });
+
         app(PayrollOperationsService::class)->postFinalizedLoanRepayments($run->refresh());
         return $run->refresh();
     }

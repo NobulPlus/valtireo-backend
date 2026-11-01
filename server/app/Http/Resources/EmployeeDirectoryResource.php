@@ -15,6 +15,7 @@ class EmployeeDirectoryResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'user_id' => $this->user_id,
             'full_name' => trim($this->first_name.' '.$this->last_name),
             'employee_number' => $this->employee_number,
             'work_email' => $this->work_email,

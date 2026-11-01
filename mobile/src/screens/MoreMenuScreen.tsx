@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { useVisibleMoreMenuItems } from '../lib/moreMenuItems';
 import { radius, spacing, useV2Colors, v2ModuleColors, V2_FONTS } from '../theme';
 import type { MoreStackParamList } from '../navigation/MoreStack';
@@ -25,35 +26,39 @@ export function MoreMenuScreen({ navigation }: Props) {
   const items = useVisibleMoreMenuItems();
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
-      <Text style={styles.title}>More</Text>
-      <Text style={styles.subtitle}>Everything else, in one place.</Text>
-      <View style={styles.list}>
-        {items.map((item) => {
-          const tileColors = v2ModuleColors[item.moduleColorKey];
-          return (
-            <Pressable
-              key={item.key}
-              style={styles.row}
-              onPress={() => navigation.navigate(item.key)}
-              accessibilityRole="button"
-              accessibilityLabel={item.label}
-            >
-              <View style={[styles.iconWrap, { backgroundColor: tileColors.bg }]}>
-                <Ionicons name={item.icon} size={19} color={tileColors.icon} />
-              </View>
-              <Text style={styles.label}>{item.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color={v2.muted} />
-            </Pressable>
-          );
-        })}
-      </View>
-    </ScrollView>
+    <View style={styles.root}>
+      <ProductIconField />
+      <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + spacing.lg }]}>
+        <Text style={styles.title}>More</Text>
+        <Text style={styles.subtitle}>Everything else, in one place.</Text>
+        <View style={styles.list}>
+          {items.map((item) => {
+            const tileColors = v2ModuleColors[item.moduleColorKey];
+            return (
+              <Pressable
+                key={item.key}
+                style={styles.row}
+                onPress={() => navigation.navigate(item.key)}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+              >
+                <View style={[styles.iconWrap, { backgroundColor: tileColors.bg }]}>
+                  <Ionicons name={item.icon} size={19} color={tileColors.icon} />
+                </View>
+                <Text style={styles.label}>{item.label}</Text>
+                <Ionicons name="chevron-forward" size={18} color={v2.muted} />
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (v2: ReturnType<typeof useV2Colors>) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: v2.bg },
+  root: { flex: 1, backgroundColor: v2.bg },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl },
   title: { fontFamily: V2_FONTS.interBold, fontSize: 30, color: v2.ink, letterSpacing: -0.4 },
   subtitle: { fontFamily: V2_FONTS.interRegular, fontSize: 13, color: v2.muted, marginTop: 2, marginBottom: spacing.lg },

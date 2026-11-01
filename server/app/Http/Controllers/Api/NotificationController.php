@@ -17,7 +17,8 @@ class NotificationController extends Controller
             ->when($request->string('status')->toString() === 'read', fn ($query) => $query->whereNotNull('read_at'))
             ->when($request->string('category')->toString(), fn ($query, string $category) => $query->where('data->category', $category))
             ->when($request->string('event')->toString(), fn ($query, string $event) => $query->where('data->event', $event))
-            ->latest();
+            ->latest()
+            ->orderBy('id');
 
         $notifications = $query->paginate(min(max($request->integer('per_page', 15), 1), 100));
 
