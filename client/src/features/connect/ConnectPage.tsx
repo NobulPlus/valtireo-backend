@@ -22,7 +22,7 @@ export function ConnectPage() {
   const { id } = useParams();
   return <>
     <PageHeader title="Connect" subtitle="A shared space to meet, talk and work together." />
-    {moduleByKey('connect')?.visibility !== 'enabled' ? <section className={panel}>Connect is not enabled for your workspace. Your administrator can enable the Connect module.</section> : id ? <MeetingDetail key={id} id={id} /> : <MeetingList />}
+    {moduleByKey('connect')?.can_access !== true ? <section className={panel}>Connect is not enabled for your workspace. Your administrator can enable the Connect module.</section> : id ? <MeetingDetail key={id} id={id} /> : <MeetingList />}
   </>;
 }
 

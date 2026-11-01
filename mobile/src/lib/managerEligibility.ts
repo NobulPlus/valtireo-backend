@@ -4,9 +4,14 @@
  * instruction this encodes: eligibility is `has_manager_scope === true` on the current
  * session, full stop. No designation, job title, department, or `service_desk.view`
  * check substitutes for it, and an HR administrator is not automatically eligible
- * (server/app/Services/DashboardService.php:772-777 — `hasManagerScope()` requires both
- * an employee record AND `employees.view_team`, a different permission from any
- * HR/admin or service-desk-agent role).
+ * (server/app/Services/DashboardService.php's `hasManagerScope()` requires both an
+ * active employee record, actual structural scope, matching visibility permission
+ * AND `employees.manage_team` — a narrower, dedicated permission
+ * granted by default only to Organization Admin, Department Head, and Supervisor,
+ * introduced specifically to replace `employees.view_team` for this one check.
+ * `employees.view_team` is still held by HR Director/HR Officer/Compliance Officer for
+ * their own team-data-visibility needs, but no longer makes them manager-eligible —
+ * holding it was never evidence of actually managing people).
  *
  * Kept as its own pure function (rather than inlined at each call site) so the rule has
  * exactly one definition and is directly unit-testable without rendering a screen.

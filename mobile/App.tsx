@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +10,7 @@ import { queryClient } from './src/lib/queryClient';
 import { loadStoredToken } from './src/lib/secureToken';
 import { AuthProvider } from './src/context/AuthContext';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { IdleLogoutWatcher } from './src/components/IdleLogoutWatcher';
 import { QueryError } from './src/components/QueryError';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { ThemeProvider, useTheme } from './src/theme';
@@ -18,16 +20,23 @@ function AppContent() {
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <RootNavigator />
+      <IdleLogoutWatcher>
+        <RootNavigator />
+      </IdleLogoutWatcher>
     </>
   );
 }
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <AppRoot />
-    </ErrorBoundary>
+    // Required by react-native-gesture-handler (the Quick Access drag-to-reorder
+    // list's dependency) — every GestureDetector in the tree needs this ancestor,
+    // so it wraps the true root, outside even the error boundary.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <AppRoot />
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
 

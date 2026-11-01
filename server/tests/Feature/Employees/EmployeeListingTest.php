@@ -181,7 +181,7 @@ class EmployeeListingTest extends TestCase
             ->assertOk()
             ->assertJsonStructure([
                 'data' => [
-                    '*' => ['id', 'full_name', 'employee_number', 'work_email', 'phone', 'department', 'unit', 'designation', 'location'],
+                    '*' => ['id', 'user_id', 'full_name', 'employee_number', 'work_email', 'phone', 'department', 'unit', 'designation', 'location'],
                 ],
                 'meta',
             ]);

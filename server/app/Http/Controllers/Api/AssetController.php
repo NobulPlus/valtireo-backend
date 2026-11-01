@@ -39,11 +39,16 @@ class AssetController extends Controller
                 $query->where('name', 'like', "%{$search}%")->orWhere('asset_tag', 'like', "%{$search}%");
             }));
 
-        if (! $request->user()->can('assets.view')) {
+        // `mine=1` is how the My Assets self-service page asks for only its own
+        // assigned equipment — without it, someone who also holds assets.view (an
+        // HR/ops admin viewing their own self-service page) would otherwise fall
+        // through to the full org-wide list below, the same list the admin asset
+        // management page shows.
+        if ($request->boolean('mine') || ! $request->user()->can('assets.view')) {
             $query->where('assigned_to_employee_id', $request->user()->employee?->id);
         }
 
-        return AssetResource::collection($query->orderBy('name')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
+        return AssetResource::collection($query->orderBy('name')->orderBy('id')->paginate(min(max($request->integer('per_page', 15), 1), 100)));
     }
 
     public function store(StoreAssetRequest $request, AssetService $assets): AssetResource

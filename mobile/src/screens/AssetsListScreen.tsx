@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,7 +15,7 @@ export function AssetsListScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const statusColors: Record<string, string> = { assigned: colors.success, available: colors.pine, maintenance: colors.warning, retired: colors.muted };
-  const { items, isLoading, isError, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyAssets();
+  const { items, isLoading, isError, error, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyAssets();
 
   function renderItem({ item }: { item: Asset }) {
     return (
@@ -40,6 +41,8 @@ export function AssetsListScreen({ navigation }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <FlatList
       style={styles.flex}
       data={items}
@@ -50,17 +53,19 @@ export function AssetsListScreen({ navigation }: Props) {
       onRefresh={refetch}
       onEndReached={fetchMore}
       onEndReachedThreshold={0.5}
-      ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
+      ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
       ListFooterComponent={<ListFooterLoader visible={isFetchingNextPage} />}
       ListEmptyComponent={
         isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No equipment assigned to you yet.</Text>
       }
     />
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   list: { padding: spacing.lg },
   empty: { textAlign: 'center', marginTop: spacing.xl },
   card: { backgroundColor: colors.white, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.line },

@@ -144,7 +144,7 @@ class Employee extends Model implements AuditableContract
 
     public function profileActivities(): HasMany
     {
-        return $this->hasMany(EmployeeProfileActivity::class)->latest();
+        return $this->hasMany(EmployeeProfileActivity::class)->latest()->orderBy('id', 'desc');
     }
 
     public function statusHistories(): HasMany

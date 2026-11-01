@@ -25,7 +25,8 @@ class CompanyEventController extends Controller
                     ->orWhere('description', 'like', "%{$search}%");
             }))
             ->orderBy('starts_on')
-            ->orderBy('title');
+            ->orderBy('title')
+            ->orderBy('id');
 
         return CompanyEventResource::collection($query->paginate(min(max($request->integer('per_page', 50), 1), 100)));
     }

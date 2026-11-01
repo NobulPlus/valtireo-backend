@@ -48,6 +48,7 @@ export function useAgenda() {
 
   const isLoading = eventsQuery.isLoading || holidaysQuery.isLoading || leaveQuery.isLoading;
   const isError = eventsQuery.isError || holidaysQuery.isError || leaveQuery.isError;
+  const error = eventsQuery.error ?? holidaysQuery.error ?? leaveQuery.error;
   const isRefetching = eventsQuery.isRefetching || holidaysQuery.isRefetching || leaveQuery.isRefetching;
 
   function refetch() {
@@ -82,5 +83,5 @@ export function useAgenda() {
 
   items.sort((a, b) => a.date.localeCompare(b.date));
 
-  return { items, isLoading, isError, isRefetching, refetch, canLoadMore, loadMore: () => setLimit((current) => current + PAGE_SIZE) };
+  return { items, isLoading, isError, error, isRefetching, refetch, canLoadMore, loadMore: () => setLimit((current) => current + PAGE_SIZE) };
 }

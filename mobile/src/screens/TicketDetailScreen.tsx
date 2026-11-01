@@ -1,9 +1,10 @@
-import { uploadFile } from '../lib/uploadFile';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
 import { QueryError } from '../components/QueryError';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import {
   isCancellableTicket,
   openTicketAttachment,
@@ -35,7 +36,7 @@ export function TicketDetailScreen({ route, navigation }: Props) {
     cancelled: colors.muted,
   };
   const { ticketId } = route.params;
-  const { data: ticket, isLoading, isError, refetch } = useTicket(ticketId);
+  const { data: ticket, isLoading, isError, error, refetch } = useTicket(ticketId);
   const cancel = useCancelTicket(ticketId);
   const resubmit = useResubmitTicket(ticketId);
   const addComment = useAddTicketComment(ticketId);
@@ -80,7 +81,14 @@ export function TicketDetailScreen({ route, navigation }: Props) {
 
   async function pickCommentAttachment() {
     const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
-    if (!result.canceled && result.assets[0]) setCommentAttachment(uploadFile(result.assets[0]));
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (isFileTooLarge(asset, MAX_UPLOAD_BYTES.ticketAttachment)) {
+        Alert.alert('File too large', `Attachments must be ${formatMaxSize(MAX_UPLOAD_BYTES.ticketAttachment)} or smaller.`);
+        return;
+      }
+      setCommentAttachment(uploadFile(asset));
+    }
   }
 
   async function handleAddComment() {
@@ -106,10 +114,12 @@ export function TicketDetailScreen({ route, navigation }: Props) {
     }
   }
 
-  if (isError) return <QueryError retry={refetch} />;
+  if (isError) return <QueryError retry={refetch} error={error} />;
   if (isLoading || !ticket) return <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} />;
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.badgeRow}>
         <Text style={[styles.status, { color: statusColors[ticket.status] ?? colors.muted }]}>{ticket.status.replace('_', ' ')}</Text>
@@ -197,11 +207,13 @@ export function TicketDetailScreen({ route, navigation }: Props) {
         {addComment.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Add comment</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   status: { fontSize: 12, fontWeight: '700', textTransform: 'capitalize' },

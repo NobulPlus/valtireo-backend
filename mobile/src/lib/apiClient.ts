@@ -61,9 +61,18 @@ apiClient.interceptors.response.use(
     }
     const status = error.response?.status ?? 0;
     const data = error.response?.data;
+    // No `error.response` means the request never got a reply at all (timeout, no
+    // connectivity, DNS failure, ...) — axios's own `error.message` for these is a raw,
+    // developer-facing string ("timeout of 30000ms exceeded", "Network Error"), not
+    // something to show a user. Give a human message for exactly that case; a real
+    // response (even a failed one) keeps using the server's own message as before.
     const message =
       (data && 'message' in data && data.message) ||
-      error.message ||
+      (!error.response
+        ? error.code === 'ECONNABORTED'
+          ? 'This is taking longer than expected. Check your connection and try again.'
+          : "Can't reach the server. Check your connection and try again."
+        : error.message) ||
       'Something went wrong. Please try again.';
     const errors = data && 'errors' in data ? (data as ValidationErrorResponse).errors : null;
 

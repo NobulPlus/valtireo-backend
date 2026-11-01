@@ -1,0 +1,438 @@
+{
+    "accounts": {
+        "manager": {
+            "login_status": 200,
+            "role": [
+                "Supervisor"
+            ],
+            "manager_home": true,
+            "direct_reports": 4
+        },
+        "supervisor": {
+            "login_status": 200,
+            "role": [
+                "Supervisor"
+            ],
+            "manager_home": true,
+            "direct_reports": 2
+        },
+        "manager.empty": {
+            "login_status": 200,
+            "role": [
+                "Supervisor"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "structural.lead": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 1
+        },
+        "hr.director": {
+            "login_status": 200,
+            "role": [
+                "HR Director"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "compliance": {
+            "login_status": 200,
+            "role": [
+                "Compliance Officer"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "team.lagos": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "team.ikeja": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "team.lekki": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "team.ikorodu": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "medical.day": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "medical.night": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "ict.report": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "new.starter": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "private": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "contract": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "nysc": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "intern": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "onboarding": {
+            "login_status": 200,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "suspended": {
+            "login_status": 422,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        },
+        "exited": {
+            "login_status": 422,
+            "role": [
+                "Employee"
+            ],
+            "manager_home": false,
+            "direct_reports": 0
+        }
+    },
+    "checks": {
+        "manager tenant": true,
+        "manager unit": true,
+        "manager manager eligibility": true,
+        "manager login (200)": true,
+        "manager auth\/me (200)": true,
+        "manager dashboard\/me (200)": true,
+        "manager employee-profile\/overview (200)": true,
+        "manager leave\/requests (200)": true,
+        "manager attendance\/records (200)": true,
+        "manager lifestyle\/preferences (200)": true,
+        "manager lifestyle\/milestones (200)": true,
+        "manager private birthday hidden": true,
+        "manager lifestyle\/appreciations (200)": true,
+        "manager manager API (200)": true,
+        "supervisor tenant": true,
+        "supervisor unit": true,
+        "supervisor manager eligibility": true,
+        "supervisor login (200)": true,
+        "supervisor auth\/me (200)": true,
+        "supervisor dashboard\/me (200)": true,
+        "supervisor employee-profile\/overview (200)": true,
+        "supervisor leave\/requests (200)": true,
+        "supervisor attendance\/records (200)": true,
+        "supervisor lifestyle\/preferences (200)": true,
+        "supervisor lifestyle\/milestones (200)": true,
+        "supervisor private birthday hidden": true,
+        "supervisor lifestyle\/appreciations (200)": true,
+        "supervisor manager API (200)": true,
+        "manager.empty tenant": true,
+        "manager.empty unit": true,
+        "manager.empty manager eligibility": true,
+        "manager.empty login (200)": true,
+        "manager.empty auth\/me (200)": true,
+        "manager.empty dashboard\/me (200)": true,
+        "manager.empty employee-profile\/overview (200)": true,
+        "manager.empty leave\/requests (200)": true,
+        "manager.empty attendance\/records (200)": true,
+        "manager.empty lifestyle\/preferences (200)": true,
+        "manager.empty lifestyle\/milestones (200)": true,
+        "manager.empty private birthday hidden": true,
+        "manager.empty lifestyle\/appreciations (200)": true,
+        "manager.empty manager API (403)": true,
+        "structural.lead tenant": true,
+        "structural.lead unit": true,
+        "structural.lead manager eligibility": true,
+        "structural.lead login (200)": true,
+        "structural.lead auth\/me (200)": true,
+        "structural.lead dashboard\/me (200)": true,
+        "structural.lead employee-profile\/overview (200)": true,
+        "structural.lead leave\/requests (200)": true,
+        "structural.lead attendance\/records (200)": true,
+        "structural.lead lifestyle\/preferences (200)": true,
+        "structural.lead lifestyle\/milestones (200)": true,
+        "structural.lead private birthday hidden": true,
+        "structural.lead lifestyle\/appreciations (200)": true,
+        "structural.lead manager API (403)": true,
+        "hr.director tenant": true,
+        "hr.director unit": true,
+        "hr.director manager eligibility": true,
+        "hr.director login (200)": true,
+        "hr.director auth\/me (200)": true,
+        "hr.director dashboard\/me (200)": true,
+        "hr.director employee-profile\/overview (200)": true,
+        "hr.director leave\/requests (200)": true,
+        "hr.director attendance\/records (200)": true,
+        "hr.director lifestyle\/preferences (200)": true,
+        "hr.director lifestyle\/milestones (200)": true,
+        "hr.director private birthday hidden": true,
+        "hr.director lifestyle\/appreciations (200)": true,
+        "compliance tenant": true,
+        "compliance unit": true,
+        "compliance manager eligibility": true,
+        "compliance login (200)": true,
+        "compliance auth\/me (200)": true,
+        "compliance dashboard\/me (200)": true,
+        "compliance employee-profile\/overview (200)": true,
+        "compliance leave\/requests (200)": true,
+        "compliance attendance\/records (200)": true,
+        "compliance lifestyle\/preferences (200)": true,
+        "compliance lifestyle\/milestones (200)": true,
+        "compliance private birthday hidden": true,
+        "compliance lifestyle\/appreciations (200)": true,
+        "team.lagos tenant": true,
+        "team.lagos unit": true,
+        "team.lagos manager eligibility": true,
+        "team.lagos login (200)": true,
+        "team.lagos auth\/me (200)": true,
+        "team.lagos dashboard\/me (200)": true,
+        "team.lagos employee-profile\/overview (200)": true,
+        "team.lagos leave\/requests (200)": true,
+        "team.lagos attendance\/records (200)": true,
+        "team.lagos lifestyle\/preferences (200)": true,
+        "team.lagos lifestyle\/milestones (200)": true,
+        "team.lagos private birthday hidden": true,
+        "team.lagos lifestyle\/appreciations (200)": true,
+        "team.lagos manager API (403)": true,
+        "team.ikeja tenant": true,
+        "team.ikeja unit": true,
+        "team.ikeja manager eligibility": true,
+        "team.ikeja login (200)": true,
+        "team.ikeja auth\/me (200)": true,
+        "team.ikeja dashboard\/me (200)": true,
+        "team.ikeja employee-profile\/overview (200)": true,
+        "team.ikeja leave\/requests (200)": true,
+        "team.ikeja attendance\/records (200)": true,
+        "team.ikeja lifestyle\/preferences (200)": true,
+        "team.ikeja lifestyle\/milestones (200)": true,
+        "team.ikeja private birthday hidden": true,
+        "team.ikeja lifestyle\/appreciations (200)": true,
+        "team.lekki tenant": true,
+        "team.lekki unit": true,
+        "team.lekki manager eligibility": true,
+        "team.lekki login (200)": true,
+        "team.lekki auth\/me (200)": true,
+        "team.lekki dashboard\/me (200)": true,
+        "team.lekki employee-profile\/overview (200)": true,
+        "team.lekki leave\/requests (200)": true,
+        "team.lekki attendance\/records (200)": true,
+        "team.lekki lifestyle\/preferences (200)": true,
+        "team.lekki lifestyle\/milestones (200)": true,
+        "team.lekki private birthday hidden": true,
+        "team.lekki lifestyle\/appreciations (200)": true,
+        "team.ikorodu tenant": true,
+        "team.ikorodu unit": true,
+        "team.ikorodu manager eligibility": true,
+        "team.ikorodu login (200)": true,
+        "team.ikorodu auth\/me (200)": true,
+        "team.ikorodu dashboard\/me (200)": true,
+        "team.ikorodu employee-profile\/overview (200)": true,
+        "team.ikorodu leave\/requests (200)": true,
+        "team.ikorodu attendance\/records (200)": true,
+        "team.ikorodu lifestyle\/preferences (200)": true,
+        "team.ikorodu lifestyle\/milestones (200)": true,
+        "team.ikorodu private birthday hidden": true,
+        "team.ikorodu lifestyle\/appreciations (200)": true,
+        "medical.day tenant": true,
+        "medical.day unit": true,
+        "medical.day manager eligibility": true,
+        "medical.day login (200)": true,
+        "medical.day auth\/me (200)": true,
+        "medical.day dashboard\/me (200)": true,
+        "medical.day employee-profile\/overview (200)": true,
+        "medical.day leave\/requests (200)": true,
+        "medical.day attendance\/records (200)": true,
+        "medical.day lifestyle\/preferences (200)": true,
+        "medical.day lifestyle\/milestones (200)": true,
+        "medical.day private birthday hidden": true,
+        "medical.day lifestyle\/appreciations (200)": true,
+        "medical.night tenant": true,
+        "medical.night unit": true,
+        "medical.night manager eligibility": true,
+        "medical.night login (200)": true,
+        "medical.night auth\/me (200)": true,
+        "medical.night dashboard\/me (200)": true,
+        "medical.night employee-profile\/overview (200)": true,
+        "medical.night leave\/requests (200)": true,
+        "medical.night attendance\/records (200)": true,
+        "medical.night lifestyle\/preferences (200)": true,
+        "medical.night lifestyle\/milestones (200)": true,
+        "medical.night private birthday hidden": true,
+        "medical.night lifestyle\/appreciations (200)": true,
+        "ict.report tenant": true,
+        "ict.report unit": true,
+        "ict.report manager eligibility": true,
+        "ict.report login (200)": true,
+        "ict.report auth\/me (200)": true,
+        "ict.report dashboard\/me (200)": true,
+        "ict.report employee-profile\/overview (200)": true,
+        "ict.report leave\/requests (200)": true,
+        "ict.report attendance\/records (200)": true,
+        "ict.report lifestyle\/preferences (200)": true,
+        "ict.report lifestyle\/milestones (200)": true,
+        "ict.report private birthday hidden": true,
+        "ict.report lifestyle\/appreciations (200)": true,
+        "new.starter tenant": true,
+        "new.starter unit": true,
+        "new.starter manager eligibility": true,
+        "new.starter login (200)": true,
+        "new.starter auth\/me (200)": true,
+        "new.starter dashboard\/me (200)": true,
+        "new.starter employee-profile\/overview (200)": true,
+        "new.starter leave\/requests (200)": true,
+        "new.starter attendance\/records (200)": true,
+        "new.starter lifestyle\/preferences (200)": true,
+        "new.starter lifestyle\/milestones (200)": true,
+        "new.starter private birthday hidden": true,
+        "new.starter lifestyle\/appreciations (200)": true,
+        "private tenant": true,
+        "private unit": true,
+        "private manager eligibility": true,
+        "private login (200)": true,
+        "private auth\/me (200)": true,
+        "private dashboard\/me (200)": true,
+        "private employee-profile\/overview (200)": true,
+        "private leave\/requests (200)": true,
+        "private attendance\/records (200)": true,
+        "private lifestyle\/preferences (200)": true,
+        "private lifestyle\/milestones (200)": true,
+        "private private birthday hidden": true,
+        "private lifestyle\/appreciations (200)": true,
+        "contract tenant": true,
+        "contract unit": true,
+        "contract manager eligibility": true,
+        "contract login (200)": true,
+        "contract auth\/me (200)": true,
+        "contract dashboard\/me (200)": true,
+        "contract employee-profile\/overview (200)": true,
+        "contract leave\/requests (200)": true,
+        "contract attendance\/records (200)": true,
+        "contract lifestyle\/preferences (200)": true,
+        "contract lifestyle\/milestones (200)": true,
+        "contract private birthday hidden": true,
+        "contract lifestyle\/appreciations (200)": true,
+        "nysc tenant": true,
+        "nysc unit": true,
+        "nysc manager eligibility": true,
+        "nysc login (200)": true,
+        "nysc auth\/me (200)": true,
+        "nysc dashboard\/me (200)": true,
+        "nysc employee-profile\/overview (200)": true,
+        "nysc leave\/requests (200)": true,
+        "nysc attendance\/records (200)": true,
+        "nysc lifestyle\/preferences (200)": true,
+        "nysc lifestyle\/milestones (200)": true,
+        "nysc private birthday hidden": true,
+        "nysc lifestyle\/appreciations (200)": true,
+        "intern tenant": true,
+        "intern unit": true,
+        "intern manager eligibility": true,
+        "intern login (200)": true,
+        "intern auth\/me (200)": true,
+        "intern dashboard\/me (200)": true,
+        "intern employee-profile\/overview (200)": true,
+        "intern leave\/requests (200)": true,
+        "intern attendance\/records (200)": true,
+        "intern lifestyle\/preferences (200)": true,
+        "intern lifestyle\/milestones (200)": true,
+        "intern private birthday hidden": true,
+        "intern lifestyle\/appreciations (200)": true,
+        "onboarding tenant": true,
+        "onboarding unit": true,
+        "onboarding manager eligibility": true,
+        "onboarding login (200)": true,
+        "onboarding auth\/me (200)": true,
+        "suspended tenant": true,
+        "suspended unit": true,
+        "suspended manager eligibility": true,
+        "suspended login (422)": true,
+        "exited tenant": true,
+        "exited unit": true,
+        "exited manager eligibility": true,
+        "exited login (422)": true,
+        "Requester cannot self approve": true,
+        "Requester can withdraw submitted demo leave": true,
+        "Pending approval has submitted source": true,
+        "Manager can review own team pending leave": true,
+        "Unrelated supervisor cannot approve this team leave": true,
+        "Unrelated supervisor cannot manage this employee": true,
+        "Manager can manage their report": true,
+        "Five overnight attendance records": true,
+        "New starter active": true
+    },
+    "passed": 261,
+    "total": 261,
+    "errors": []
+}

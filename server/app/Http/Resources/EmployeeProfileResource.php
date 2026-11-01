@@ -25,7 +25,7 @@ class EmployeeProfileResource extends JsonResource
             'next_of_kin_phone' => $this->next_of_kin_phone,
             'passport_photo_path' => $this->passport_photo_path,
             // An authenticated, organization-scoped endpoint — never a public storage URL.
-            'passport_photo_url' => $this->passport_photo_path ? url("/api/employees/{$this->employee_id}/photo") : null,
+            'passport_photo_url' => $this->resource->photoUrl(),
             'completion_status' => $this->completion_status,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

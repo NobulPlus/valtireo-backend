@@ -5,6 +5,8 @@ namespace Tests\Feature\Employees;
 use App\Models\Employee;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\EmployeeProfileActivityService;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -14,6 +16,69 @@ use Tests\TestCase;
 class EmployeePhotoAccessTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_multipart_replacement_versions_all_photo_surfaces_and_survives_a_fresh_session(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+        $user = User::where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $this->actingAsInOrganization($user);
+        $first = $this->post('/api/me/employee-profile', ['_method' => 'PATCH', 'passport_photo' => UploadedFile::fake()->image('first.jpg')], ['Accept' => 'application/json'])->assertOk();
+        $oldPath = $first->json('profile.passport_photo_path');
+        $firstUrl = $first->json('profile.passport_photo_url');
+        $second = $this->post('/api/me/employee-profile', ['_method' => 'PATCH', 'passport_photo' => UploadedFile::fake()->image('second.png')], ['Accept' => 'application/json'])->assertOk();
+        $url = $second->json('profile.passport_photo_url');
+        $this->assertNotSame($firstUrl, $url);
+        Storage::disk('local')->assertMissing($oldPath);
+        Storage::disk('local')->assertExists($second->json('profile.passport_photo_path'));
+        $this->actingAsInOrganization($user->fresh());
+        $this->getJson('/api/auth/me')->assertOk()->assertJsonPath('user.photo_url', $url);
+        $this->getJson('/api/employee-profile/overview')->assertOk()->assertJsonPath('profile.passport_photo_url', $url);
+        $this->get($url)->assertOk()->assertHeader('x-content-type-options', 'nosniff');
+        $this->patchJson('/api/me/employee-profile', ['residential_address' => 'Updated address'])->assertOk()->assertJsonPath('profile.passport_photo_url', $url);
+    }
+
+    public function test_failed_disk_write_keeps_the_existing_photo(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+        $user = User::where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $this->actingAsInOrganization($user);
+        $user->employee->profile()->update(['passport_photo_path' => 'old.jpg']);
+        $disk = \Mockery::mock(FilesystemAdapter::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturn(false);
+        $disk->shouldNotReceive('delete');
+        Storage::shouldReceive('disk')->with('local')->andReturn($disk);
+        $this->post('/api/me/employee-profile', ['_method' => 'PATCH', 'passport_photo' => UploadedFile::fake()->image('new.jpg')], ['Accept' => 'application/json'])->assertStatus(503);
+        $this->assertSame('old.jpg', $user->employee->profile()->first()->passport_photo_path);
+    }
+
+    public function test_failed_profile_transaction_preserves_old_file_and_removes_new_orphan(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+        $user = User::where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $this->actingAsInOrganization($user);
+        Storage::disk('local')->put('old.jpg', 'old image');
+        $user->employee->profile()->update(['passport_photo_path' => 'old.jpg']);
+        $this->mock(EmployeeProfileActivityService::class)->shouldReceive('record')->once()->andThrow(new \RuntimeException('Simulated audit failure'));
+        $this->post('/api/me/employee-profile', ['_method' => 'PATCH', 'passport_photo' => UploadedFile::fake()->image('new.jpg')], ['Accept' => 'application/json'])->assertStatus(500);
+        $this->assertSame('old.jpg', $user->employee->profile()->first()->passport_photo_path);
+        $this->assertSame(['old.jpg'], Storage::disk('local')->allFiles());
+    }
+
+    public function test_invalid_and_oversized_uploads_leave_existing_photo_unchanged(): void
+    {
+        Storage::fake('local');
+        $this->seed();
+        $user = User::where('email', 'aisha.bello@valtireo.test')->firstOrFail();
+        $this->actingAsInOrganization($user);
+        $user->employee->profile()->update(['passport_photo_path' => 'old.jpg']);
+        foreach ([UploadedFile::fake()->create('not-image.jpg', 5, 'text/plain'), UploadedFile::fake()->image('large.png')->size(2049)] as $file) {
+            $this->post('/api/me/employee-profile', ['_method' => 'PATCH', 'passport_photo' => $file], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('passport_photo');
+        }
+        $this->assertSame('old.jpg', $user->employee->profile()->first()->passport_photo_path);
+    }
 
     public function test_employee_can_view_their_own_photo(): void
     {

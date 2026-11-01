@@ -86,6 +86,13 @@ class RolePermissionSeeder extends Seeder
             'employees.view_team',
             'employees.view_department',
             'employees.assign_role',
+            // Structural people-management responsibility — distinct from
+            // employees.view_team, which an HR/Compliance role can hold
+            // purely for team-level data VISIBILITY without actually being
+            // anyone's manager. This is the one checked for Manager Home
+            // eligibility (DashboardService::hasManagerScope()); view_team
+            // keeps gating EmployeeVisibility's data-scoping, unchanged.
+            'employees.manage_team',
             'employee_documents.view',
             'employee_documents.create',
             'employee_documents.update',

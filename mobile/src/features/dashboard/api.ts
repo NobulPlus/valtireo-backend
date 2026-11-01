@@ -26,7 +26,7 @@ export function useMyDashboard(filters: MyDashboardFilters = {}) {
  * consumes (client/src/features/dashboard/api.ts). Deliberately no `department_id`/
  * `cluster_id` params, unlike web's hook — passing either would exercise the backend's
  * org-wide browse branch (DashboardService.php:694-718, gated on `reports.view`, a
- * different permission from the people-manager `employees.view_team` this phase is
+ * different permission from the people-manager `employees.manage_team` this phase is
  * scoped to); omitting them keeps the request to the caller's own natural scope
  * (direct reports / department they head / cluster they lead), resolved entirely
  * server-side. `enabled` must be the caller's own `session.has_manager_scope === true`

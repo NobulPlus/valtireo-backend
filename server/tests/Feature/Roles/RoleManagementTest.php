@@ -5,6 +5,7 @@ namespace Tests\Feature\Roles;
 use App\Models\Organization;
 use App\Models\Role;
 use App\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -119,6 +120,116 @@ class RoleManagementTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['permission_names']);
+    }
+
+    /**
+     * A fresh, isolated organization — never the shared seeded Valtireo org,
+     * whose Organization Admin always independently holds every permission
+     * and would mask any lockout these tests are specifically trying to
+     * trigger. Only the global permission catalog is seeded, not the full
+     * DatabaseSeeder's demo data.
+     */
+    private function isolatedOrganization(): Organization
+    {
+        $this->seed(RolePermissionSeeder::class);
+
+        return Organization::query()->create([
+            'name' => 'Split Admin Test Org',
+            'code' => 'SPLITADMINTEST'.uniqid(),
+            'status' => 'active',
+            'country' => 'Nigeria',
+            'settings' => [],
+        ]);
+    }
+
+    /**
+     * @param  array<int, string>  $permissionNames
+     */
+    private function isolatedRole(Organization $organization, string $name, array $permissionNames): Role
+    {
+        $this->setPermissionsTeamId($organization->id);
+
+        $role = Role::create(['organization_id' => $organization->id, 'guard_name' => 'web', 'key' => null, 'name' => $name]);
+        $role->syncPermissions($permissionNames);
+
+        return $role;
+    }
+
+    public function test_removing_half_of_an_administrators_permissions_is_rejected_even_though_neither_role_alone_was_ever_admin_capable(): void
+    {
+        // Role Updater never holds employees.assign_role, and Role Assigner
+        // never holds roles.update — neither role is, by itself, ever
+        // "admin-capable." The ONLY reason this organization has anyone able
+        // to administer roles at all is that one user holds BOTH roles. A
+        // check that only asked "was the role being edited ever
+        // individually admin-capable" would miss this entirely and let the
+        // lockout through — this is exactly the bug being fixed.
+        $organization = $this->isolatedOrganization();
+        $updaterRole = $this->isolatedRole($organization, 'Role Updater', ['roles.update']);
+        $assignerRole = $this->isolatedRole($organization, 'Role Assigner', ['employees.assign_role']);
+
+        $splitAdmin = User::factory()->create(['organization_id' => $organization->id]);
+        $this->setPermissionsTeamId($organization->id);
+        $splitAdmin->syncRoles([$updaterRole, $assignerRole]);
+
+        $this->actingAsInOrganization($splitAdmin);
+
+        $this->patchJson("/api/roles/{$updaterRole->id}", [
+            'permission_names' => [],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['permission_names']);
+
+        $this->assertTrue($updaterRole->fresh()->permissions->pluck('name')->contains('roles.update'));
+    }
+
+    public function test_the_same_split_permission_removal_succeeds_once_another_user_independently_holds_full_administrative_capability(): void
+    {
+        $organization = $this->isolatedOrganization();
+        $updaterRole = $this->isolatedRole($organization, 'Role Updater', ['roles.update']);
+        $assignerRole = $this->isolatedRole($organization, 'Role Assigner', ['employees.assign_role']);
+
+        $splitAdmin = User::factory()->create(['organization_id' => $organization->id]);
+        $this->setPermissionsTeamId($organization->id);
+        $splitAdmin->syncRoles([$updaterRole, $assignerRole]);
+
+        $fullAdminRole = $this->isolatedRole($organization, 'Full Admin', ['roles.update', 'employees.assign_role']);
+        $otherUser = User::factory()->create(['organization_id' => $organization->id]);
+        $this->setPermissionsTeamId($organization->id);
+        $otherUser->syncRoles([$fullAdminRole]);
+
+        $this->actingAsInOrganization($splitAdmin);
+
+        $this->patchJson("/api/roles/{$updaterRole->id}", [
+            'permission_names' => [],
+        ])->assertOk();
+
+        $this->assertFalse($updaterRole->fresh()->permissions->pluck('name')->contains('roles.update'));
+    }
+
+    public function test_removing_an_unrelated_permission_from_the_same_split_administrators_role_is_unaffected_by_the_guardrail(): void
+    {
+        $organization = $this->isolatedOrganization();
+        $updaterRole = $this->isolatedRole($organization, 'Role Updater', ['roles.update']);
+        // Carries an extra, unrelated permission so this test can remove it
+        // while keeping employees.assign_role — proving an ordinary,
+        // non-threatening permission change is never blocked, and never
+        // even needs the guardrail to weigh in.
+        $assignerRole = $this->isolatedRole($organization, 'Role Assigner', ['employees.assign_role', 'leave_requests.view']);
+
+        $splitAdmin = User::factory()->create(['organization_id' => $organization->id]);
+        $this->setPermissionsTeamId($organization->id);
+        $splitAdmin->syncRoles([$updaterRole, $assignerRole]);
+
+        $this->actingAsInOrganization($splitAdmin);
+
+        $this->patchJson("/api/roles/{$assignerRole->id}", [
+            'permission_names' => ['employees.assign_role'],
+        ])->assertOk();
+
+        $freshPermissions = $assignerRole->fresh()->permissions->pluck('name');
+        $this->assertTrue($freshPermissions->contains('employees.assign_role'));
+        $this->assertFalse($freshPermissions->contains('leave_requests.view'));
     }
 
     public function test_cannot_delete_a_role_currently_assigned_to_a_user(): void

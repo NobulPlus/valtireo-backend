@@ -28,6 +28,7 @@ class ApprovalWorkflowController extends Controller
             ->orderBy('module')
             ->orderBy('action')
             ->orderBy('name')
+            ->orderBy('id')
             ->paginate(min(max($request->integer('per_page', 15), 1), 100));
 
         return ApprovalWorkflowResource::collection($workflows);

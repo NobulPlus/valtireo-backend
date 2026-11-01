@@ -25,6 +25,7 @@ class ApprovalRequestController extends Controller
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($request->integer('subject_employee_id'), fn (Builder $query, int $employeeId) => $query->where('subject_employee_id', $employeeId))
             ->latest()
+            ->orderBy('id')
             ->paginate(min(max($request->integer('per_page', 15), 1), 100));
 
         return ApprovalRequestResource::collection($approvals);
@@ -49,7 +50,8 @@ class ApprovalRequestController extends Controller
             $request->user(),
             $approvalRequest,
             $request->string('action')->toString(),
-            $request->input('note')
+            $request->input('note'),
+            $request->input('expected_step_order')
         );
 
         return response()->json([

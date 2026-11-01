@@ -41,6 +41,7 @@ const DECISION_OPTIONS: Array<{ value: ApprovalDecisionAction; label: string }> 
   { value: 'approve', label: 'Approve' },
   { value: 'reject', label: 'Reject' },
   { value: 'request_changes', label: 'Request changes' },
+  { value: 'cancel', label: 'Cancel' },
 ];
 
 const PRIORITY_OPTIONS = [
@@ -251,7 +252,7 @@ export function TicketDetailModal({
 
   async function handleDecision() {
     try {
-      await decisionMutation.mutateAsync({ action: decisionAction, note: decisionNote.trim() || undefined });
+      await decisionMutation.mutateAsync({ action: decisionAction, note: decisionNote.trim() || undefined, expected_step_order: pendingApproval?.current_step_order });
       setDecisionNote('');
       toast.success('Decision recorded');
     } catch (error) {
@@ -488,14 +489,15 @@ export function TicketDetailModal({
                 <div className="space-y-3">
                   <label className="block text-sm">
                     <span className="mb-1 block text-xs font-medium text-muted">Decision</span>
-                    <SelectMenu value={decisionAction} onChange={(value) => setDecisionAction(value as ApprovalDecisionAction)} options={DECISION_OPTIONS} />
+                    <SelectMenu value={decisionAction} onChange={(value) => setDecisionAction(value as ApprovalDecisionAction)} options={DECISION_OPTIONS.filter((option) => !pendingApproval.allowed_actions || pendingApproval.allowed_actions.includes(option.value))} />
                   </label>
                   <Textarea
                     value={decisionNote}
                     onChange={(event) => setDecisionNote(event.target.value)}
                     placeholder="Optional — some workflows require a note when rejecting or requesting changes."
                   />
-                  <Button type="button" size="sm" isLoading={decisionMutation.isPending} onClick={handleDecision}>
+                  {pendingApproval.action_restrictions?.approve && <p className="text-sm text-muted">{pendingApproval.action_restrictions.approve === 'self_approval_not_allowed' ? 'Another eligible reviewer must approve your request.' : 'Approval is unavailable for your account or the current request state.'}</p>}
+                  <Button type="button" size="sm" disabled={Boolean(pendingApproval.allowed_actions && !pendingApproval.allowed_actions.includes(decisionAction))} isLoading={decisionMutation.isPending} onClick={handleDecision}>
                     Record decision
                   </Button>
                 </div>

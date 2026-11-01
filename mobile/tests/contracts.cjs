@@ -372,8 +372,8 @@ test('manager dashboard refetch after pull-to-refresh is gated on the FRESH sess
 
 test('notification deep-linking: the explicit allowlist covers every real backend action_url, rejects unauthorized/malformed/unsupported combinations', () => {
   const { resolveNotificationDestination } = load('src/lib/notificationNavigation.ts', {});
-  const fullAccess = { leave: true, serviceDesk: true, employeeSelfService: true };
-  const noAccess = { leave: false, serviceDesk: false, employeeSelfService: false };
+  const fullAccess = { leave: true, serviceDesk: true, employeeSelfService: true, connect: true };
+  const noAccess = { leave: false, serviceDesk: false, employeeSelfService: false, connect: false };
 
   // Supported: a ticket notification whose entity_id agrees with the id embedded in action_url.
   assert.deepEqual(
@@ -411,12 +411,20 @@ test('notification deep-linking: the explicit allowlist covers every real backen
   // Unrecognized entity_type, missing fields, and a ticket-shaped entity_type with a URL that doesn't match the known pattern.
   assert.deepEqual(plain(resolveNotificationDestination({}, fullAccess)), { kind: 'unsupported' });
   assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'ticket', entity_id: 1, action_url: '/something-else' }, fullAccess)), { kind: 'unsupported' });
+
+  // connect_conversation covers every Connect event (message, mention, incoming/missed call) the backend dispatches under this one entity_type — they all point at the same conversation.
+  assert.deepEqual(
+    plain(resolveNotificationDestination({ entity_type: 'connect_conversation', entity_id: 'c1', action_url: '/connect/chat/01a16b53-702d-7153-9aed-efec2a293782' }, fullAccess)),
+    { kind: 'connectConversation', conversationId: '01a16b53-702d-7153-9aed-efec2a293782' },
+  );
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'connect_conversation', entity_id: 'c1', action_url: '/connect/chat/abc' }, noAccess)), { kind: 'unsupported' });
+  assert.deepEqual(plain(resolveNotificationDestination({ entity_type: 'connect_conversation', entity_id: 'c1', action_url: '/connect/meetings/abc' }, fullAccess)), { kind: 'unsupported' });
 });
 
 test('Lifestyle Home card: feature flags gate content, an empty/disabled result never renders, counts are honest about being capped', () => {
   const { selectLifestyleHomeSummary } = load('src/lib/lifestyleHomeSummary.ts', {});
   const today = new Date('2026-10-20T12:00:00');
-  const milestones = [{ employee: { name: 'Amara' }, type: 'birthday', date: '2026-10-23' }];
+  const milestones = [{ employee: { id: 42, name: 'Amara' }, type: 'birthday', date: '2026-10-23' }];
 
   // Both features off — never visible even though data is present, and no request should have been needed to know that (the screen is expected to gate the queries themselves on these same flags).
   assert.equal(selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: false, milestones, receivedAppreciationCount: 5, receivedAppreciationCapped: false, today }).visible, false);
@@ -425,6 +433,11 @@ test('Lifestyle Home card: feature flags gate content, an empty/disabled result 
   const milestonesOnly = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: false, milestones, receivedAppreciationCount: 5, receivedAppreciationCapped: false, today });
   assert.equal(milestonesOnly.visible, true);
   assert.equal(milestonesOnly.milestoneLabel, "Amara's birthday is in 3 days");
+  // The milestone's employee must survive through to the summary — this is what lets
+  // Home deep-link straight into appreciating THEM instead of the general Lifestyle
+  // screen (the exact gap a real device test caught: tapping a milestone landed on a
+  // blank "who is this for" search instead of this specific person).
+  assert.deepEqual(plain(milestonesOnly.milestoneEmployee), { id: 42, name: 'Amara' });
   assert.equal(milestonesOnly.appreciationLabel, null); // feature disabled — never shown even though a count was supplied.
 
   // Appreciation only, exact count (not capped). "received", not "new" — the
@@ -432,6 +445,7 @@ test('Lifestyle Home card: feature flags gate content, an empty/disabled result 
   // imply one.
   const appreciationOnly = selectLifestyleHomeSummary({ milestonesEnabled: false, appreciationEnabled: true, milestones: undefined, receivedAppreciationCount: 2, receivedAppreciationCapped: false, today });
   assert.equal(appreciationOnly.milestoneLabel, null);
+  assert.equal(appreciationOnly.milestoneEmployee, null); // nothing to deep-link to when there's no milestone label.
   assert.equal(appreciationOnly.appreciationLabel, '2 appreciations received');
 
   // Capped count is honest ("N+"), singular wording only when both exact and 1.
@@ -445,8 +459,29 @@ test('Lifestyle Home card: feature flags gate content, an empty/disabled result 
   assert.equal(nothing.visible, false);
 
   // "today" and "tomorrow" wording, and an anniversary's year count.
-  const todayMilestone = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: false, milestones: [{ employee: { name: 'Jordan' }, type: 'anniversary', date: '2026-10-20', years_of_service: 4 }], receivedAppreciationCount: 0, receivedAppreciationCapped: false, today });
+  const todayMilestone = selectLifestyleHomeSummary({ milestonesEnabled: true, appreciationEnabled: false, milestones: [{ employee: { id: 7, name: 'Jordan' }, type: 'anniversary', date: '2026-10-20', years_of_service: 4 }], receivedAppreciationCount: 0, receivedAppreciationCapped: false, today });
   assert.equal(todayMilestone.milestoneLabel, "Jordan's 4-year work anniversary is today");
+  assert.deepEqual(plain(todayMilestone.milestoneEmployee), { id: 7, name: 'Jordan' });
+});
+
+test('Home\'s leave-balances card only shows leave types this employee actually has an allocation for', () => {
+  const { selectImportantLeaveBalances } = load('src/lib/leaveBalances.ts', {});
+
+  const balances = [
+    { leave_type: { id: 1, name: 'Annual' }, days_allocated: 20, days_used: 5, days_pending: 0, days_available: 15 },
+    // Doesn't apply to this employee at all (e.g. a male employee's maternity-leave
+    // entitlement row) — exactly the "muddled" noise a device test flagged.
+    { leave_type: { id: 2, name: 'Maternity' }, days_allocated: 0, days_used: 0, days_pending: 0, days_available: 0 },
+    // A REAL entitlement that happens to be fully used — this is a genuine, useful
+    // "you're out" signal, not clutter, so it must still be shown despite also having
+    // a zero days_available.
+    { leave_type: { id: 3, name: 'Sick' }, days_allocated: 10, days_used: 10, days_pending: 0, days_available: 0 },
+  ];
+
+  const important = plain(selectImportantLeaveBalances(balances));
+  assert.deepEqual(important.map((b) => b.leave_type.name), ['Annual', 'Sick']);
+
+  assert.deepEqual(plain(selectImportantLeaveBalances([])), []);
 });
 
 test('overnight correction dates survive timezone and year boundaries; invalid times fail', () => {
@@ -484,4 +519,12 @@ test('directory explicitly requests every department and lifestyle queries obey 
   const lifestyle = load('src/features/lifestyle/api.ts', { '@tanstack/react-query': query, '../../lib/useInfiniteList': { ...infinite, useInfiniteList: (_, __, options) => options }, '../../lib/apiClient': {} });
   assert.equal(lifestyle.useMilestones(30, false).enabled, false);
   assert.equal(lifestyle.useAppreciations('all', false).enabled, false);
+});
+
+test('uuid() produces distinct, correctly-shaped v4 strings — crypto.randomUUID() does not exist on Hermes, so this is a from-scratch implementation, not a thin wrapper', () => {
+  const { uuid } = load('src/lib/uuid.ts', {});
+  const a = uuid();
+  const b = uuid();
+  assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.notEqual(a, b);
 });

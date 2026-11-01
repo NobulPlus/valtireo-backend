@@ -1,4 +1,5 @@
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -8,7 +9,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../context/AuthContext';
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationList } from '../features/notifications/api';
-import { goIntoMoreTab, type HomeAreaNavigation } from '../lib/navigation';
+import { goIntoMoreTab, goToConnectConversation, type HomeAreaNavigation } from '../lib/navigation';
+import { isEligibleForManagerHome } from '../lib/managerEligibility';
 import { resolveNotificationDestination, type NotificationDestination } from '../lib/notificationNavigation';
 import { radius, spacing, useTheme, type ThemeColors, type Typography } from '../theme';
 import type { HomeStackParamList } from '../navigation/HomeStack';
@@ -34,6 +36,12 @@ function navigateForNotification(destination: NotificationDestination, navigatio
       return;
     case 'moreScreen':
       goIntoMoreTab(navigation, destination.screen);
+      return;
+    case 'connectConversation':
+      goToConnectConversation(navigation, destination.conversationId);
+      return;
+    case 'approvalDetail':
+      navigation.navigate('ApprovalsTab', { screen: 'ApprovalDetail', params: { approvalRequestId: destination.approvalRequestId } });
       return;
     case 'unsupported':
       return;
@@ -84,9 +92,9 @@ function NotificationRow({
 export function NotificationsScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { moduleByKey } = useAuth();
+  const { moduleByKey, session } = useAuth();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-  const { items, isLoading, isError, refetch, isRefetching, fetchMore, isFetchingNextPage } = useNotificationList({ status: filter === 'unread' ? 'unread' : '' });
+  const { items, isLoading, isError, error, refetch, isRefetching, fetchMore, isFetchingNextPage } = useNotificationList({ status: filter === 'unread' ? 'unread' : '' });
   const markAllRead = useMarkAllNotificationsRead();
   const markRead = useMarkNotificationRead();
 
@@ -94,6 +102,8 @@ export function NotificationsScreen({ navigation }: Props) {
     leave: moduleByKey('leave')?.can_access === true,
     serviceDesk: moduleByKey('service_desk')?.can_access === true,
     employeeSelfService: moduleByKey('employee_self_service')?.can_access === true,
+    connect: moduleByKey('connect')?.can_access === true,
+    approvals: isEligibleForManagerHome(session),
   };
 
   function openNotification(item: NotificationEntry) {
@@ -112,6 +122,7 @@ export function NotificationsScreen({ navigation }: Props) {
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <View style={styles.toolbar}>
         <View style={styles.filterRow}>
           <Pressable onPress={() => changeFilter('all')} style={[styles.filterChip, filter === 'all' && styles.filterChipActive]}>
@@ -134,7 +145,7 @@ export function NotificationsScreen({ navigation }: Props) {
         onRefresh={refetch}
         onEndReached={fetchMore}
         onEndReachedThreshold={0.5}
-        ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
+        ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
         ListFooterComponent={<ListFooterLoader visible={isFetchingNextPage} />}
       ListEmptyComponent={
           isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>You are all caught up.</Text>

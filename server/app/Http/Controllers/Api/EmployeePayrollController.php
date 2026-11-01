@@ -18,9 +18,9 @@ class EmployeePayrollController extends Controller
 {
     public function myPayslips(Request $request): JsonResponse
     {
-        abort_unless($request->user()->can('payroll.payslips.view_own'), 403);
+        abort_unless($request->user()->can('payroll.payslips.view_own'), 403, "You don't have permission to view payslips.");
         $employee = $request->user()->employee;
-        abort_unless($employee, 403);
+        abort_unless($employee, 403, 'No employee record is linked to this account.');
         $items = PayrollRunItem::query()->with(['payrollRun:id,name,reference,period_start,period_end,payment_date,currency,published_at'])
             ->where('organization_id', $request->user()->organization_id)->where('employee_id', $employee->id)
             ->whereHas('payrollRun', fn ($query) => $query->where('status', 'finalized')->whereNotNull('published_at'))
@@ -30,7 +30,7 @@ class EmployeePayrollController extends Controller
 
     public function myPayslip(Request $request, PayrollRunItem $payrollRunItem): JsonResponse
     {
-        abort_unless($request->user()->can('payroll.payslips.view_own'), 403);
+        abort_unless($request->user()->can('payroll.payslips.view_own'), 403, "You don't have permission to view payslips.");
         abort_unless($payrollRunItem->organization_id === $request->user()->organization_id && $payrollRunItem->employee_id === $request->user()->employee?->id, 404);
         abort_unless($payrollRunItem->payrollRun()->where('status', 'finalized')->whereNotNull('published_at')->exists(), 404);
         return response()->json(['payslip' => $payrollRunItem->load(['payrollRun', 'lines'])]);
@@ -38,9 +38,9 @@ class EmployeePayrollController extends Controller
 
     public function myCompensation(Request $request): JsonResponse
     {
-        abort_unless($request->user()->can('payroll.compensation.view_own'), 403);
+        abort_unless($request->user()->can('payroll.compensation.view_own'), 403, "You don't have permission to view compensation.");
         $employee = $request->user()->employee;
-        abort_unless($employee, 403);
+        abort_unless($employee, 403, 'No employee record is linked to this account.');
 
         $today = today();
         $compensations = $employee->compensations()->with('payGroup')->latest('effective_from')->get()

@@ -502,7 +502,7 @@ class ApprovalWorkflowTest extends TestCase
 
         Sanctum::actingAs($admin);
 
-        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve'])
+        $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve', 'note' => 'Recovering the inactive approval step.'])
             ->assertOk()
             ->assertJsonPath('approval_request.status', 'approved');
     }

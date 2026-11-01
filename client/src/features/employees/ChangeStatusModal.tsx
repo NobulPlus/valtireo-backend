@@ -2,18 +2,21 @@ import { useState, type ReactNode } from 'react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { ModalCancelAction, ModalSaveAction } from '@/components/ui/ModalActions';
+import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
 import { SelectMenu } from '@/components/ui/SelectMenu';
 import { useToast } from '@/components/ui/Toast';
 import { ApiError } from '@/lib/apiClient';
 import type { Employee } from '@/types/api';
 import { useChangeEmployeeStatus } from '@/features/employees/api';
-import { confirmationStatusOptionsFor, statusOptionsFor } from '@/features/employees/statusHelpers';
+import { confirmationStatusOptionsFor, statusLabel, statusOptionsFor } from '@/features/employees/statusHelpers';
 
 function today(): string {
   const date = new Date();
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
+
+/** Moving an active employee straight to one of these is disruptive and hard to undo casually — require an explicit second confirmation, matching the danger-styled confirm step every other destructive action in the app already uses (asset/role delete, setup-data delete/deactivate). */
+const DISRUPTIVE_STATUSES = ['suspended', 'exited'];
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -44,11 +47,14 @@ export function ChangeStatusModal({
   const [note, setNote] = useState('');
   const [probationEndsAt, setProbationEndsAt] = useState(employee.probation_ends_at?.slice(0, 10) ?? '');
   const [probationEndsAtError, setProbationEndsAtError] = useState<string | null>(null);
+  const [disruptiveConfirmed, setDisruptiveConfirmed] = useState(false);
   const mutation = useChangeEmployeeStatus(employee.id);
 
   const resolvedStatus = newStatus || employee.status;
   const resolvedConfirmationStatus = newConfirmationStatus || employee.confirmation_status;
   const movingToProbation = resolvedConfirmationStatus === 'probation';
+  const isDisruptiveChange = resolvedStatus !== employee.status && DISRUPTIVE_STATUSES.includes(resolvedStatus);
+  const needsConfirmation = isDisruptiveChange && !disruptiveConfirmed;
 
   async function handleSave() {
     setProbationEndsAtError(null);
@@ -62,6 +68,13 @@ export function ChangeStatusModal({
         setProbationEndsAtError('Must be after the effective date.');
         return;
       }
+    }
+
+    // First click on a disruptive change only arms the confirmation — the button
+    // swaps to a danger-styled "confirm" step and submission waits for a second click.
+    if (needsConfirmation) {
+      setDisruptiveConfirmed(true);
+      return;
     }
 
     try {
@@ -78,11 +91,17 @@ export function ChangeStatusModal({
       setNewConfirmationStatus('');
       setReason('');
       setNote('');
+      setDisruptiveConfirmed(false);
       onClose();
       onChanged?.();
     } catch (error) {
       toast.error('Could not change status', error instanceof ApiError ? error.message : 'Could not change status.');
     }
+  }
+
+  function handleStatusChange(value: string) {
+    setNewStatus(value);
+    setDisruptiveConfirmed(false);
   }
 
   return (
@@ -93,15 +112,29 @@ export function ChangeStatusModal({
       footer={
         <>
           <ModalCancelAction onClick={onClose} disabled={mutation.isPending} />
-          <ModalSaveAction title="Save status" isLoading={mutation.isPending} onClick={handleSave} />
+          {needsConfirmation ? (
+            <ModalConfirmAction
+              variant="danger"
+              title={`Confirm: move to ${statusLabel(resolvedStatus)}`}
+              isLoading={mutation.isPending}
+              onClick={handleSave}
+            />
+          ) : (
+            <ModalSaveAction title="Save status" isLoading={mutation.isPending} onClick={handleSave} />
+          )}
         </>
       }
     >
       <div className="space-y-3">
         <Field label="Employment status">
-          <SelectMenu value={newStatus || employee.status} onChange={setNewStatus} options={statusOptionsFor(employee)} />
+          <SelectMenu value={newStatus || employee.status} onChange={handleStatusChange} options={statusOptionsFor(employee)} />
           {employee.status === 'draft' && !employee.work_email && (
             <p className="mt-1 text-xs text-warning">Add a work email before inviting this employee.</p>
+          )}
+          {needsConfirmation && (
+            <p className="mt-1 text-xs text-danger">
+              Moving {employee.full_name} to {statusLabel(resolvedStatus).toLowerCase()} is disruptive — click the confirm button again to proceed.
+            </p>
           )}
         </Field>
         <Field label="Confirmation status">

@@ -1,8 +1,9 @@
-import { uploadFile } from '../lib/uploadFile';
+import { prepareProfilePhoto, discardProfilePhoto } from '../lib/profilePhoto';
 import { QueryError } from '../components/QueryError';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Avatar } from '../components/Avatar';
+import { ProductIconField } from '../components/ProductIconField';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMyProfileOverview, useUpdateMyProfile } from '../features/profile/api';
@@ -25,9 +26,9 @@ const GENDER_OPTIONS = [
 export function ProfileScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { data, isLoading, isError, refetch } = useMyProfileOverview();
+  const { data, isLoading, isError, error, refetch } = useMyProfileOverview();
   if (isLoading) return <ActivityIndicator style={styles.flex} color={colors.pine} />;
-  if (isError || !data) return <QueryError retry={refetch} />;
+  if (isError || !data) return <QueryError retry={refetch} error={error} />;
   return <ProfileForm key={data.employee?.id ?? 'me'} data={data} navigation={navigation} />;
 }
 
@@ -43,13 +44,17 @@ function ProfileForm({ data, navigation }: { data: EmployeeProfileOverview; navi
   const [nextOfKinName, setNextOfKinName] = useState(data.profile?.next_of_kin_name ?? '');
   const [nextOfKinPhone, setNextOfKinPhone] = useState(data.profile?.next_of_kin_phone ?? '');
   const [photo, setPhoto] = useState<RNFile | null>(null);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  useEffect(() => () => { if (photo) discardProfilePhoto(photo.uri); }, [photo]);
 
   async function pickPhoto() {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setPhoto(uploadFile(asset));
-    }
+    setPreparingPhoto(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      if (!result.canceled && result.assets[0]) setPhoto(await prepareProfilePhoto(result.assets[0]));
+    } catch (error) {
+      Alert.alert('Could not select photo', error instanceof Error ? error.message : 'Please choose another photo.');
+    } finally { setPreparingPhoto(false); }
   }
 
   async function handleSave() {
@@ -74,10 +79,12 @@ function ProfileForm({ data, navigation }: { data: EmployeeProfileOverview; navi
   const photoUrl = photo?.uri ?? data?.profile?.passport_photo_url ?? undefined;
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
-      <Pressable onPress={pickPhoto} style={styles.photoWrap}>
+      <Pressable onPress={pickPhoto} disabled={preparingPhoto || updateProfile.isPending} style={styles.photoWrap}>
         <Avatar uri={photoUrl} name={employee?.full_name ?? 'Your'} size={84} />
-        <Text style={styles.changePhoto}>Change photo</Text>
+        <Text style={styles.changePhoto}>{preparingPhoto ? 'Preparing photo…' : 'Change photo'}</Text>
         {photo ? <Text style={typography.caption}>Photo selected. Tap Save changes to upload it.</Text> : null}
       </Pressable>
 
@@ -106,7 +113,7 @@ function ProfileForm({ data, navigation }: { data: EmployeeProfileOverview; navi
       <LabeledInput label="Next of kin name" value={nextOfKinName} onChangeText={setNextOfKinName} colors={colors} styles={styles} />
       <LabeledInput label="Next of kin phone" value={nextOfKinPhone} onChangeText={setNextOfKinPhone} keyboardType="phone-pad" colors={colors} styles={styles} />
 
-      <Pressable style={[styles.button, updateProfile.isPending && styles.buttonDisabled]} onPress={handleSave} disabled={updateProfile.isPending}>
+      <Pressable style={[styles.button, (updateProfile.isPending || preparingPhoto) && styles.buttonDisabled]} onPress={handleSave} disabled={updateProfile.isPending || preparingPhoto}>
         {updateProfile.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Save changes</Text>}
       </Pressable>
 
@@ -120,6 +127,7 @@ function ProfileForm({ data, navigation }: { data: EmployeeProfileOverview; navi
         <Text style={typography.caption}>{data.dependents.length} ›</Text>
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
@@ -157,7 +165,8 @@ function LabeledInput(props: {
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   photoWrap: { alignItems: 'center', marginBottom: spacing.lg },
   photo: { width: 84, height: 84, borderRadius: 42 },

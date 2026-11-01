@@ -1,0 +1,5 @@
+export type Person = { id: number; name: string; active: boolean; department: string | null; photo_url: string | null; availability: string };
+export type Conversation = { id: string; kind: 'direct' | 'group' | 'channel'; visibility: string; name: string; owner_id: number; archived: boolean; muted: boolean; joined: boolean; unread_count: number; members: Person[]; updated_at: string };
+export type Message = { id: number; client_id: string; sender: Person; body: string | null; reply_to_id: number | null; mentions: number[]; created_at: string; edited_at: string | null; deleted: boolean; pinned: boolean; attachment: { name: string; mime: string; size: number; voice_note: boolean; url: string } | null; reactions: { reaction: string; count: number; mine: boolean }[] };
+export type VoiceCall = { id: string; conversation_id: string; incoming: boolean; status: string; caller: Person; callee: Person; created_at: string; accepted_at: string | null; ended_at: string | null };
+export type Page<T> = { data: T[]; current_page: number; last_page: number };

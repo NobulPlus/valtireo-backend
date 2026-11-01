@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { useCreateEmergencyContact, useUpdateEmergencyContact } from '../features/profile/api';
 import { ApiError } from '../lib/apiClient';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
@@ -54,6 +55,8 @@ export function EmergencyContactFormScreen({ route, navigation }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Name</Text>
       <TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} />
@@ -82,11 +85,13 @@ export function EmergencyContactFormScreen({ route, navigation }: Props) {
         {isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>{isEditing ? 'Save changes' : 'Add contact'}</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs, marginTop: spacing.md },
   body: { fontSize: 14, color: colors.ink },

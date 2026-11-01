@@ -66,9 +66,11 @@ class PayrollFoundationTest extends TestCase
             ->assertJsonPath('payroll_run.status', 'pending_approval');
 
         $approval = ApprovalRequest::query()->where('approvable_type', PayrollRun::class)->where('approvable_id', $runId)->firstOrFail();
+        Sanctum::actingAs(User::where('email', 'mariam.okafor@valtireo.test')->firstOrFail());
         $this->postJson("/api/approvals/{$approval->id}/actions", ['action' => 'approve', 'note' => 'Payroll checked.'])
             ->assertOk();
 
+        Sanctum::actingAs($admin);
         $this->postJson("/api/payroll/runs/{$runId}/finalize")
             ->assertOk()
             ->assertJsonPath('payroll_run.status', 'finalized');

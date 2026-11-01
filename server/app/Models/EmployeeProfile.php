@@ -23,6 +23,13 @@ class EmployeeProfile extends Model implements AuditableContract
 {
     use Auditable;
 
+    public function photoUrl(): ?string
+    {
+        return $this->passport_photo_path
+            ? url("/api/employees/{$this->employee_id}/photo").'?v='.hash('sha256', $this->passport_photo_path)
+            : null;
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);

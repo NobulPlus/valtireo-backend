@@ -167,3 +167,24 @@ Shared local test password: `LashmaDemo2026!`. These are fictional people and co
 | LSH-160 | Folake Ogunleye | employee160@lashma.test | Employee | Executive Office | Strategy | Surulere Test Branch | onboarding |
 | LSH-161 | Chiamaka Ogunleye | employee161@lashma.test | Employee | Executive Office | Secretariat | Lagos Island Test Branch | suspended |
 | LSH-162 | Yusuf Ogunleye | employee162@lashma.test | Employee | Executive Office | Governance | Lekki Test Branch | exited |
+| LSH-M001 | Adebisi Akinola | manager@lashma.test | Supervisor | Client Service | Enrollee Support | Alausa Test Headquarters | active |
+| LSH-M002 | Chinwe Okorie | supervisor@lashma.test | Supervisor | Medical | Clinical Quality | Alausa Test Headquarters | active |
+| LSH-M003 | Bashir Lawal | manager.empty@lashma.test | Supervisor | Finance | Budget and Planning | Alausa Test Headquarters | active |
+| LSH-M004 | Funmilayo Ojo | structural.lead@lashma.test | Employee | ICT | Application Support | Alausa Test Headquarters | active |
+| LSH-M005 | Nnenna Eze | hr.director@lashma.test | HR Director | Admin | Human Resources | Alausa Test Headquarters | active |
+| LSH-M006 | Olumide Balogun | compliance@lashma.test | Compliance Officer | Regulations | Compliance | Alausa Test Headquarters | active |
+| LSH-M007 | Kemi Adebanjo | team.lagos@lashma.test | Employee | Client Service | Enrollee Support | Lagos Island Test Branch | active |
+| LSH-M008 | Ibrahim Sani | team.ikeja@lashma.test | Employee | Client Service | Enrollee Support | Ikeja Test Branch | active |
+| LSH-M009 | Adaeze Obi | team.lekki@lashma.test | Employee | Client Service | Enrollee Support | Lekki Test Branch | active |
+| LSH-M010 | Seyi Alabi | team.ikorodu@lashma.test | Employee | Client Service | Enrollee Support | Ikorodu Test Branch | active |
+| LSH-M011 | Amina Usman | medical.day@lashma.test | Employee | Medical | Clinical Quality | Alausa Test Headquarters | active |
+| LSH-M012 | Chukwudi Nwosu | medical.night@lashma.test | Employee | Medical | Clinical Quality | Badagry Test Branch | active |
+| LSH-M013 | Tosin Ajayi | ict.report@lashma.test | Employee | ICT | Application Support | Alausa Test Headquarters | active |
+| LSH-M014 | Zainab Bello | new.starter@lashma.test | Employee | Account | General Ledger | Alausa Test Headquarters | active |
+| LSH-M015 | Emeka Udo | private@lashma.test | Employee | Audit | Internal Audit | Alausa Test Headquarters | active |
+| LSH-M016 | Yetunde Salami | contract@lashma.test | Employee | Sales | Corporate Sales | Alausa Test Headquarters | active |
+| LSH-M017 | Musa Abubakar | nysc@lashma.test | Employee | PRE | Planning | Abuja Test Liaison Office | active |
+| LSH-M018 | Amaka Nwankwo | intern@lashma.test | Employee | Actuary | Pricing | Alausa Test Headquarters | active |
+| LSH-M019 | Damilola Ogundipe | onboarding@lashma.test | Employee | Admin | Human Resources | Alausa Test Headquarters | onboarding |
+| LSH-M020 | Segun Adeleke | suspended@lashma.test | Employee | Regulations | Compliance | Alausa Test Headquarters | suspended |
+| LSH-M021 | Halima Yusuf | exited@lashma.test | Employee | Finance | Budget and Planning | Alausa Test Headquarters | exited |

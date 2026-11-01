@@ -196,6 +196,7 @@ export const v2ModuleColors: Record<string, ModuleColorPair> = {
   learning: { bg: '#DEE6F5', icon: '#3A5FA0' },
   financial_admin: { bg: '#F2E9D2', icon: '#96762A' },
   ai_assistant: { bg: '#EDE4FB', icon: '#8B5FD9' },
+  connect: { bg: '#D9EEEC', icon: '#2F8F8A' },
 };
 
 export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };
@@ -276,5 +277,15 @@ export function navigatorScreenOptions(colors: ThemeColors) {
     headerStyle: { backgroundColor: colors.white },
     headerTitleStyle: { color: colors.ink },
     contentStyle: { backgroundColor: colors.paper },
+  };
+}
+
+/** Design System v2 counterpart of `navigatorScreenOptions` — for a stack whose pushed screens keep the native back-button header (unlike a tab root such as MoreMenu, which hides it and builds its own in-screen title) but reskin it onto the v2 palette/type. */
+export function navigatorScreenOptionsV2(v2: V2Colors) {
+  return {
+    headerTintColor: v2.primary,
+    headerStyle: { backgroundColor: v2.surface },
+    headerTitleStyle: { color: v2.ink, fontFamily: V2_FONTS.interSemiBold },
+    contentStyle: { backgroundColor: v2.bg },
   };
 }

@@ -34,7 +34,7 @@ interface AuthContextValue {
   /** null only while an eligible admin/manager hasn't picked a mode yet this session. Plain employees are always 'employee'. */
   workspaceMode: WorkspaceMode | null;
   setWorkspaceMode: (mode: WorkspaceMode) => void;
-  /** Backend-computed: true only if the user is an employee AND holds `employees.view_team` — drives the Manager tab so it never shows when the API would 403. */
+  /** Backend-computed: active employee + employees.manage_team + matching visibility and structural scope; drives Manager Home independently of HR administration. */
   hasManagerScope: boolean;
 }
 

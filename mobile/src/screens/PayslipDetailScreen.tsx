@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -17,7 +18,7 @@ export function PayslipDetailScreen({ route }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors, typography), [colors, typography]);
   const { runItemId } = route.params;
-  const { data: payslip, isLoading, isError, refetch } = useMyPayslip(runItemId);
+  const { data: payslip, isLoading, isError, error, refetch } = useMyPayslip(runItemId);
   const [isDownloading, setIsDownloading] = useState(false);
 
   async function handleDownload() {
@@ -32,13 +33,15 @@ export function PayslipDetailScreen({ route }: Props) {
     }
   }
 
-  if (isLoading) return <ActivityIndicator style={styles.flex} color={colors.pine} />;
+  if (isLoading) return <ActivityIndicator style={styles.root} color={colors.pine} />;
 
-  if (isError || !payslip) return <QueryError retry={refetch} />;
+  if (isError || !payslip) return <QueryError retry={refetch} error={error} />;
 
   const currency = payslip.payroll_run?.currency ?? 'NGN';
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={typography.title}>{payslip.payroll_run?.name ?? payslip.payroll_run?.reference}</Text>
       <Text style={[typography.caption, { marginBottom: spacing.lg }]}>
@@ -70,6 +73,7 @@ export function PayslipDetailScreen({ route }: Props) {
         {isDownloading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Download payslip</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
@@ -83,7 +87,8 @@ function SummaryRow({ label, value, emphasize, typography, styles }: { label: st
 }
 
 const makeStyles = (colors: ThemeColors, typography: Typography) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   summaryCard: { backgroundColor: colors.white, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.line, marginBottom: spacing.lg },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },

@@ -20,6 +20,7 @@ class ActOnApprovalRequestRequest extends FormRequest
         return [
             'action' => ['required', Rule::in(['approve', 'reject', 'request_changes', 'cancel'])],
             'note' => ['nullable', 'string', 'max:2000'],
+            'expected_step_order' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

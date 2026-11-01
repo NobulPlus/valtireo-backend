@@ -311,6 +311,8 @@ class DocumentComplianceTest extends TestCase
             ->assertCreated()
             ->json('document.id');
 
+        // The uploader cannot also be the human reviewer.
+        Sanctum::actingAs(User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail());
         $this->patchJson("/api/documents/{$documentId}/review", [
             'action' => 'approve',
             'note' => 'Verified against original.',

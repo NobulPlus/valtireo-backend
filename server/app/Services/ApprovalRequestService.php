@@ -36,6 +36,14 @@ class ApprovalRequestService
         array $metadata = []
     ): ApprovalRequest {
         return DB::transaction(function () use ($actor, $approvable, $module, $action, $title, $subjectEmployee, $metadata): ApprovalRequest {
+            abort_unless($approvable->organization_id === $actor->organization_id
+                && (! $subjectEmployee || $subjectEmployee->organization_id === $actor->organization_id), 404);
+            $approvable = $approvable->newQuery()->whereKey($approvable->getKey())->lockForUpdate()->firstOrFail();
+            if (ApprovalRequest::query()->where('organization_id', $actor->organization_id)
+                ->where('approvable_type', $approvable::class)->where('approvable_id', $approvable->getKey())
+                ->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages(['approval_workflow' => ['This record already has a pending approval.']]);
+            }
             $workflow = ApprovalWorkflow::query()
                 ->where('organization_id', $actor->organization_id)
                 ->where('module', $module)
@@ -51,6 +59,10 @@ class ApprovalRequestService
             }
 
             $firstStep = $workflow?->steps->where('is_active', true)->sortBy('step_order')->first();
+
+            if ($approvable instanceof PayrollRun && (! $firstStep || $workflow->auto_approve_when_no_steps)) {
+                throw ValidationException::withMessages(['approval_workflow' => ['Payroll requires a human approval step and automatic approval must be disabled.']]);
+            }
 
             if (! $firstStep && ! $workflow->auto_approve_when_no_steps) {
                 throw ValidationException::withMessages([
@@ -80,15 +92,23 @@ class ApprovalRequestService
             if ($approvalRequest->status === 'pending') {
                 $this->notifications->approvalSubmitted($approvalRequest);
             } elseif ($approvalRequest->status === 'approved') {
-                $this->syncApprovableStatus($approvalRequest->load('approvable'), $actor, 'approve', null);
+                $approvalRequest->decisions()->create([
+                    'actor_id' => null, 'action' => 'approve', 'previous_status' => 'pending',
+                    'next_status' => 'approved', 'note' => 'Automatic approval configured for an empty workflow.',
+                    'metadata' => ['origin' => 'system', 'approval_workflow_id' => $workflow->id],
+                ]);
+                $this->syncApprovableStatus($approvalRequest->load('approvable'), null, 'approve', null);
             }
 
             return $approvalRequest->refresh();
         });
     }
 
-    public function act(User $actor, ApprovalRequest $approvalRequest, string $action, ?string $note = null): ApprovalRequest
+    public function act(User $actor, ApprovalRequest $approvalRequest, string $action, ?string $note = null, ?int $expectedStepOrder = null): ApprovalRequest
     {
+        if (! in_array($action, ApprovalDecisionAuthorizationService::ACTIONS, true)) {
+            throw ValidationException::withMessages(['action' => ['Unknown approval action.']]);
+        }
         if ($approvalRequest->organization_id !== $actor->organization_id) {
             abort(404);
         }
@@ -99,14 +119,32 @@ class ApprovalRequestService
             ]);
         }
 
-        return DB::transaction(function () use ($actor, $approvalRequest, $action, $note): ApprovalRequest {
-            $approvalRequest->loadMissing(['workflow.steps', 'subjectEmployee.department']);
+        return DB::transaction(function () use ($actor, $approvalRequest, $action, $note, $expectedStepOrder): ApprovalRequest {
+            $expectedStep = $expectedStepOrder ?? $approvalRequest->current_step_order;
+            // Source first: submission, document recovery and cancellation use this same lock order.
+            $source = $approvalRequest->approvable()->first();
+            abort_unless($source && $source->organization_id === $actor->organization_id, 404);
+            $source = $source->newQuery()->whereKey($source->getKey())->lockForUpdate()->firstOrFail();
+            $approvalRequest = ApprovalRequest::query()->where('organization_id', $actor->organization_id)
+                ->whereKey($approvalRequest->id)->lockForUpdate()->firstOrFail();
+            if ($approvalRequest->status !== 'pending' || $approvalRequest->current_step_order !== $expectedStep) {
+                throw ValidationException::withMessages(['action' => ['This approval request has changed. Refresh before deciding.']]);
+            }
+            $approvalRequest->setRelation('approvable', $source);
+            $approvalRequest->load(['workflow.steps.approverRole', 'subjectEmployee.department']);
+            $actor = $actor->fresh();
             $step = $this->currentStep($approvalRequest);
-
-            if ($action === 'cancel') {
-                $this->ensureActorCanCancel($actor, $approvalRequest, $step);
-            } else {
-                $this->ensureActorCanApproveStep($actor, $approvalRequest, $step);
+            $restriction = app(ApprovalDecisionAuthorizationService::class)->restriction($actor, $approvalRequest, $action);
+            if ($restriction === 'tenant_mismatch') {
+                abort(404);
+            }
+            if ($restriction === 'approval_step_unavailable') {
+                throw ValidationException::withMessages(['action' => ['The approval step configured for this request is no longer active. Ask an organization admin to resolve it.']]);
+            }
+            abort_if($restriction !== null, 403, $restriction ?? 'Approval forbidden.');
+            $recovery = ! $step && $action === 'approve';
+            if ($recovery && blank($note)) {
+                throw ValidationException::withMessages(['note' => ['An administrative recovery note is required.']]);
             }
 
             $this->ensureRequiredNote($approvalRequest, $step, $action, $note);
@@ -125,6 +163,8 @@ class ApprovalRequestService
                 'metadata' => [
                     'step_order' => $step?->step_order,
                     'step_name' => $step?->name,
+                    'origin' => 'human',
+                    'administrative_recovery' => $recovery,
                 ],
             ]);
 
@@ -176,43 +216,6 @@ class ApprovalRequestService
         return $this->nextStep($approvalRequest, $step) ? 'pending' : 'approved';
     }
 
-    private function ensureActorCanApproveStep(User $actor, ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step): void
-    {
-        if ($actor->is_platform_admin || $actor->can('organizations.administer')) {
-            return;
-        }
-
-        if (! $step) {
-            throw ValidationException::withMessages([
-                'action' => ['The approval step configured for this request is no longer active. Ask an organization admin to resolve it.'],
-            ]);
-        }
-
-        $subjectEmployee = $approvalRequest->subjectEmployee;
-        $allowed = match ($step->approver_type) {
-            'permission' => $step->approver_permission && $actor->can($step->approver_permission),
-            'role' => $step->approverRole && $actor->hasRole($step->approverRole),
-            'direct_manager' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->reporting_manager_id,
-            'department_head' => $subjectEmployee && $actor->employee?->id === $subjectEmployee->department?->head_employee_id,
-            default => false,
-        };
-
-        abort_unless($allowed, 403);
-    }
-
-    private function ensureActorCanCancel(User $actor, ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step): void
-    {
-        if ($actor->id === $approvalRequest->requester_id) {
-            return;
-        }
-
-        if ($approvalRequest->subject_employee_id && $actor->employee?->id === $approvalRequest->subject_employee_id) {
-            return;
-        }
-
-        $this->ensureActorCanApproveStep($actor, $approvalRequest, $step);
-    }
-
     private function ensureRequiredNote(ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step, string $action, ?string $note): void
     {
         $requiresNote = ($step?->note_required ?? false)
@@ -226,7 +229,7 @@ class ApprovalRequestService
         }
     }
 
-    private function syncApprovableStatus(ApprovalRequest $approvalRequest, User $actor, string $action, ?string $note): void
+    private function syncApprovableStatus(ApprovalRequest $approvalRequest, ?User $actor, string $action, ?string $note): void
     {
         $approvable = $approvalRequest->approvable;
 
@@ -267,13 +270,13 @@ class ApprovalRequestService
 
         $approvable->update([
             'status' => $nextStatus,
-            'reviewed_by_id' => $actor->id,
+            'reviewed_by_id' => $actor?->id,
             'review_note' => $note,
             'reviewed_at' => now(),
         ]);
 
         $approvable->reviews()->create([
-            'reviewed_by_id' => $actor->id,
+            'reviewed_by_id' => $actor?->id,
             'action' => $action,
             'previous_status' => $previousStatus,
             'next_status' => $nextStatus,

@@ -22,7 +22,7 @@ class PayrollRunController extends Controller
             ->when($request->string('status')->toString(), fn (Builder $q, string $status) => $q->where('status', $status))
             ->when($request->date('date_from'), fn (Builder $q, $date) => $q->whereDate('period_start', '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $q, $date) => $q->whereDate('period_end', '<=', $date->toDateString()))
-            ->latest('period_end')->paginate(min(max($request->integer('per_page', 15), 1), 100));
+            ->latest('period_end')->orderBy('id', 'desc')->paginate(min(max($request->integer('per_page', 15), 1), 100));
 
         return response()->json($runs);
     }
@@ -50,6 +50,7 @@ class PayrollRunController extends Controller
 
     public function calculate(Request $request, PayrollRun $payrollRun, PayrollService $payroll, OperationAutomationService $automations): JsonResponse
     {
+        abort_unless($payrollRun->organization_id === $request->user()->organization_id, 404);
         abort_unless($request->user()->can('payroll.runs.manage'), 403);
         $payrollRun = $payroll->calculate($request->user(), $payrollRun);
         $context = ['event_id' => "calculation:{$payrollRun->calculated_at?->timestamp}", 'actor_user_id' => $request->user()->id];
@@ -63,6 +64,7 @@ class PayrollRunController extends Controller
 
     public function readiness(Request $request, PayrollRun $payrollRun, PayrollService $payroll): JsonResponse
     {
+        abort_unless($payrollRun->organization_id === $request->user()->organization_id, 404);
         abort_unless($request->user()->can('payroll.runs.view'), 403);
 
         return response()->json(['readiness' => $payroll->readiness($request->user(), $payrollRun)]);
@@ -70,6 +72,7 @@ class PayrollRunController extends Controller
 
     public function submit(Request $request, PayrollRun $payrollRun, PayrollService $payroll, OperationAutomationService $automations): JsonResponse
     {
+        abort_unless($payrollRun->organization_id === $request->user()->organization_id, 404);
         abort_unless($request->user()->can('payroll.runs.submit'), 403);
         $payrollRun = $payroll->submit($request->user(), $payrollRun);
         $automations->dispatch('payroll.submitted', $payrollRun, [
@@ -81,6 +84,7 @@ class PayrollRunController extends Controller
 
     public function finalize(Request $request, PayrollRun $payrollRun, PayrollService $payroll, OperationAutomationService $automations): JsonResponse
     {
+        abort_unless($payrollRun->organization_id === $request->user()->organization_id, 404);
         abort_unless($request->user()->can('payroll.runs.finalize'), 403);
         $payrollRun = $payroll->finalize($request->user(), $payrollRun);
         $automations->dispatch('payroll.finalized', $payrollRun, [

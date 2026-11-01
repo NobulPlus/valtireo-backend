@@ -134,7 +134,7 @@ class TicketController extends Controller
         $sortable = ['submitted_at', 'sla_due_at', 'priority', 'status', 'escalation_level'];
 
         if (in_array($sortBy, $sortable, true)) {
-            $query->orderBy($sortBy, $sortDirection);
+            $query->orderBy($sortBy, $sortDirection)->orderBy('id', $sortDirection);
         } else {
             $query->latest('id');
         }

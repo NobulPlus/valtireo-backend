@@ -1,4 +1,5 @@
-import { uploadFile } from '../lib/uploadFile';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { useMemo, useState } from 'react';
@@ -18,7 +19,7 @@ const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
 export function NewTicketScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { data: categories, isLoading: loadingCategories, isError: categoriesError, refetch: retryCategories } = useTicketCategories();
+  const { data: categories, isLoading: loadingCategories, isError: categoriesError, error: categoriesErrorDetail, refetch: retryCategories } = useTicketCategories();
   const { data: departments } = useDepartmentOptions();
   const { data: resolvers } = useTicketResolvers();
   const createTicket = useCreateTicket();
@@ -40,7 +41,14 @@ export function NewTicketScreen({ navigation }: Props) {
       type: ['image/*', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
       copyToCacheDirectory: true,
     });
-    if (!result.canceled && result.assets[0]) setAttachment(uploadFile(result.assets[0]));
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      if (isFileTooLarge(asset, MAX_UPLOAD_BYTES.ticketAttachment)) {
+        Alert.alert('File too large', `Attachments must be ${formatMaxSize(MAX_UPLOAD_BYTES.ticketAttachment)} or smaller.`);
+        return;
+      }
+      setAttachment(uploadFile(asset));
+    }
   }
 
   async function handleSubmit() {
@@ -68,9 +76,11 @@ export function NewTicketScreen({ navigation }: Props) {
     }
   }
 
-  if (categoriesError) return <QueryError retry={retryCategories} />;
+  if (categoriesError) return <QueryError retry={retryCategories} error={categoriesErrorDetail} />;
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Category</Text>
       {loadingCategories ? (
@@ -148,11 +158,13 @@ export function NewTicketScreen({ navigation }: Props) {
         {createTicket.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Submit ticket</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs, marginTop: spacing.md },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, fontSize: 14, color: colors.ink, backgroundColor: colors.white },

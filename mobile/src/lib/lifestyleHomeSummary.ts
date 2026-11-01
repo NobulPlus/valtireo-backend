@@ -14,7 +14,7 @@
  */
 
 export interface MilestoneLike {
-  employee: { name: string };
+  employee: { id: number; name: string };
   type: 'birthday' | 'anniversary';
   date: string;
   years_of_service?: number;
@@ -37,6 +37,10 @@ export interface LifestyleHomeSummary {
   /** False means render nothing — per the audit, an empty card must not appear. */
   visible: boolean;
   milestoneLabel: string | null;
+  /** Who milestoneLabel is about — lets the card deep-link straight into sending them an
+   * appreciation instead of just the general Lifestyle screen. Null exactly when
+   * milestoneLabel is null (nothing to link to). */
+  milestoneEmployee: { id: number; name: string } | null;
   appreciationLabel: string | null;
 }
 
@@ -78,6 +82,7 @@ export function selectLifestyleHomeSummary(input: LifestyleHomeSummaryInput): Li
   return {
     visible: milestoneLabel !== null || appreciationLabel !== null,
     milestoneLabel,
+    milestoneEmployee: milestoneLabel !== null && nearestMilestone ? { id: nearestMilestone.employee.id, name: nearestMilestone.employee.name } : null,
     appreciationLabel,
   };
 }

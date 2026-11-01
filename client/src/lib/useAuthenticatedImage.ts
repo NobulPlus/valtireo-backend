@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
-import { apiClient } from '@/lib/apiClient';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { apiClient, getStoredToken } from '@/lib/apiClient';
+import { onSessionChange } from './sessionEvents';
+import { profilePhotoEndpoint } from './profilePhotoUrl';
 
 /**
  * Employee photos are served by an authenticated, organization-scoped
@@ -10,33 +12,32 @@ import { apiClient } from '@/lib/apiClient';
  * view/download in lib/documents.ts for the same reason.
  */
 export function useAuthenticatedImage(url: string | null | undefined): string | null {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const token = useSyncExternalStore(onSessionChange, getStoredToken, () => null);
+  const endpoint = profilePhotoEndpoint(url);
+  const [image, setImage] = useState<{ endpoint: string; token: string; blobUrl: string } | null>(null);
 
   useEffect(() => {
-    if (!url) {
-      setBlobUrl(null);
-      return;
-    }
+    if (!endpoint || !token) return;
 
     let cancelled = false;
     let objectUrl: string | null = null;
 
     apiClient
-      .get(url, { responseType: 'blob' })
+      .get(endpoint, { responseType: 'blob' })
       .then((response) => {
         if (cancelled) return;
         objectUrl = window.URL.createObjectURL(response.data as Blob);
-        setBlobUrl(objectUrl);
+        setImage({ endpoint, token, blobUrl: objectUrl });
       })
       .catch(() => {
-        if (!cancelled) setBlobUrl(null);
+        if (!cancelled) setImage(null);
       });
 
     return () => {
       cancelled = true;
       if (objectUrl) window.URL.revokeObjectURL(objectUrl);
     };
-  }, [url]);
+  }, [endpoint, token]);
 
-  return blobUrl;
+  return image?.endpoint === endpoint && image?.token === token ? image.blobUrl : null;
 }

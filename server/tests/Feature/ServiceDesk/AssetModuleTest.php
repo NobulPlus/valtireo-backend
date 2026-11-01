@@ -299,6 +299,39 @@ class AssetModuleTest extends TestCase
         $this->getJson("/api/assets/{$mineId}")->assertOk();
     }
 
+    public function test_mine_param_scopes_to_self_even_for_a_user_who_also_holds_assets_view(): void
+    {
+        $this->seed();
+
+        $admin = $this->admin();
+        $employeeUser = $this->employeeUser();
+        $employee = $employeeUser->employee()->firstOrFail();
+        $otherEmployee = Employee::query()->where('organization_id', $admin->organization_id)->where('id', '!=', $employee->id)->firstOrFail();
+
+        Sanctum::actingAs($admin);
+        $mineId = $this->postJson('/api/assets', ['name' => 'My Laptop', 'asset_tag' => 'AST-0008', 'asset_category_id' => $this->categoryId('LAPTOP')])->json('data.id');
+        $othersId = $this->postJson('/api/assets', ['name' => 'Their Laptop', 'asset_tag' => 'AST-0009', 'asset_category_id' => $this->categoryId('LAPTOP')])->json('data.id');
+        $this->patchJson("/api/assets/{$mineId}", ['status' => 'assigned', 'assigned_to_employee_id' => $employee->id])->assertOk();
+        $this->patchJson("/api/assets/{$othersId}", ['status' => 'assigned', 'assigned_to_employee_id' => $otherEmployee->id])->assertOk();
+
+        // This employee also holds the admin's own role — an HR/ops admin viewing
+        // their own My Assets page, not an ordinary employee with no other access.
+        $employeeUser->assignRole($admin->roles->first());
+
+        Sanctum::actingAs($employeeUser);
+        $this->assertTrue($employeeUser->can('assets.view'));
+
+        // Without `mine`, this privileged user sees the organization-wide list —
+        // the admin asset management page's own behavior, unchanged.
+        $allIds = $this->getJson('/api/assets')->assertOk()->json('data.*.id');
+        $this->assertContains($mineId, $allIds);
+        $this->assertContains($othersId, $allIds);
+
+        // With `mine=1` — the My Assets self-service page's request — only their
+        // own assigned asset comes back, regardless of holding assets.view.
+        $this->assertSame([$mineId], $this->getJson('/api/assets?mine=1')->assertOk()->json('data.*.id'));
+    }
+
     public function test_cannot_access_another_organizations_asset(): void
     {
         $this->seed();

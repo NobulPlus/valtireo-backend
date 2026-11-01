@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { ListFooterLoader } from '../components/ListFooterLoader';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMyPayslips } from '../features/payroll/api';
 import { radius, spacing, useTheme, type ThemeColors, type Typography } from '../theme';
@@ -18,7 +19,7 @@ function formatMoney(amount: string, currency: string): string {
 export function PayslipsListScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors, typography), [colors, typography]);
-  const { items, isLoading, isError, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyPayslips();
+  const { items, isLoading, isError, error, refetch, isRefetching, fetchMore, isFetchingNextPage } = useMyPayslips();
 
   function renderItem({ item }: { item: PayrollRunItem }) {
     const currency = item.payroll_run?.currency ?? 'NGN';
@@ -32,27 +33,31 @@ export function PayslipsListScreen({ navigation }: Props) {
   }
 
   return (
-    <FlatList
-      style={styles.flex}
-      data={items}
-      keyExtractor={(item) => String(item.id)}
-      contentContainerStyle={styles.list}
-      renderItem={renderItem}
-      refreshing={isRefetching}
-      onRefresh={refetch}
-      onEndReached={fetchMore}
-      onEndReachedThreshold={0.5}
-      ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
-      ListFooterComponent={<ListFooterLoader visible={isFetchingNextPage} />}
-      ListEmptyComponent={
-        isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No payslips published yet.</Text>
-      }
-    />
+    <View style={styles.root}>
+      <ProductIconField />
+      <FlatList
+        style={styles.flex}
+        data={items}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.list}
+        renderItem={renderItem}
+        refreshing={isRefetching}
+        onRefresh={refetch}
+        onEndReached={fetchMore}
+        onEndReachedThreshold={0.5}
+        ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
+        ListFooterComponent={<ListFooterLoader visible={isFetchingNextPage} />}
+        ListEmptyComponent={
+          isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No payslips published yet.</Text>
+        }
+      />
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors, typography: Typography) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   list: { padding: spacing.lg },
   empty: { textAlign: 'center', marginTop: spacing.xl },
   card: { backgroundColor: colors.white, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.line },

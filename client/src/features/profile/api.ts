@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/apiClient';
 import { useAuth } from '@/context/AuthContext';
-import type { Dependent, EmergencyContact, EmployeeDocument, EmployeeProfileOverview } from '@/types/api';
+import type { Dependent, EmergencyContact, EmployeeDocument, EmployeeProfileOverview, EmployeeProfileSummary } from '@/types/api';
 
 const OVERVIEW_KEY = ['profile', 'overview'];
 
@@ -42,9 +42,10 @@ export function useUpdateMyProfile() {
       });
       if (payload.passport_photo) formData.append('passport_photo', payload.passport_photo);
 
-      return api.post('/me/employee-profile', formData);
+      return api.post<{ profile: EmployeeProfileSummary }>('/me/employee-profile', formData);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      queryClient.setQueryData<EmployeeProfileOverview>(OVERVIEW_KEY, (previous) => previous ? { ...previous, profile: response.profile } : previous);
       queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'me'] });
       // The topbar/sidebar avatar reads session.user.photo_url from

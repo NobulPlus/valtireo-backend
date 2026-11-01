@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, Pressable, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { useRequestAttendanceCorrection } from '../features/attendance/api';
 import { ApiError } from '../lib/apiClient';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
@@ -50,6 +51,8 @@ export function RequestCorrectionScreen({ route, navigation }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={typography.heading}>{record.attendance_date}</Text>
       <Text style={typography.caption}>Enter times in {timezone}.</Text>
@@ -77,11 +80,13 @@ export function RequestCorrectionScreen({ route, navigation }: Props) {
         {requestCorrection.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Submit correction</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs, marginTop: spacing.md },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, fontSize: 14, color: colors.ink, backgroundColor: colors.white },

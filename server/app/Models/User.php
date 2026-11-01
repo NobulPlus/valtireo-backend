@@ -59,6 +59,11 @@ class User extends Authenticatable implements AuditableContract
         return $this->hasOne(Employee::class);
     }
 
+    public function devicePushTokens(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(DevicePushToken::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

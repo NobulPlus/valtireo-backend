@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { useLifestylePreferences, useUpdateLifestylePreferences } from '../features/lifestyle/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
 import type { LifestylePreferences } from '../types/api';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 
 const ROWS: { key: keyof LifestylePreferences; title: string; description: string }[] = [
@@ -16,13 +17,15 @@ const ROWS: { key: keyof LifestylePreferences; title: string; description: strin
 export function LifestylePreferencesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { data, isLoading, isError, refetch } = useLifestylePreferences();
+  const { data, isLoading, isError, error, refetch } = useLifestylePreferences();
   const update = useUpdateLifestylePreferences();
 
-  if (isError) return <QueryError retry={refetch} />;
+  if (isError) return <QueryError retry={refetch} error={error} />;
   if (isLoading || !data) return <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} />;
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       {update.isError ? <Text accessibilityRole="alert" style={styles.description}>Could not save your preference. Please try again.</Text> : null}
       {ROWS.map((row) => {
@@ -40,11 +43,13 @@ export function LifestylePreferencesScreen() {
         );
       })}
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   row: {
     flexDirection: 'row',

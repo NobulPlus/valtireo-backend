@@ -9,6 +9,33 @@ use Illuminate\Support\Facades\Http;
 
 class ConnectMediaService
 {
+    public function voiceToken(\App\Models\ConnectVoiceCall $call, User $user): string
+    {
+        return $this->token(['sub' => 'user-'.$user->id, 'name' => $user->name,
+            'video' => ['room' => $call->roomName(), 'roomJoin' => true, 'canPublish' => true, 'canPublishSources' => ['microphone'], 'canSubscribe' => true, 'canPublishData' => false, 'canUpdateOwnMetadata' => false]]);
+    }
+
+    public function createVoiceRoom(\App\Models\ConnectVoiceCall $call): void
+    {
+        $this->request('CreateRoom', ['name' => $call->roomName(), 'max_participants' => 2, 'empty_timeout' => 60, 'departure_timeout' => 30], ['roomCreate' => true]);
+    }
+
+    public function closeVoiceRoom(\App\Models\ConnectVoiceCall $call): void
+    {
+        $this->request('DeleteRoom', ['room' => $call->roomName()], ['roomCreate' => true], true);
+    }
+
+    /**
+     * Empty array means "nobody is actually in the room" — either it reports
+     * zero participants, or the room is already gone (LiveKit auto-deletes it
+     * after createVoiceRoom's own empty_timeout/departure_timeout), which
+     * $allowMissing folds into the same empty result rather than a 503.
+     */
+    public function voiceParticipants(\App\Models\ConnectVoiceCall $call): array
+    {
+        return $this->request('ListParticipants', ['room' => $call->roomName()], ['roomAdmin' => true, 'room' => $call->roomName()], true)['participants'] ?? [];
+    }
+
     public function ready(): bool
     {
         $url = (string) config('connect.url');

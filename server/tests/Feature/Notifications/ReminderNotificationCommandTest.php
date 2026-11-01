@@ -64,10 +64,11 @@ class ReminderNotificationCommandTest extends TestCase
             ->firstOrFail();
 
         Sanctum::actingAs($employeeUser);
+        $startsOn = now()->addWeeks(2)->next(\Carbon\CarbonInterface::MONDAY);
         $this->postJson('/api/leave/requests', [
             'leave_type_id' => $annual->id,
-            'starts_on' => now()->addDays(10)->toDateString(),
-            'ends_on' => now()->addDays(11)->toDateString(),
+            'starts_on' => $startsOn->toDateString(),
+            'ends_on' => $startsOn->copy()->addDay()->toDateString(),
             'reason' => 'Personal time.',
         ])->assertCreated();
 

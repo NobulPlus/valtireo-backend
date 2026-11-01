@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { SearchableSelect } from '../components/SearchableSelect';
 import { useAppreciationRecipients, useSendAppreciation } from '../features/lifestyle/api';
 import { ApiError } from '../lib/apiClient';
@@ -9,16 +10,20 @@ import type { LifestyleStackParamList } from '../navigation/LifestyleStack';
 
 type Props = NativeStackScreenProps<LifestyleStackParamList, 'SendAppreciation'>;
 
-export function SendAppreciationScreen({ navigation }: Props) {
+export function SendAppreciationScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState('');
-  const [recipientLabel, setRecipientLabel] = useState('');
+  const [recipientLabel, setRecipientLabel] = useState(route.params?.recipientName ?? '');
+  // Deliberately false even when arriving pre-filled: the deep link only knows the
+  // recipient's id/name, not whether they've opted into SHARED appreciation visibility —
+  // defaulting to private (always allowed) is the only safe choice without that
+  // information. Re-picking the same person via search recovers the real value.
   const [recipientCanShare, setRecipientCanShare] = useState(false);
   const recipientsQuery = useAppreciationRecipients(search);
   const sendAppreciation = useSendAppreciation();
 
-  const [recipientId, setRecipientId] = useState<number | null>(null);
+  const [recipientId, setRecipientId] = useState<number | null>(route.params?.recipientEmployeeId ?? null);
   const [message, setMessage] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'shared'>('private');
 
@@ -44,6 +49,8 @@ export function SendAppreciationScreen({ navigation }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={96}>
     <ScrollView style={styles.flex} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.container}>
       <Text style={styles.label}>Who is this for?</Text>
@@ -102,11 +109,13 @@ export function SendAppreciationScreen({ navigation }: Props) {
       </Pressable>
     </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs, marginTop: spacing.md },
   caption: { fontSize: 12, color: colors.muted },

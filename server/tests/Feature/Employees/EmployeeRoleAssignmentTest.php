@@ -345,6 +345,137 @@ class EmployeeRoleAssignmentTest extends TestCase
             ->assertJsonPath('data', []);
     }
 
+    /**
+     * Phase 2A correction: HR Director may assign Department Head/Supervisor
+     * without personally holding employees.manage_team (restored by the
+     * tests above), but that delegated authority is deliberately narrow.
+     * These confirm the boundaries: an actor with assign_role but without
+     * HR-Director-equivalent administrative authority, a custom role that
+     * merely looks like a standard one, and self-assignment are all still
+     * blocked exactly as the generalized escalation rule would block them
+     * for anything else.
+     */
+    public function test_an_actor_with_assign_role_but_without_broad_employee_administration_cannot_use_delegated_authority(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
+
+        // A custom role with assign_role but deliberately WITHOUT
+        // employees.view_all — assign_role for some narrower purpose, not
+        // HR Director-equivalent org-wide administration.
+        $this->setPermissionsTeamId($organization->id);
+        $limitedRole = Role::create([
+            'organization_id' => $organization->id,
+            'guard_name' => 'web',
+            'key' => null,
+            'name' => 'Onboarding Coordinator',
+        ]);
+        $limitedRole->syncPermissions(['employees.assign_role', 'employees.view', 'employees.create']);
+
+        $limitedActor = User::factory()->create(['organization_id' => $organization->id]);
+        $limitedActor->syncRoles([$limitedRole]);
+
+        Sanctum::actingAs($limitedActor);
+
+        $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-ROLE-011',
+            'work_email' => 'role-limited-actor@valtireo.test',
+            'pending_role_id' => $this->roleId('supervisor'),
+        ]))->assertUnprocessable()
+            ->assertJsonValidationErrors(['pending_role_id']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'role-limited-actor@valtireo.test']);
+    }
+
+    public function test_hr_director_cannot_assign_a_custom_role_with_an_identical_permission_set_to_supervisor(): void
+    {
+        $this->seed();
+
+        $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
+        $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();
+        $supervisorRole = Role::query()->where('organization_id', $organization->id)->where('key', 'supervisor')->firstOrFail();
+
+        // A custom role (key === null) carrying the EXACT same permissions
+        // as the standard Supervisor role, including employees.manage_team
+        // — the delegated-authority exception must never apply here, even
+        // though the permission set is identical to an approved role.
+        $this->setPermissionsTeamId($organization->id);
+        $lookalikeRole = Role::create([
+            'organization_id' => $organization->id,
+            'guard_name' => 'web',
+            'key' => null,
+            'name' => 'Supervisor Lookalike',
+        ]);
+        $lookalikeRole->syncPermissions($supervisorRole->permissions->pluck('name')->all());
+
+        Sanctum::actingAs($hrDirector);
+
+        $this->postJson('/api/employees', $this->payload([
+            'employee_number' => 'EMP-ROLE-012',
+            'work_email' => 'role-lookalike@valtireo.test',
+            'pending_role_id' => $lookalikeRole->id,
+        ]))->assertUnprocessable()
+            ->assertJsonValidationErrors(['pending_role_id']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'role-lookalike@valtireo.test']);
+    }
+
+    public function test_hr_director_cannot_assign_department_head_to_themselves_via_delegated_authority(): void
+    {
+        $this->seed();
+
+        $hrDirector = User::query()->where('email', 'mariam.okafor@valtireo.test')->firstOrFail();
+        $hrDirectorEmployee = Employee::query()->where('work_email', 'mariam.okafor@valtireo.test')->firstOrFail();
+
+        Sanctum::actingAs($hrDirector);
+
+        $this->patchJson("/api/employees/{$hrDirectorEmployee->id}", [
+            'pending_role_id' => $this->roleId('department_head'),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['pending_role_id']);
+
+        $this->assertTrue($hrDirector->refresh()->hasRole('HR Director'));
+    }
+
+    public function test_organization_admin_can_still_assign_department_head_to_themselves_via_the_strict_superset_rule(): void
+    {
+        // The self-assignment block is specific to the DELEGATED path.
+        // Organization Admin qualifies for Department Head via the
+        // ordinary strict superset rule ($all already covers it), which
+        // was never restricted — self-assignment through it is unaffected.
+        // A second admin-capable user is seeded first so this self-reassignment
+        // isn't separately blocked by the (unrelated) lockout guard, which
+        // would otherwise also refuse it — this test isolates the
+        // self-assignment question specifically.
+        $this->seed();
+
+        $admin = User::query()->where('email', 'admin@valtireo.test')->firstOrFail();
+        $this->setPermissionsTeamId($admin->organization_id);
+        $secondAdmin = User::factory()->create(['organization_id' => $admin->organization_id]);
+        $secondAdmin->assignRole('Organization Admin');
+        Employee::factory()->create([
+            'organization_id' => $admin->organization_id,
+            'user_id' => $secondAdmin->id,
+            'status' => 'active',
+        ]);
+
+        $adminEmployee = Employee::factory()->create([
+            'organization_id' => $admin->organization_id,
+            'user_id' => $admin->id,
+            'status' => 'active',
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/employees/{$adminEmployee->id}", [
+            'pending_role_id' => $this->roleId('department_head'),
+        ])->assertOk();
+
+        $this->assertTrue($admin->refresh()->hasRole('Department Head'));
+    }
+
     private function roleId(string $key): int
     {
         $organization = Organization::query()->where('code', 'VALTIREO')->firstOrFail();

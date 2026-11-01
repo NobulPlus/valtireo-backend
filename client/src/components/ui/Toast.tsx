@@ -79,7 +79,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={toast.id}
-              role="status"
+              role={toast.tone === 'danger' ? 'alert' : 'status'}
+              aria-live={toast.tone === 'danger' ? 'assertive' : 'polite'}
               className={cn(
                 'flex items-start gap-3 rounded-lg border px-3 py-3 shadow-xl shadow-ink/10',
                 toneClasses[toast.tone],

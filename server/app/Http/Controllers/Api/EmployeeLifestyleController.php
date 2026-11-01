@@ -99,15 +99,14 @@ class EmployeeLifestyleController extends Controller
 
             $record = EmployeeAppreciation::create(['organization_id' => $actor->organization_id, 'sender_employee_id' => $actor->id, 'recipient_employee_id' => $recipient->id, 'message' => $data['message'], 'visibility' => $visibility]);
             if ($preferences['appreciation_notifications'] && $recipient->user_id) {
-                // Database-only, no mail/push, and no private message content in the alert.
-                DB::table('notifications')->insert([
-                    'id' => (string) \Illuminate\Support\Str::uuid(),
-                    'type' => \App\Notifications\ValtireoNotification::class,
-                    'notifiable_type' => \App\Models\User::class,
-                    'notifiable_id' => $recipient->user_id,
-                    'data' => json_encode(['organization_id' => $actor->organization_id, 'category' => 'lifestyle', 'event' => 'appreciation.received', 'severity' => 'info', 'title' => 'You received appreciation', 'message' => 'Open Life at work to see your received messages.', 'action_label' => 'View appreciation', 'action_url' => '/me/lifestyle', 'entity_type' => 'employee_appreciation', 'entity_id' => $record->id]),
-                    'read_at' => null, 'created_at' => now(), 'updated_at' => now(),
-                ]);
+                // No private message content in the alert. Routed through ->notify(), not a raw
+                // DB insert — same fix as Connect's notify() (ConnectChatService), which otherwise
+                // silently never delivers push for this event, only an in-app row.
+                $recipient->user?->notify(new \App\Notifications\ValtireoNotification([
+                    'organization_id' => $actor->organization_id, 'category' => 'lifestyle', 'event' => 'appreciation.received',
+                    'severity' => 'info', 'title' => 'You received appreciation', 'message' => 'Open Life at work to see your received messages.',
+                    'action_label' => 'View appreciation', 'action_url' => '/me/lifestyle', 'entity_type' => 'employee_appreciation', 'entity_id' => $record->id,
+                ]));
             }
             return $record;
         });

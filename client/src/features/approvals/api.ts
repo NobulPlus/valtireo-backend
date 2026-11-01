@@ -40,6 +40,7 @@ export type ApprovalDecisionAction = 'approve' | 'reject' | 'request_changes' | 
 
 export interface ActOnApprovalRequestPayload {
   action: ApprovalDecisionAction;
+  expected_step_order?: number | null;
   note?: string;
 }
 
@@ -50,6 +51,9 @@ export function useActOnApprovalRequest(approvalRequestId: number) {
       api.post<{ approval_request: ApprovalRequest }>(`/approvals/${approvalRequestId}/actions`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['approvals', 'requests'] });
+      queryClient.invalidateQueries({ queryKey: ['approvals', 'request', approvalRequestId] });
+      queryClient.invalidateQueries({ queryKey: ['payroll'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });

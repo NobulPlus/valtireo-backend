@@ -1,4 +1,4 @@
-import { useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { Paperclip, Plus, X } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -24,6 +24,7 @@ import {
 import { TicketDetailModal } from '@/features/tickets/TicketDetailModal';
 import { useSetupLookups } from '@/features/workspace/api';
 import { ApiError } from '@/lib/apiClient';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES } from '@/lib/fileSize';
 import { useDateFormatter } from '@/lib/dateFormat';
 import type { Ticket } from '@/types/api';
 
@@ -116,6 +117,17 @@ function MyTicketsContent() {
   });
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [viewingTicketId, setViewingTicketId] = useState<number | null>(null);
+
+  function pickAttachmentFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return setAttachmentFile(null);
+    if (isFileTooLarge(file, MAX_UPLOAD_BYTES.ticketAttachment)) {
+      event.target.value = '';
+      toast.error('File too large', `Attachments must be ${formatMaxSize(MAX_UPLOAD_BYTES.ticketAttachment)} or smaller.`);
+      return;
+    }
+    setAttachmentFile(file);
+  }
 
   async function handleViewAttachment(ticket: Ticket, event: ReactMouseEvent) {
     event.stopPropagation();
@@ -372,7 +384,7 @@ function MyTicketsContent() {
             <input
               type="file"
               accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-              onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+              onChange={pickAttachmentFile}
               className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-strong"
             />
             {attachmentFile && <span className="mt-1 block text-xs text-muted">{attachmentFile.name}</span>}

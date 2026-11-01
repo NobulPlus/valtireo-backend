@@ -1,4 +1,5 @@
-import { uploadFile } from '../lib/uploadFile';
+import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
+import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -33,7 +34,7 @@ function DocumentRow({ item, colors, typography, styles }: { item: EmployeeDocum
       const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'], copyToCacheDirectory: true });
       if (result.canceled) return;
       const asset = result.assets[0];
-      if (asset.size && asset.size > 10 * 1024 * 1024) { Alert.alert('File too large', 'Choose a file smaller than 10 MB.'); return; }
+      if (isFileTooLarge(asset, MAX_UPLOAD_BYTES.document)) { Alert.alert('File too large', `Choose a file smaller than ${formatMaxSize(MAX_UPLOAD_BYTES.document)}.`); return; }
       await signedCopy.mutateAsync({ documentId: item.id, file: uploadFile(asset) });
       Alert.alert('Signed copy submitted', 'Your document has been sent for review.');
     } catch (error) { Alert.alert('Could not submit signed copy', error instanceof ApiError ? error.message : 'Please try again.'); }
@@ -69,10 +70,11 @@ function DocumentRow({ item, colors, typography, styles }: { item: EmployeeDocum
 export function DocumentsListScreen({ navigation }: Props) {
   const { colors, typography } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { data, isLoading, isError, refetch, isRefetching } = useMyProfileOverview();
+  const { data, isLoading, isError, error, refetch, isRefetching } = useMyProfileOverview();
 
   return (
     <View style={styles.flex}>
+      <ProductIconField />
       <FlatList
         data={data?.documents ?? []}
         keyExtractor={(item) => String(item.id)}
@@ -80,7 +82,7 @@ export function DocumentsListScreen({ navigation }: Props) {
         renderItem={({ item }) => <DocumentRow item={item} colors={colors} typography={typography} styles={styles} />}
         refreshing={isRefetching}
         onRefresh={refetch}
-        ListHeaderComponent={isError ? <QueryError retry={refetch} /> : null}
+        ListHeaderComponent={isError ? <QueryError retry={refetch} error={error} /> : null}
       ListEmptyComponent={
           isError ? null : isLoading ? <ActivityIndicator color={colors.pine} style={{ marginTop: spacing.xl }} /> : <Text style={[typography.caption, styles.empty]}>No documents yet.</Text>
         }

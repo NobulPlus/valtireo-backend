@@ -208,6 +208,23 @@ class LeaveRequestService
         }
 
         return DB::transaction(function () use ($actor, $leaveRequest, $note, $today): LeaveRequest {
+            $leaveRequest = LeaveRequest::query()->whereKey($leaveRequest->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($leaveRequest->status, ['submitted', 'changes_requested', 'approved'], true)) {
+                throw ValidationException::withMessages(['status' => ['This leave request has changed. Refresh before cancelling.']]);
+            }
+            if ($leaveRequest->status === 'approved' && CarbonImmutable::parse($leaveRequest->ends_on)->lte($today)) {
+                throw ValidationException::withMessages(['status' => ['This leave has no remaining days left to cancel.']]);
+            }
+            $pendingApproval = $leaveRequest->approvalRequests()->where('status', 'pending')->lockForUpdate()->first();
+            if ($pendingApproval) {
+                // Preserve this endpoint's existing cancellation authority and note policy.
+                $pendingApproval->decisions()->create([
+                    'actor_id' => $actor->id, 'action' => 'cancel', 'previous_status' => 'pending',
+                    'next_status' => 'cancelled', 'note' => $note,
+                    'metadata' => ['origin' => 'human', 'source' => 'leave_cancellation'],
+                ]);
+                $pendingApproval->update(['status' => 'cancelled', 'current_step_order' => null, 'completed_at' => now()]);
+            }
             $entitlement = LeaveEntitlement::query()
                 ->where('employee_id', $leaveRequest->employee_id)
                 ->where('leave_type_id', $leaveRequest->leave_type_id)

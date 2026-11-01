@@ -28,7 +28,7 @@ class PayrollOperationsController extends Controller
         abort_unless($request->user()->can('payroll.runs.manage'),403);
         $query=PayrollInput::query()->with(['employee','component'])->where('organization_id',$request->user()->organization_id)
             ->when($request->integer('employee_id'),fn($q,$id)=>$q->where('employee_id',$id))->when($request->string('status')->toString(),fn($q,$s)=>$q->where('status',$s));
-        return response()->json($query->latest('effective_date')->paginate(min(max($request->integer('per_page',15),1),100)));
+        return response()->json($query->latest('effective_date')->orderBy('id','desc')->paginate(min(max($request->integer('per_page',15),1),100)));
     }
 
     public function storeInput(Request $request): JsonResponse
@@ -71,7 +71,7 @@ class PayrollOperationsController extends Controller
     }
 
     public function loans(Request $request): JsonResponse
-    { abort_unless($request->user()->can('payroll.compensation.view'),403); return response()->json(EmployeeLoan::query()->with('employee')->where('organization_id',$request->user()->organization_id)->latest()->paginate(min(max($request->integer('per_page',15),1),100))); }
+    { abort_unless($request->user()->can('payroll.compensation.view'),403); return response()->json(EmployeeLoan::query()->with('employee')->where('organization_id',$request->user()->organization_id)->latest()->orderBy('id','desc')->paginate(min(max($request->integer('per_page',15),1),100))); }
 
     public function storeLoan(Request $request): JsonResponse
     {
@@ -138,7 +138,7 @@ class PayrollOperationsController extends Controller
     {
         abort_unless($request->user()->can('payroll.reports.view'),403);
         $runs=PayrollRun::query()->where('organization_id',$request->user()->organization_id)->when($request->string('status')->toString(),fn($q,$s)=>$q->where('status',$s))->when($request->date('date_from'),fn($q,$d)=>$q->whereDate('period_start','>=',$d))->when($request->date('date_to'),fn($q,$d)=>$q->whereDate('period_end','<=',$d));
-        return response()->json(['summary'=>['run_count'=>(clone $runs)->count(),'employee_payments'=>(clone $runs)->sum('employee_count'),'gross'=>(float)(clone $runs)->sum('total_gross'),'deductions'=>(float)(clone $runs)->sum('total_deductions'),'net'=>(float)(clone $runs)->sum('total_net'),'employer_contributions'=>(float)(clone $runs)->sum('total_employer_contributions')],'data'=>$runs->latest('period_end')->paginate(min(max($request->integer('per_page',15),1),100))]);
+        return response()->json(['summary'=>['run_count'=>(clone $runs)->count(),'employee_payments'=>(clone $runs)->sum('employee_count'),'gross'=>(float)(clone $runs)->sum('total_gross'),'deductions'=>(float)(clone $runs)->sum('total_deductions'),'net'=>(float)(clone $runs)->sum('total_net'),'employer_contributions'=>(float)(clone $runs)->sum('total_employer_contributions')],'data'=>$runs->latest('period_end')->orderBy('id','desc')->paginate(min(max($request->integer('per_page',15),1),100))]);
     }
 
     public function statutoryReport(Request $request): JsonResponse

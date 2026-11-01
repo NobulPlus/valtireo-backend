@@ -297,7 +297,8 @@ class ReportService
             ->when($request->string('profile_status')->toString(), fn (Builder $query, string $status) => $query->whereHas('profile', fn (Builder $query) => $query->where('completion_status', $status)))
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate($dateColumn, '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate($dateColumn, '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function documentComplianceQuery(User $user, Request $request, array $report): Builder
@@ -317,7 +318,8 @@ class ReportService
             ->when($request->date('expires_to'), fn (Builder $query, $date) => $query->whereDate('expires_at', '<=', $date->toDateString()))
             ->when($request->date('submitted_from'), fn (Builder $query, $date) => $query->whereDate('submitted_at', '>=', $date->toDateString()))
             ->when($request->date('submitted_to'), fn (Builder $query, $date) => $query->whereDate('submitted_at', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function leaveBalancesQuery(User $user, Request $request, array $report): Builder
@@ -332,7 +334,8 @@ class ReportService
             ->when($request->integer('department_id'), fn (Builder $query, int $id) => $query->whereHas('employee', fn (Builder $query) => $query->where('department_id', $id)))
             ->when($request->integer('leave_type_id'), fn (Builder $query, int $id) => $query->where('leave_type_id', $id))
             ->when($request->integer('leave_period_id'), fn (Builder $query, int $id) => $query->where('leave_period_id', $id))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function leaveRequestsQuery(User $user, Request $request, array $report): Builder
@@ -351,7 +354,8 @@ class ReportService
             ->when($request->string('status')->toString(), fn (Builder $query, string $status) => $query->where('status', $status))
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('starts_on', '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('ends_on', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function attendanceSummaryQuery(User $user, Request $request, array $report): Builder
@@ -387,7 +391,8 @@ class ReportService
             ->when($request->string('search')->toString(), fn (Builder $query, string $search) => $this->employeeSearch($query, $search))
             ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employees.id', $id))
             ->when($request->integer('department_id'), fn (Builder $query, int $id) => $query->where('department_id', $id))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('employees.id', $this->direction($request));
     }
 
     private function attendanceExceptionsQuery(User $user, Request $request, array $report): Builder
@@ -409,7 +414,8 @@ class ReportService
             ->when($request->string('source')->toString(), fn (Builder $query, string $source) => $query->where('source', $source))
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('attendance_date', '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('attendance_date', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function ticketLogQuery(User $user, Request $request, array $report): Builder
@@ -427,7 +433,8 @@ class ReportService
             ->when($request->integer('employee_id'), fn (Builder $query, int $id) => $query->where('employee_id', $id))
             ->when($request->date('date_from'), fn (Builder $query, $date) => $query->whereDate('submitted_at', '>=', $date->toDateString()))
             ->when($request->date('date_to'), fn (Builder $query, $date) => $query->whereDate('submitted_at', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function assetInventoryQuery(User $user, Request $request, array $report): Builder
@@ -454,7 +461,8 @@ class ReportService
             ->when($request->date('purchase_to'), fn (Builder $query, $date) => $query->whereDate('purchase_date', '<=', $date->toDateString()))
             ->when($request->date('warranty_from'), fn (Builder $query, $date) => $query->whereDate('warranty_expires_at', '>=', $date->toDateString()))
             ->when($request->date('warranty_to'), fn (Builder $query, $date) => $query->whereDate('warranty_expires_at', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function assetAssignmentsQuery(User $user, Request $request, array $report): Builder
@@ -480,7 +488,8 @@ class ReportService
             ->when($request->date('assigned_to'), fn (Builder $query, $date) => $query->whereDate('assigned_at', '<=', $date->toDateString()))
             ->when($request->date('returned_from'), fn (Builder $query, $date) => $query->whereDate('returned_at', '>=', $date->toDateString()))
             ->when($request->date('returned_to'), fn (Builder $query, $date) => $query->whereDate('returned_at', '<=', $date->toDateString()))
-            ->orderBy($sortBy, $this->direction($request));
+            ->orderBy($sortBy, $this->direction($request))
+            ->orderBy('id', $this->direction($request));
     }
 
     private function row(string $key, mixed $row): array

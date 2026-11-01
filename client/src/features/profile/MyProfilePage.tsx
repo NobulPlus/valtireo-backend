@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Download, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -219,6 +219,7 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
   });
   const [passportPhoto, setPassportPhoto] = useState<File | null>(null);
   const [passportPreview, setPassportPreview] = useState<string | null>(null);
+  useEffect(() => () => { if (passportPreview) URL.revokeObjectURL(passportPreview); }, [passportPreview]);
   const savedPhotoUrl = useAuthenticatedImage(profile?.passport_photo_url);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const updateProfileMutation = useUpdateMyProfile();
@@ -237,6 +238,7 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
         passport_photo: passportPhoto,
       });
       setPassportPhoto(null);
+      setPassportPreview(null);
       toast.success('Profile saved', 'Your biodata has been updated.');
       onRefetch();
     } catch (error) {
@@ -574,6 +576,10 @@ function MyProfileContent({ overview, onRefetch }: { overview: EmployeeProfileOv
                   const file = event.target.files?.[0];
                   event.target.value = '';
                   if (!file) return;
+                  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+                    toast.error('Unsupported photo', 'Choose a JPEG, PNG or WebP photo no larger than 2 MB.');
+                    return;
+                  }
                   setPassportPhoto(file);
                   setPassportPreview(URL.createObjectURL(file));
                 }}

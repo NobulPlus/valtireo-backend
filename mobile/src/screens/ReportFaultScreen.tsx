@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ProductIconField } from '../components/ProductIconField';
 import { useReportAssetFault } from '../features/assets/api';
 import { ApiError } from '../lib/apiClient';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
@@ -27,6 +28,8 @@ export function ReportFaultScreen({ route, navigation }: Props) {
   }
 
   return (
+    <View style={styles.root}>
+    <ProductIconField />
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={typography.heading}>{assetName}</Text>
       <Text style={[styles.label, { marginTop: spacing.lg }]}>What&apos;s wrong?</Text>
@@ -42,11 +45,13 @@ export function ReportFaultScreen({ route, navigation }: Props) {
         {reportFault.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Report fault</Text>}
       </Pressable>
     </ScrollView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  root: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   container: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   label: { fontSize: 12, color: colors.muted, fontWeight: '600', marginBottom: spacing.xs },
   input: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, fontSize: 14, color: colors.ink, backgroundColor: colors.white },

@@ -13,6 +13,7 @@ import {
   type BiometricIdentity,
 } from '../lib/secureToken';
 import { onSessionChange } from '../lib/sessionEvents';
+import { unregisterPushToken } from '../lib/pushTokenRegistration';
 import { queryClient } from '../lib/queryClient';
 import { MANAGER_DASHBOARD_QUERY_KEY } from '../features/dashboard/api';
 import { managerScopeWasRevoked } from '../lib/managerEligibility';
@@ -200,6 +201,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     const token = getStoredToken();
     clearSession();
+    // Same reasoning as the /auth/logout call below: the token captured above
+    // (before clearSession ran) still works as an explicit bearer here, even
+    // though the interceptor's own stored copy is already gone.
+    if (token) void unregisterPushToken(token);
     try {
       await api.post('/auth/logout', undefined, { headers: { Authorization: `Bearer ${token}` } });
     } catch {

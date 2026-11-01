@@ -628,6 +628,7 @@ export interface Ticket {
 
 export interface EmployeeDirectoryEntry {
   id: number;
+  user_id: number | null;
   full_name: string;
   employee_number: string;
   work_email: string;
@@ -721,4 +722,56 @@ export interface NotificationEntry {
   metadata: Record<string, unknown>;
   read_at: string | null;
   created_at: string;
+}
+
+export type ApprovalDecisionAction = 'approve' | 'reject' | 'request_changes' | 'cancel';
+
+export interface ApprovalDecision {
+  id: number;
+  actor?: { id: number; name: string; email: string } | null;
+  action: string;
+  previous_status: string | null;
+  next_status: string;
+  note: string | null;
+  created_at: string;
+}
+
+/** Ported from client/src/types/api.ts's `ApprovalRequest` — see mobile manager approvals build notes. */
+export interface ApprovalRequest {
+  allowed_actions?: ApprovalDecisionAction[];
+  action_restrictions?: Record<string, string>;
+  id: number;
+  requester?: { id: number; name: string; email: string } | null;
+  subject_employee?: { id: number; employee_number: string; full_name: string; work_email: string } | null;
+  approvable_type: string;
+  approvable_id: number;
+  module: string;
+  action: string;
+  title: string;
+  status: string;
+  current_step_order: number | null;
+  submitted_at: string | null;
+  completed_at: string | null;
+  decisions?: ApprovalDecision[];
+  document?: { id: number; title: string; file_name: string; mime_type: string | null } | null;
+  leave_request?: {
+    id: number;
+    handover_to_employee_id: number | null;
+    handover_note: string | null;
+    handover_to: EmployeeSummary | null;
+    evidence_file_name: string | null;
+    evidence_download_url: string | null;
+    handover_file_name: string | null;
+    handover_download_url: string | null;
+  } | null;
+  ticket?: {
+    id: number;
+    category: { id: number; name: string; code: string } | null;
+    subject: string;
+    description: string;
+    attachment_file_name: string | null;
+    attachment_download_url: string | null;
+  } | null;
+  created_at: string;
+  updated_at: string;
 }

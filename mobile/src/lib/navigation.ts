@@ -1,4 +1,5 @@
 import type { MoreStackParamList } from '../navigation/MoreStack';
+import type { ApprovalsStackParamList } from '../navigation/ApprovalsStack';
 
 /**
  * Shared by every screen nested under the Home tab (Home itself, Notifications, ...)
@@ -19,6 +20,10 @@ export interface HomeAreaNavigation {
   navigate(screen: 'LeaveTab'): void;
   navigate(screen: 'TicketsTab'): void;
   navigate(screen: 'TicketsTab', params: { screen: 'TicketDetail'; params: { ticketId: number } }): void;
+  navigate(screen: 'ApprovalsTab'): void;
+  navigate(screen: 'ApprovalsTab', params: { screen: 'ApprovalDetail'; params: ApprovalsStackParamList['ApprovalDetail'] }): void;
+  navigate(screen: 'MoreTab', params: { screen: 'Lifestyle'; params: MoreStackParamList['Lifestyle'] }): void;
+  navigate(screen: 'MoreTab', params: { screen: 'Connect'; params: MoreStackParamList['Connect'] }): void;
   navigate(screen: 'MoreTab', params: { screen: keyof MoreStackParamList }): void;
   getParent(): { getState(): unknown } | undefined;
 }
@@ -50,4 +55,32 @@ export function goIntoMoreTab(navigation: HomeAreaNavigation, screen: MoreDestin
     navigation.navigate('MoreTab', { screen: 'MoreMenu' });
   }
   navigation.navigate('MoreTab', { screen });
+}
+
+/**
+ * Deep-links straight into sending someone an appreciation — e.g. from Home's
+ * milestone row, which already knows who it's about — rather than landing on the
+ * general Lifestyle list and making the person search for that colleague again.
+ * Reuses goIntoMoreTab's own reset-before-switch logic (see currentMoreTabScreen's
+ * docblock) so this is never pushed on top of an unrelated MoreTab feature.
+ */
+export function goToAppreciationRecipient(navigation: HomeAreaNavigation, recipient: { id: number; name: string }) {
+  if (currentMoreTabScreen(navigation) !== 'Lifestyle') {
+    navigation.navigate('MoreTab', { screen: 'MoreMenu' });
+  }
+  navigation.navigate('MoreTab', {
+    screen: 'Lifestyle',
+    params: { screen: 'SendAppreciation', params: { recipientEmployeeId: recipient.id, recipientName: recipient.name } },
+  });
+}
+
+/** Deep-links straight into a specific Connect conversation — same reset-before-switch logic as the two helpers above. */
+export function goToConnectConversation(navigation: HomeAreaNavigation, conversationId: string) {
+  if (currentMoreTabScreen(navigation) !== 'Connect') {
+    navigation.navigate('MoreTab', { screen: 'MoreMenu' });
+  }
+  navigation.navigate('MoreTab', {
+    screen: 'Connect',
+    params: { screen: 'ConnectConversation', params: { conversationId } },
+  });
 }
