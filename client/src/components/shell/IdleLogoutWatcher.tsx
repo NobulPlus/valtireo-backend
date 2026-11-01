@@ -22,15 +22,15 @@ const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'wheel', 'touchstart'] as const
 export function IdleLogoutWatcher() {
   const { isAuthenticated, logout } = useAuth();
   const [warningSecondsLeft, setWarningSecondsLeft] = useState<number | null>(null);
-  const idleTimer = useRef<ReturnType<typeof setTimeout>>();
-  const countdownInterval = useRef<ReturnType<typeof setInterval>>();
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   // A ref, not state, so the activity listener (registered once) always
   // reads the current value without needing to re-subscribe on every change.
   const warningActive = useRef(false);
 
   const stopCountdown = useCallback(() => {
     if (countdownInterval.current) clearInterval(countdownInterval.current);
-    countdownInterval.current = undefined;
+    countdownInterval.current = null;
   }, []);
 
   const startIdleTimer = useCallback(() => {
