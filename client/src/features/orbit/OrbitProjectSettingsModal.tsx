@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SelectMenu } from '@/components/ui/SelectMenu';
+import { OptionDot } from '@/components/ui/OptionDot';
 import { LoadingState } from '@/components/ui/States';
 import { useAuth } from '@/context/AuthContext';
 import { ApiError } from '@/lib/apiClient';
@@ -33,10 +34,12 @@ const PROJECT_ROLE_OPTIONS = [
   { value: 'viewer', label: 'Viewer' },
 ];
 
+// Same tone mapping the ticket lifecycle already uses in StatusBadge
+// (in_progress: info, resolved/done: success, closed/todo: draft).
 const STATUS_CATEGORIES = [
-  { value: 'todo', label: 'To do' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'done', label: 'Done' },
+  { value: 'todo', label: 'To do', icon: <OptionDot className="bg-draft" /> },
+  { value: 'in_progress', label: 'In progress', icon: <OptionDot className="bg-info" /> },
+  { value: 'done', label: 'Done', icon: <OptionDot className="bg-success" /> },
 ];
 
 const LABEL_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];

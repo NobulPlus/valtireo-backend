@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { SelectMenu } from '@/components/ui/SelectMenu';
+import { OptionDot } from '@/components/ui/OptionDot';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { LoadingState } from '@/components/ui/States';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +23,21 @@ import {
   useUploadOrbitWorkItemAttachment,
 } from '@/features/orbit/api';
 import { ApiError } from '@/lib/apiClient';
+
+// Categorical, not severity — same chart-palette treatment as OrbitProjectBoardPage's
+// item-type dots, extended with the palette's tinted pair for the extra two link types.
+const LINK_TYPE_DOT: Record<string, string> = {
+  ticket: 'bg-chart-1',
+  asset: 'bg-chart-2',
+  document: 'bg-chart-3',
+  leave_request: 'bg-chart-4',
+  operation_task: 'bg-chart-5',
+};
+
+const LINK_TYPE_OPTIONS = ORBIT_LINK_TYPES.map((type) => ({
+  ...type,
+  icon: <OptionDot className={LINK_TYPE_DOT[type.value] ?? 'bg-chart-6'} />,
+}));
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -257,7 +273,7 @@ export function OrbitWorkItemDetailModal({
 
             {canEdit && (
               <form onSubmit={handleAddLink} className="mt-3 flex items-center gap-2">
-                <SelectMenu value={linkType} onChange={setLinkType} options={ORBIT_LINK_TYPES} className="w-44" />
+                <SelectMenu value={linkType} onChange={setLinkType} options={LINK_TYPE_OPTIONS} className="w-44" />
                 <Input
                   value={linkId}
                   onChange={(event) => setLinkId(event.target.value.replace(/[^0-9]/g, ''))}

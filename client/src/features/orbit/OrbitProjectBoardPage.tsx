@@ -21,6 +21,7 @@ import { ModalCancelAction, ModalSaveAction } from '@/components/ui/ModalActions
 import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
 import { SelectMenu } from '@/components/ui/SelectMenu';
+import { OptionDot } from '@/components/ui/OptionDot';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { ErrorState, LoadingState } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
@@ -36,17 +37,22 @@ import { ApiError } from '@/lib/apiClient';
 import { OrbitWorkItemDetailModal } from '@/features/orbit/OrbitWorkItemDetailModal';
 import { OrbitProjectSettingsModal } from '@/features/orbit/OrbitProjectSettingsModal';
 
+// Categorical, not severity — reuses the chart palette index.css reserves
+// for "distinguish categories, don't imply severity" rather than the
+// StatusBadge tone system.
 const TYPES = [
-  { value: 'task', label: 'Task' },
-  { value: 'bug', label: 'Bug' },
-  { value: 'story', label: 'Story' },
+  { value: 'task', label: 'Task', icon: <OptionDot className="bg-chart-1" /> },
+  { value: 'bug', label: 'Bug', icon: <OptionDot className="bg-chart-2" /> },
+  { value: 'story', label: 'Story', icon: <OptionDot className="bg-chart-3" /> },
 ];
 
+// Severity — reuses PriorityBadge's exact tone mapping (low: draft,
+// medium: info, high: warning, urgent: danger).
 const PRIORITIES = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
+  { value: 'low', label: 'Low', icon: <OptionDot className="bg-draft" /> },
+  { value: 'medium', label: 'Medium', icon: <OptionDot className="bg-info" /> },
+  { value: 'high', label: 'High', icon: <OptionDot className="bg-warning" /> },
+  { value: 'urgent', label: 'Urgent', icon: <OptionDot className="bg-danger" /> },
 ];
 
 /** Midpoint-insertion position math mirroring OrbitBoardOrderingService::between() on the server — the server is the source of truth (it re-derives nothing from this value beyond storing it), this just picks a sensible number to send. */

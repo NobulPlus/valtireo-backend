@@ -132,23 +132,28 @@ export function OrbitMemberManager({
             <SelectMenu value={addRole} onChange={setAddRole} options={roleOptions} className="w-36" />
           </div>
           {search.trim() && (
-            <ul className="flex flex-col gap-1">
+            // Same contained-popover shell as SelectMenu's own open menu (border,
+            // elevation, capped height with scroll) instead of a bare list that
+            // used to push the whole modal taller with every result.
+            <ul className="flex max-h-64 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1.5 shadow-xl">
               {candidates.map((person) => (
                 <li key={person.id}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-between"
+                  <button
+                    type="button"
                     onClick={() => void handleAdd(person.id)}
                     disabled={isAdding}
+                    className="flex w-full items-center justify-between gap-3 rounded-md px-2.5 py-2 text-left text-sm text-strong transition-colors hover:bg-surface-soft disabled:cursor-wait disabled:opacity-60"
                   >
-                    <span className="truncate text-left">{person.name}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{person.name}</span>
+                      <span className="block truncate text-xs text-muted">{person.email}</span>
+                    </span>
                     <Plus className="h-3.5 w-3.5 flex-shrink-0 text-pine" />
-                  </Button>
+                  </button>
                 </li>
               ))}
               {!people.isLoading && candidates.length === 0 && (
-                <li className="px-2 py-1 text-xs text-muted">No matching colleagues.</li>
+                <li className="px-2.5 py-3 text-xs text-muted">No matching colleagues.</li>
               )}
             </ul>
           )}
