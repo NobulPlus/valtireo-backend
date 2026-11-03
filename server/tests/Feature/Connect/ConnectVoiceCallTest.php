@@ -77,8 +77,17 @@ class ConnectVoiceCallTest extends TestCase
         $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated();
 
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://exp.host/--/api/v2/push/send'
-                && in_array('ExponentPushToken[incoming-call]', array_column($request->data(), 'to'), true);
+            if ($request->url() !== 'https://exp.host/--/api/v2/push/send') return false;
+            $message = collect($request->data())->firstWhere('to', 'ExponentPushToken[incoming-call]');
+
+            // The dedicated 'calls' Android channel + iOS time-sensitive interruption
+            // level are what actually make this push break through Do Not Disturb /
+            // Focus and show as a heads-up banner while the app is backgrounded —
+            // without this, an incoming call was indistinguishable from any other
+            // low-priority notification (e.g. a leave approval).
+            return $message !== null
+                && $message['channelId'] === 'calls'
+                && $message['interruptionLevel'] === 'time-sensitive';
         });
     }
 
