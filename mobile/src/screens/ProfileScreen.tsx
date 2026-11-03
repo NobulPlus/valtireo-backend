@@ -3,6 +3,7 @@ import { QueryError } from '../components/QueryError';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Avatar } from '../components/Avatar';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -81,6 +82,7 @@ function ProfileForm({ data, navigation }: { data: EmployeeProfileOverview; navi
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Pressable onPress={pickPhoto} disabled={preparingPhoto || updateProfile.isPending} style={styles.photoWrap}>
         <Avatar uri={photoUrl} name={employee?.full_name ?? 'Your'} size={84} />
@@ -127,6 +129,7 @@ function ProfileForm({ data, navigation }: { data: EmployeeProfileOverview; navi
         <Text style={typography.caption}>{data.dependents.length} ›</Text>
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

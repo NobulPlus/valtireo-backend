@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { useCreateDependent, useUpdateDependent } from '../features/profile/api';
 import { ApiError } from '../lib/apiClient';
@@ -66,6 +67,7 @@ export function DependentFormScreen({ route, navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Name</Text>
       <TextInput value={name} onChangeText={setName} style={styles.input} placeholderTextColor={colors.muted} />
@@ -103,6 +105,7 @@ export function DependentFormScreen({ route, navigation }: Props) {
         {isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>{isEditing ? 'Save changes' : 'Add dependent'}</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

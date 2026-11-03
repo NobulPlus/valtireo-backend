@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Button } from '../components/Button';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import {
@@ -76,6 +77,7 @@ export function ApprovalDetailScreen({ route, navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.badgeRow}>
         <View style={[styles.pill, { backgroundColor: tone.bg }]}>
@@ -202,6 +204,7 @@ export function ApprovalDetailScreen({ route, navigation }: Props) {
         </View>
       )}
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

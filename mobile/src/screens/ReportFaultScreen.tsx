@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { useReportAssetFault } from '../features/assets/api';
 import { ApiError } from '../lib/apiClient';
@@ -30,6 +31,7 @@ export function ReportFaultScreen({ route, navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={typography.heading}>{assetName}</Text>
       <Text style={[styles.label, { marginTop: spacing.lg }]}>What&apos;s wrong?</Text>
@@ -45,6 +47,7 @@ export function ReportFaultScreen({ route, navigation }: Props) {
         {reportFault.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Report fault</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

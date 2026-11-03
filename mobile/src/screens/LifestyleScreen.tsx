@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ListFooterLoader } from '../components/ListFooterLoader';
 import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
@@ -214,6 +215,7 @@ export function LifestyleScreen({ navigation }: Props) {
       ) : null}
 
       <Modal visible={reportingId !== null} animationType="slide" transparent onRequestClose={() => setReportingId(null)}>
+        <KeyboardAvoidingScreen>
         <Pressable style={styles.backdrop} onPress={() => setReportingId(null)} />
         <View style={styles.sheet}>
           <Text style={styles.sectionTitle}>Report this message</Text>
@@ -235,6 +237,7 @@ export function LifestyleScreen({ navigation }: Props) {
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </Pressable>
         </View>
+        </KeyboardAvoidingScreen>
       </Modal>
     </View>
   );
