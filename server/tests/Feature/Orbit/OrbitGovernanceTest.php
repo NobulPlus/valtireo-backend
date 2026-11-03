@@ -35,6 +35,29 @@ class OrbitGovernanceTest extends TestCase
         return $project;
     }
 
+    public function test_a_user_without_orbit_access_is_blocked_from_every_orbit_route_even_in_a_subscribed_organization(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $this->workspaceFor($fixture);
+
+        // The employee fixture role is deliberately NOT given orbit.access here —
+        // the organization is subscribed to Orbit, but this user's role isn't.
+        Sanctum::actingAs($fixture['employee']);
+
+        $this->getJson('/api/orbit/workspaces')->assertForbidden();
+    }
+
+    public function test_granting_orbit_access_is_sufficient_to_view_an_organization_visibility_workspace(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $workspace = $this->workspaceFor($fixture, 'ws-org-visible');
+        $fixture['roles']->get('employee')->givePermissionTo('orbit.access');
+
+        Sanctum::actingAs($fixture['employee']);
+
+        $this->getJson("/api/orbit/workspaces/{$workspace->id}")->assertOk();
+    }
+
     public function test_workspace_show_reports_the_viewers_own_role_and_administer_flag(): void
     {
         $fixture = $this->createOrbitOrganization();

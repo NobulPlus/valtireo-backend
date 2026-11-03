@@ -87,6 +87,27 @@ class ModuleEntitlementService
         return $user->can($module->required_permission);
     }
 
+    /**
+     * The per-user half of module gating that EnsureModuleIsSubscribed must also
+     * check — a module can be subscribed at the organization level while a
+     * specific user's role still lacks the module's `required_permission` (e.g.
+     * orbit.access), and subscription alone must not let that user's requests
+     * through. Mirrors the same permission branch userCanAccessModule() already
+     * applies for module-listing/nav visibility.
+     */
+    public function userHasRequiredPermission(User $user, PlatformModule $module): bool
+    {
+        if ($user->is_platform_admin || $user->can('organizations.administer')) {
+            return true;
+        }
+
+        if (! $module->required_permission) {
+            return true;
+        }
+
+        return $user->can($module->required_permission);
+    }
+
     public function organizationHasActiveSubscription(Organization $organization, string $moduleKey): bool
     {
         $module = PlatformModule::query()

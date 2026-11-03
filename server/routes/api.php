@@ -139,7 +139,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/meetings/{meeting}/join', [\App\Http\Controllers\Api\ConnectController::class, 'join'])->whereUuid('meeting')->middleware('throttle:20,1,connect-join:');
         Route::post('/meetings/{meeting}/end', [\App\Http\Controllers\Api\ConnectController::class, 'end'])->whereUuid('meeting');
     });
-    Route::prefix('orbit')->middleware(EnsureModuleIsSubscribed::class.':orbit')->group(function () {
+    Route::prefix('orbit')->middleware(EnsureModuleIsSubscribed::class.':orbit,true')->group(function () {
         Route::get('/my-work', [OrbitMyWorkController::class, 'index']);
         Route::get('/people', [OrbitWorkspaceController::class, 'people']);
 
