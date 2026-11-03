@@ -162,6 +162,13 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
   const [name, setName] = useState('');
   const [category, setCategory] = useState('todo');
   const [error, setError] = useState<string | null>(null);
+  // Renaming a column must not fire a mutation on every keystroke — the input's
+  // value would otherwise be bound to status.name, which only updates once the
+  // round-trip settles, so each keystroke raced the previous one's save and
+  // overwrote whatever the user had typed since. Buffer locally while editing,
+  // fall back to the server value once there's no unsaved draft, and only save
+  // on blur.
+  const [nameDrafts, setNameDrafts] = useState<Record<number, string>>({});
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -171,6 +178,20 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
       setName('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create that column.');
+    }
+  }
+
+  async function handleRename(statusId: number, draft: string, original: string) {
+    setNameDrafts((current) => {
+      const { [statusId]: _removed, ...rest } = current;
+      return rest;
+    });
+    if (draft.trim() === '' || draft === original) return;
+    setError(null);
+    try {
+      await updateStatus.mutateAsync({ statusId, name: draft });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not rename that column.');
     }
   }
 
@@ -194,8 +215,9 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
             {canAdminister ? (
               <>
                 <Input
-                  value={status.name}
-                  onChange={(event) => void updateStatus.mutateAsync({ statusId: status.id, name: event.target.value })}
+                  value={nameDrafts[status.id] ?? status.name}
+                  onChange={(event) => setNameDrafts((current) => ({ ...current, [status.id]: event.target.value }))}
+                  onBlur={(event) => void handleRename(status.id, event.target.value, status.name)}
                   className="max-w-[12rem]"
                 />
                 <div className="flex items-center gap-2">
@@ -242,6 +264,10 @@ function LabelsTab({ projectId, canAdminister }: { projectId: number; canAdminis
   const [name, setName] = useState('');
   const [color, setColor] = useState(LABEL_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
+  // Same local-draft-until-blur pattern as StatusesTab's rename field — see
+  // its comment for why binding value directly to label.name and saving on
+  // every keystroke breaks mid-typing.
+  const [nameDrafts, setNameDrafts] = useState<Record<number, string>>({});
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -251,6 +277,20 @@ function LabelsTab({ projectId, canAdminister }: { projectId: number; canAdminis
       setName('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create that label.');
+    }
+  }
+
+  async function handleRename(labelId: number, draft: string, original: string) {
+    setNameDrafts((current) => {
+      const { [labelId]: _removed, ...rest } = current;
+      return rest;
+    });
+    if (draft.trim() === '' || draft === original) return;
+    setError(null);
+    try {
+      await updateLabel.mutateAsync({ labelId, name: draft });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not rename that label.');
     }
   }
 
@@ -275,8 +315,9 @@ function LabelsTab({ projectId, canAdminister }: { projectId: number; canAdminis
               <span className="h-3 w-3 rounded-full" style={{ backgroundColor: label.color }} />
               {canAdminister ? (
                 <Input
-                  value={label.name}
-                  onChange={(event) => void updateLabel.mutateAsync({ labelId: label.id, name: event.target.value })}
+                  value={nameDrafts[label.id] ?? label.name}
+                  onChange={(event) => setNameDrafts((current) => ({ ...current, [label.id]: event.target.value }))}
+                  onBlur={(event) => void handleRename(label.id, event.target.value, label.name)}
                   className="max-w-[12rem]"
                 />
               ) : (
