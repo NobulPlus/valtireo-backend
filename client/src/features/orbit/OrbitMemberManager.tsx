@@ -47,11 +47,19 @@ export function OrbitMemberManager({
   const [search, setSearch] = useState('');
   const [addRole, setAddRole] = useState(roleOptions[roleOptions.length - 1]?.value ?? roleOptions[0]?.value ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [showAllMembers, setShowAllMembers] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 300);
   const people = useOrbitPeople(debouncedSearch);
 
   const existingIds = new Set(members.map((member) => member.id));
   const candidates = (people.data?.data ?? []).filter((person) => !existingIds.has(person.id));
+
+  // The server already orders `members` most-recently-added first; this just
+  // caps what's shown by default so a large workspace/project doesn't dump
+  // dozens of rows into the modal at once.
+  const VISIBLE_MEMBER_LIMIT = 5;
+  const hiddenMemberCount = Math.max(0, members.length - VISIBLE_MEMBER_LIMIT);
+  const visibleMembers = showAllMembers ? members : members.slice(0, VISIBLE_MEMBER_LIMIT);
 
   async function handleAdd(userId: number) {
     setError(null);
@@ -89,7 +97,7 @@ export function OrbitMemberManager({
         <LoadingState />
       ) : (
         <ul className="flex flex-col divide-y divide-border">
-          {members.map((member) => (
+          {visibleMembers.map((member) => (
             <li key={member.id} className="flex items-center justify-between gap-3 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-strong">{member.name}</p>
@@ -122,6 +130,25 @@ export function OrbitMemberManager({
           ))}
           {members.length === 0 && <li className="py-2.5 text-sm text-muted">No members yet.</li>}
         </ul>
+      )}
+
+      {!isLoading && hiddenMemberCount > 0 && !showAllMembers && (
+        <button
+          type="button"
+          onClick={() => setShowAllMembers(true)}
+          className="self-start text-xs font-medium text-teal hover:text-pine"
+        >
+          +{hiddenMemberCount} more
+        </button>
+      )}
+      {!isLoading && showAllMembers && members.length > VISIBLE_MEMBER_LIMIT && (
+        <button
+          type="button"
+          onClick={() => setShowAllMembers(false)}
+          className="self-start text-xs font-medium text-muted hover:text-strong"
+        >
+          Show less
+        </button>
       )}
 
       {canManage && (

@@ -119,7 +119,7 @@ class OrbitWorkspaceController extends Controller
     {
         abort_unless($this->auth->canViewWorkspace($request->user(), $workspace), 404);
 
-        $members = $workspace->members()->get(['users.id', 'users.name', 'users.email'])
+        $members = $workspace->members()->orderByPivot('created_at', 'desc')->get(['users.id', 'users.name', 'users.email'])
             ->map(fn (User $member) => [
                 'id' => $member->id,
                 'name' => $member->name,

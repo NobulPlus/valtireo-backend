@@ -85,6 +85,34 @@ class OrbitGovernanceTest extends TestCase
             ->assertJsonFragment(['id' => $contributor->id, 'role' => 'contributor']);
     }
 
+    public function test_project_members_endpoint_lists_most_recently_added_first(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $workspace = $this->workspaceFor($fixture, 'ws-members-order');
+        $project = $this->projectFor($fixture, $workspace, 'ORDR');
+
+        // created_at isn't fillable on OrbitProjectMember (by design — see its
+        // #[Fillable] attribute), and Eloquent's own auto-timestamping would
+        // otherwise stamp every row created in this test with the same
+        // second anyway, so distinct timestamps have to be forced via a
+        // direct update after create().
+        $older = User::create(['organization_id' => $fixture['organization']->id, 'name' => 'Older Member', 'email' => 'older@test.local', 'password' => 'Password1!']);
+        $olderMembership = OrbitProjectMember::create(['organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'user_id' => $older->id, 'role' => 'contributor']);
+        $olderMembership->forceFill(['created_at' => now()->subDay()])->save();
+
+        $newer = User::create(['organization_id' => $fixture['organization']->id, 'name' => 'Newer Member', 'email' => 'newer@test.local', 'password' => 'Password1!']);
+        OrbitProjectMember::create(['organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'user_id' => $newer->id, 'role' => 'contributor']);
+
+        Sanctum::actingAs($fixture['admin']);
+
+        // Three members end up in the list (the admin from projectFor() plus these
+        // two), so assert relative order rather than exact positions — the admin's
+        // own created_at isn't controlled by this test.
+        $ids = collect($this->getJson("/api/orbit/projects/{$project->id}/members")->assertOk()->json('data'))->pluck('id');
+
+        $this->assertLessThan($ids->search($older->id), $ids->search($newer->id));
+    }
+
     public function test_removing_a_project_member_immediately_revokes_their_access_to_a_private_project(): void
     {
         $fixture = $this->createOrbitOrganization();

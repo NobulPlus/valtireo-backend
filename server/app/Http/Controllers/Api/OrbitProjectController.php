@@ -147,7 +147,7 @@ class OrbitProjectController extends Controller
     {
         abort_unless($this->auth->canViewProject($request->user(), $project), 404);
 
-        $members = $project->members()->get(['users.id', 'users.name', 'users.email'])
+        $members = $project->members()->orderByPivot('created_at', 'desc')->get(['users.id', 'users.name', 'users.email'])
             ->map(fn (User $member) => [
                 'id' => $member->id,
                 'name' => $member->name,
