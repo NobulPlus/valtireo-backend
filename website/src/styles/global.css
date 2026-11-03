@@ -646,6 +646,35 @@ section[id] {
 .module-strip a:hover {
   color:#2c7757
 }
+.status-badge {
+  font-size:9px;
+  font-weight:700;
+  letter-spacing:.5px;
+  text-transform:uppercase;
+  padding:4px 8px;
+  border-radius:5px;
+  background:#f3f6ef;
+  color:var(--muted);
+  white-space:nowrap
+}
+.status-badge--planned {
+  background:#fdf0dd;
+  color:#95640e
+}
+.status-badge--in_development {
+  background:#e4f0fb;
+  color:#2b5f8a
+}
+.module-strip a .status-badge {
+  margin-left:0
+}
+.page-hero .status-badge {
+  margin-left:12px;
+  vertical-align:middle
+}
+.module-detail .status-badge {
+  margin-bottom:10px
+}
 .workspace-section {
   padding:100px 0 90px
 }
