@@ -143,6 +143,12 @@ class RolePermissionSeeder extends Seeder
             'assets.update',
             'financial_admin.view',
             'ai_assistant.use',
+            'orbit.access',
+            'orbit.workspaces.create',
+            'orbit.workspaces.administer',
+            'orbit.projects.create',
+            'orbit.reports.view_all',
+            'orbit.admin.manage',
         ];
     }
 }

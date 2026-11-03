@@ -505,6 +505,122 @@ class NotificationDispatchService
     /**
      * @return Collection<int, User>
      */
+    public function orbitWorkItemAssigned(\App\Models\OrbitWorkItem $workItem): void
+    {
+        $workItem->loadMissing('assignee', 'project');
+
+        if (! $workItem->assignee) {
+            return;
+        }
+
+        $this->notify($workItem->assignee, [
+            'category' => 'orbit',
+            'event' => 'orbit.item.assigned',
+            'title' => 'A work item has been assigned to you',
+            'message' => "\"{$workItem->title}\" ({$workItem->key}) has been assigned to you.",
+            'action_label' => 'View work item',
+            'action_url' => "/orbit/work-items/{$workItem->key}",
+            'entity_type' => 'orbit_work_item',
+            'entity_id' => $workItem->id,
+            'metadata' => ['project_id' => $workItem->project_id],
+        ]);
+    }
+
+    public function orbitWorkItemStatusChanged(\App\Models\OrbitWorkItem $workItem, User $actor): void
+    {
+        $workItem->loadMissing('watchers', 'status');
+
+        foreach ($workItem->watchers as $watcher) {
+            if ($watcher->id === $actor->id) {
+                continue;
+            }
+
+            $this->notify($watcher, [
+                'category' => 'orbit',
+                'event' => 'orbit.item.status_changed',
+                'title' => 'A work item you are watching changed status',
+                'message' => "\"{$workItem->title}\" ({$workItem->key}) moved to {$workItem->status?->name}.",
+                'action_label' => 'View work item',
+                'action_url' => "/orbit/work-items/{$workItem->key}",
+                'entity_type' => 'orbit_work_item',
+                'entity_id' => $workItem->id,
+                'metadata' => ['status_id' => $workItem->status_id],
+            ]);
+        }
+    }
+
+    public function orbitCommentPosted(\App\Models\OrbitComment $comment): void
+    {
+        $comment->loadMissing('workItem.watchers', 'author');
+        $workItem = $comment->workItem;
+
+        foreach ($workItem->watchers as $watcher) {
+            if ($watcher->id === $comment->author_id) {
+                continue;
+            }
+
+            $this->notify($watcher, [
+                'category' => 'orbit',
+                'event' => 'orbit.item.commented',
+                'title' => 'New comment on a work item you are watching',
+                'message' => "{$comment->author?->name} commented on \"{$workItem->title}\" ({$workItem->key}).",
+                'action_label' => 'View comment',
+                'action_url' => "/orbit/work-items/{$workItem->key}",
+                'entity_type' => 'orbit_comment',
+                'entity_id' => $comment->id,
+                'metadata' => ['work_item_id' => $workItem->id],
+            ]);
+        }
+    }
+
+    /**
+     * @param Collection<int, User> $mentioned
+     */
+    public function orbitCommentMentioned(\App\Models\OrbitComment $comment, Collection $mentioned): void
+    {
+        $comment->loadMissing('workItem', 'author');
+        $workItem = $comment->workItem;
+
+        foreach ($mentioned as $user) {
+            if ($user->id === $comment->author_id) {
+                continue;
+            }
+
+            $this->notify($user, [
+                'category' => 'orbit',
+                'event' => 'orbit.comment.mentioned',
+                'title' => 'You were mentioned in a comment',
+                'message' => "{$comment->author?->name} mentioned you on \"{$workItem->title}\" ({$workItem->key}).",
+                'action_label' => 'View comment',
+                'action_url' => "/orbit/work-items/{$workItem->key}",
+                'entity_type' => 'orbit_comment',
+                'entity_id' => $comment->id,
+                'metadata' => ['work_item_id' => $workItem->id],
+            ]);
+        }
+    }
+
+    public function orbitWorkItemDueSoon(\App\Models\OrbitWorkItem $workItem): void
+    {
+        $workItem->loadMissing('assignee');
+
+        if (! $workItem->assignee) {
+            return;
+        }
+
+        $this->notify($workItem->assignee, [
+            'category' => 'orbit',
+            'event' => 'orbit.item.due_soon',
+            'title' => 'A work item is due soon',
+            'message' => "\"{$workItem->title}\" ({$workItem->key}) is due on {$workItem->due_at?->toDateString()}.",
+            'action_label' => 'View work item',
+            'action_url' => "/orbit/work-items/{$workItem->key}",
+            'entity_type' => 'orbit_work_item',
+            'entity_id' => $workItem->id,
+            'metadata' => ['due_at' => $workItem->due_at?->toDateString()],
+        ]);
+    }
+
     private function approvalRecipients(ApprovalRequest $approvalRequest, ?ApprovalWorkflowStep $step): Collection
     {
         if (! $step) {

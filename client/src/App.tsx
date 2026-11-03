@@ -65,6 +65,10 @@ const LifestylePage = namedLazy(() => import('@/features/lifestyle/LifestylePage
 const LifestyleAdminPage = namedLazy(() => import('@/features/lifestyle/LifestylePage'), 'LifestyleAdminPage');
 const ConnectPage = namedLazy(() => import('@/features/connect/ConnectPage'), 'ConnectPage');
 const ConnectMessenger = namedLazy(() => import('@/features/connect/ConnectMessenger'), 'ConnectMessenger');
+const OrbitMyWorkPage = namedLazy(() => import('@/features/orbit/OrbitMyWorkPage'), 'OrbitMyWorkPage');
+const OrbitWorkspacesPage = namedLazy(() => import('@/features/orbit/OrbitWorkspacesPage'), 'OrbitWorkspacesPage');
+const OrbitWorkspaceOverviewPage = namedLazy(() => import('@/features/orbit/OrbitWorkspaceOverviewPage'), 'OrbitWorkspaceOverviewPage');
+const OrbitProjectBoardPage = namedLazy(() => import('@/features/orbit/OrbitProjectBoardPage'), 'OrbitProjectBoardPage');
 
 function IndexRedirect() {
   const { defaultRoute } = useAuth();
@@ -108,6 +112,10 @@ export default function App() {
           <Route path="connect/:id" element={<ConnectPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="operations" element={<OperationsCenterPage />} />
+          <Route path="orbit" element={<OrbitMyWorkPage />} />
+          <Route path="orbit/workspaces" element={<OrbitWorkspacesPage />} />
+          <Route path="orbit/workspaces/:workspaceId" element={<OrbitWorkspaceOverviewPage />} />
+          <Route path="orbit/projects/:projectId" element={<OrbitProjectBoardPage />} />
           <Route path="employees" element={<EmployeeListPage />} />
           <Route path="employees/new" element={<EmployeeCreatePage />} />
           <Route path="employees/:id" element={<EmployeeDetailPage />} />

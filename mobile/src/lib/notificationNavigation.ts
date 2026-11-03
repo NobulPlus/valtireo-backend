@@ -22,6 +22,8 @@ export type NotificationDestination =
   | { kind: 'moreScreen'; screen: 'Documents' | 'Calendar' | 'Lifestyle' }
   | { kind: 'connectConversation'; conversationId: string }
   | { kind: 'approvalDetail'; approvalRequestId: number }
+  | { kind: 'orbitWorkItemDetail'; itemKey: string }
+  | { kind: 'orbitMyWork' }
   | { kind: 'unsupported' };
 
 export interface NotificationAccess {
@@ -33,6 +35,8 @@ export interface NotificationAccess {
   connect: boolean;
   /** Reviewer-facing approval notifications only make sense for someone with a manager-eligible session — same `has_manager_scope` gate as the Approvals tab (see MainTabs.tsx's `showApprovals`), not a module. */
   approvals: boolean;
+  /** Gates `orbit_work_item`/`orbit_comment` notifications the same way MoreMenuScreen gates the Orbit tile: on module access. */
+  orbit: boolean;
 }
 
 export interface NotificationLike {
@@ -44,6 +48,7 @@ export interface NotificationLike {
 const TICKET_DETAIL_PATTERN = /^\/service-desk\?ticket=(\d+)$/;
 const CONNECT_CHAT_PATTERN = /^\/connect\/chat\/([\w-]+)$/;
 const APPROVAL_DETAIL_PATTERN = /^\/approvals\/(\d+)$/;
+const ORBIT_WORK_ITEM_PATTERN = /^\/orbit\/work-items\/([A-Z][A-Z0-9]*-\d+)$/;
 
 function asPositiveInt(value: unknown): number | null {
   const n = typeof value === 'number' ? value : Number(value);
@@ -115,6 +120,17 @@ export function resolveNotificationDestination(notification: NotificationLike, a
       return approvalRequestId !== null ? { kind: 'approvalDetail', approvalRequestId } : { kind: 'unsupported' };
     }
     return { kind: 'unsupported' };
+  }
+
+  if (type === 'orbit_work_item' || type === 'orbit_comment') {
+    // Assignment, status-change, due-soon (orbit_work_item) and comment/mention
+    // (orbit_comment) notifications all point at the same work item detail —
+    // see NotificationDispatchService.php's orbitWorkItem*/orbitComment* methods,
+    // which all use the identical "/orbit/work-items/{key}" action_url shape.
+    if (!access.orbit) return { kind: 'unsupported' };
+    const match = ORBIT_WORK_ITEM_PATTERN.exec(url);
+    if (match) return { kind: 'orbitWorkItemDetail', itemKey: match[1] };
+    return { kind: 'orbitMyWork' };
   }
 
   // organization / employee_invitation / employee — admin/HR-facing concepts with no

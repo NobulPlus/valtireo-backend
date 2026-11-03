@@ -21,6 +21,7 @@ export function usePushNotifications(enabled: boolean): void {
     employeeSelfService: moduleByKey('employee_self_service')?.can_access === true,
     connect: moduleByKey('connect')?.can_access === true,
     approvals: isEligibleForManagerHome(session),
+    orbit: moduleByKey('orbit')?.can_access === true,
   };
   // A ref, not state: the tap listener below is set up once and must read
   // whatever access the person currently has, not whatever it was when the
