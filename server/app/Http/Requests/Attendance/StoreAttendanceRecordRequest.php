@@ -9,7 +9,14 @@ class StoreAttendanceRecordRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('attendance.create') === true;
+        // Recording your own attendance is baseline employee self-service, not a
+        // role-gated capability — mirrors StoreLeaveRequestRequest's fallback.
+        // AttendanceService::targetEmployee() already restricts a caller without
+        // attendance.update to only their own employee_id, so this fallback can't
+        // let anyone record attendance for someone else.
+        return $this->user()?->can('attendance.create') === true
+            || $this->user()?->can('attendance.update') === true
+            || $this->user()?->employee?->status === 'active';
     }
 
     public function rules(): array

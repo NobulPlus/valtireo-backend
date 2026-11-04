@@ -247,6 +247,51 @@ class AttendanceModuleTest extends TestCase
         $this->assertSame(420, AttendanceRecord::query()->findOrFail($recordId)->duration_minutes);
     }
 
+    public function test_payroll_administrator_can_record_and_correct_own_attendance(): void
+    {
+        // Regression: Payroll Administrator (and ICT Admin) have neither
+        // attendance.view nor attendance.create/.update — before the fix to
+        // StoreAttendanceRecordRequest/StoreAttendanceCorrectionRequest,
+        // this role was completely locked out of recording or correcting
+        // its own attendance, the same bug class already fixed once this
+        // session for leave requests. AttendanceService::targetEmployee()/
+        // requestCorrection() already restrict a non-elevated caller to
+        // their own employee_id, so the fallback can't be used to act on
+        // someone else's record.
+        $this->seed();
+
+        $reference = Employee::query()->where('employee_number', 'EMP-FIN-001')->firstOrFail();
+        $user = User::create([
+            'organization_id' => $reference->organization_id,
+            'name' => 'Payroll Admin Test',
+            'email' => 'payroll-admin-attendance-test@valtireo.test',
+            'password' => 'Password1!',
+        ]);
+        $this->setPermissionsTeamId($user->organization_id);
+        $user->syncRoles(['Payroll Administrator']);
+
+        $employee = $reference->replicate();
+        $employee->employee_number = 'EMP-TEST-PAYADMIN';
+        $employee->user_id = $user->id;
+        $employee->work_email = 'payroll-admin-attendance-test-work@valtireo.test';
+        $employee->status = 'active';
+        $employee->save();
+
+        $this->actingAsInOrganization($user);
+
+        $recordId = $this->postJson('/api/attendance/records', [
+            'attendance_date' => '2026-08-22',
+            'check_in_at' => '2026-08-22 09:00:00',
+            'check_out_at' => '2026-08-22 17:00:00',
+        ])->assertCreated()->json('attendance_record.id');
+
+        $this->postJson('/api/attendance/corrections', [
+            'attendance_record_id' => $recordId,
+            'requested_check_in_at' => '2026-08-22 09:15:00',
+            'reason' => 'Forgot to clock in on time',
+        ])->assertCreated();
+    }
+
     public function test_employee_only_sees_own_attendance_records(): void
     {
         $this->seed();
