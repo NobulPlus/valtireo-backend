@@ -42,6 +42,19 @@ if [ "${RUN_MIGRATIONS:-true}" = "true" ] && [ "$APP_PROCESS_MODE" != "worker" ]
     fi
 fi
 
+# Seeding is deliberately opt-in and double-guarded. It is useful for an
+# empty staging database when no provider shell is available, but must never
+# happen just because a production service restarts.
+if [ "${RUN_SEEDERS:-false}" = "true" ] && [ "$APP_PROCESS_MODE" != "worker" ] && [ "$APP_PROCESS_MODE" != "scheduler" ]; then
+    if [ "${ALLOW_DATABASE_SEEDING:-false}" != "true" ]; then
+        echo "RUN_SEEDERS requires ALLOW_DATABASE_SEEDING=true." >&2
+        exit 1
+    fi
+
+    echo "Running database seeders..."
+    php artisan db:seed --force
+fi
+
 php artisan app:verify-production-safety
 
 php artisan storage:link --force >/dev/null 2>&1 || true

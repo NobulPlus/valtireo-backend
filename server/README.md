@@ -140,6 +140,8 @@ DB_PASSWORD=...
 APP_PROCESS_MODE=all
 RUN_MIGRATIONS=true
 RESET_DB_ON_BOOT=false
+RUN_SEEDERS=false
+ALLOW_DATABASE_SEEDING=false
 ```
 
 Set the Vercel frontend variable `VITE_API_BASE_URL` to the public backend API
@@ -153,6 +155,21 @@ Laravel filesystem disk before accepting real customer uploads.
 
 `RESET_DB_ON_BOOT` is guarded by `ALLOW_DESTRUCTIVE_DB_RESET=true` and must
 remain disabled for any persistent environment.
+
+### Bootstrap an empty staging database without a provider shell
+
+For a deliberately empty staging environment, set both variables below for
+one deployment. The entrypoint runs `php artisan db:seed --force` after
+migrations, which creates the Valtireo demo workspace and test accounts. It
+does not reset or delete database records.
+
+```text
+RUN_SEEDERS=true
+ALLOW_DATABASE_SEEDING=true
+```
+
+Once the deployment succeeds, set both back to `false` and redeploy. Never
+enable these variables for a customer-facing production database.
 
 ## Related Docs
 
