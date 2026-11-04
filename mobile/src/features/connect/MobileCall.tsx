@@ -37,54 +37,54 @@ export function MobileCall({ call }: { call: VoiceCall }) {
 
   return (
     <View style={styles.card}>
-      <View style={styles.row}>
+      <View style={styles.topRow}>
         <Avatar name={person.name} uri={person.photo_url} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.name}>{person.name}</Text>
+        <View style={styles.identity}>
+          <Text style={styles.name} numberOfLines={1}>{person.name}</Text>
           <Text style={styles.subtitle}>
             {call.status === 'ringing' ? (call.incoming ? 'Incoming voice call' : 'Calling…') : call.status}
           </Text>
+        </View>
+
+        <View style={styles.actions}>
+          {isIncomingRing ? (
+            <>
+              <Pressable
+                onPress={() => action.mutate('accept')}
+                disabled={!nativeCallsSupported || action.isPending}
+                style={[styles.actionButton, styles.acceptButton, (!nativeCallsSupported || action.isPending) && styles.actionButtonDisabled]}
+                accessibilityLabel="Accept call"
+                accessibilityRole="button"
+              >
+                <Ionicons name="call" size={20} color={colors.white} />
+              </Pressable>
+              <Pressable
+                onPress={() => action.mutate('decline')}
+                disabled={action.isPending}
+                style={[styles.actionButton, styles.declineButton, action.isPending && styles.actionButtonDisabled]}
+                accessibilityLabel="Decline call"
+                accessibilityRole="button"
+              >
+                <Ionicons name="close" size={20} color={colors.white} />
+              </Pressable>
+            </>
+          ) : (
+            <Pressable
+              onPress={() => action.mutate('end')}
+              disabled={action.isPending}
+              style={[styles.actionButton, styles.declineButton, action.isPending && styles.actionButtonDisabled]}
+              accessibilityLabel="End call"
+              accessibilityRole="button"
+            >
+              {action.isPending ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="call" size={20} color={colors.white} style={styles.endIcon} />}
+            </Pressable>
+          )}
         </View>
       </View>
 
       {!nativeCallsSupported ? (
         <Text style={styles.notice}>Live calls need a Valtireo development build. Expo Go supports messaging and voice notes.</Text>
       ) : null}
-
-      <View style={styles.actions}>
-        {isIncomingRing ? (
-          <>
-            <Pressable
-              onPress={() => action.mutate('accept')}
-              disabled={!nativeCallsSupported || action.isPending}
-              style={[styles.actionButton, styles.acceptButton, (!nativeCallsSupported || action.isPending) && styles.actionButtonDisabled]}
-              accessibilityLabel="Accept call"
-              accessibilityRole="button"
-            >
-              <Ionicons name="call" size={20} color={colors.white} />
-            </Pressable>
-            <Pressable
-              onPress={() => action.mutate('decline')}
-              disabled={action.isPending}
-              style={[styles.actionButton, styles.declineButton, action.isPending && styles.actionButtonDisabled]}
-              accessibilityLabel="Decline call"
-              accessibilityRole="button"
-            >
-              <Ionicons name="close" size={20} color={colors.white} />
-            </Pressable>
-          </>
-        ) : (
-          <Pressable
-            onPress={() => action.mutate('end')}
-            disabled={action.isPending}
-            style={[styles.actionButton, styles.declineButton, action.isPending && styles.actionButtonDisabled]}
-            accessibilityLabel="End call"
-            accessibilityRole="button"
-          >
-            {action.isPending ? <ActivityIndicator size="small" color={colors.white} /> : <Ionicons name="call" size={20} color={colors.white} style={styles.endIcon} />}
-          </Pressable>
-        )}
-      </View>
 
       {call.status === 'active' && credentials ? (
         <Suspense fallback={<ActivityIndicator size="small" color={colors.pine} style={{ marginTop: spacing.sm }} />}>
@@ -106,12 +106,13 @@ export function MobileCall({ call }: { call: VoiceCall }) {
 
 const makeStyles = (colors: ThemeColors, typography: Typography) => StyleSheet.create({
   card: { padding: spacing.md, gap: spacing.md, backgroundColor: colors.chip, borderRadius: radius.md },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  identity: { flex: 1, minWidth: 0 },
   name: { ...typography.heading, color: colors.pine },
   subtitle: { ...typography.caption, color: colors.muted, textTransform: 'capitalize' },
   notice: { ...typography.caption, color: colors.muted },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  actionButton: { width: 48, height: 48, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+  actions: { flexDirection: 'row', gap: spacing.sm, flexShrink: 0 },
+  actionButton: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   actionButtonDisabled: { opacity: 0.6 },
   acceptButton: { backgroundColor: colors.success },
   declineButton: { backgroundColor: colors.danger },

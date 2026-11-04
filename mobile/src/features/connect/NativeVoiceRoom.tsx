@@ -40,7 +40,12 @@ export default function NativeVoiceRoom({ credentials, onDisconnected }: { crede
         return AudioSession.startAudioSession().then(() => { if (mounted) setReady(true); });
       })
       .catch((e) => { if (mounted) setError(String(e)); });
-    return () => { mounted = false; void AudioSession.stopAudioSession(); };
+    // Best-effort: this fires on every unmount (call ends, screen navigates away,
+    // fast dev-mode remounts), and stopping a session that's already stopped or
+    // never fully started rejects — left uncaught before, it surfaced as a
+    // generic "right operand of 'in' is not an object" unhandled-rejection error
+    // with no useful stack, since the component is already gone by the time it rejects.
+    return () => { mounted = false; AudioSession.stopAudioSession().catch(() => {}); };
   }, []);
 
   return (
