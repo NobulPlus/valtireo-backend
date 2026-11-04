@@ -49,10 +49,13 @@ function relativeTime(iso: string): string {
 
 function previewText(c: Conversation): string {
   const lm = c.last_message;
-  if (!lm) return c.kind === 'channel' ? 'No messages yet' : 'Start the conversation';
-  const body = lm.voice_note ? 'Voice note' : lm.has_attachment ? 'Sent an attachment' : lm.body ?? '';
-  const prefix = c.kind !== 'direct' && lm.sender_name ? `${lm.sender_name}: ` : '';
-  return `${prefix}${body}`;
+  if (lm) {
+    const body = lm.voice_note ? 'Voice note' : lm.has_attachment ? 'Sent an attachment' : lm.body ?? '';
+    const prefix = c.kind !== 'direct' && lm.sender_name ? `${lm.sender_name}: ` : '';
+    return `${prefix}${body}`;
+  }
+  if (c.last_call) return c.last_call.label;
+  return c.kind === 'channel' ? 'No messages yet' : 'Start the conversation';
 }
 
 /** Icon-only Previous/Next, reused everywhere this file paginates a list. */

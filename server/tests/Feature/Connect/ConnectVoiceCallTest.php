@@ -175,6 +175,29 @@ class ConnectVoiceCallTest extends TestCase
         $this->assertNotNull(\App\Models\ConnectVoiceCall::findOrFail($call2)->room_closed_at);
     }
 
+    public function test_a_direct_conversation_with_only_a_call_appears_in_the_list_with_a_call_label(): void
+    {
+        // A conversation created just to place a call, with no message ever sent,
+        // must still surface — unlike an opened-but-unused chat (see ConnectChatTest's
+        // "hidden until a message is sent") — just labeled as a call, not blank.
+        $id = $this->directWith($this->guest);
+        $callId = $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated()->json('data.id');
+
+        $this->actingAsInOrganization($this->guest);
+        $this->postJson("/api/connect/calls/{$callId}/actions", ['action' => 'decline'])->assertOk();
+
+        $this->getJson('/api/connect/conversations')->assertOk()
+            ->assertJsonFragment(['id' => $id])
+            ->assertJsonPath('data.0.last_call.status', 'declined')
+            ->assertJsonPath('data.0.last_call.label', 'You declined a call');
+
+        $this->actingAsInOrganization($this->host);
+        $this->getJson('/api/connect/conversations')->assertOk()
+            ->assertJsonFragment(['id' => $id])
+            ->assertJsonPath('data.0.last_call.status', 'declined')
+            ->assertJsonPath('data.0.last_call.label', 'Call declined');
+    }
+
     public function test_an_unanswered_call_expires_to_missed_and_notifies_the_callee(): void
     {
         $id = $this->directWith($this->guest);

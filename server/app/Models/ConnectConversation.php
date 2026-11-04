@@ -11,4 +11,5 @@ class ConnectConversation extends Model
     protected function casts(): array { return ['archived' => 'boolean']; }
     public function members() { return $this->belongsToMany(User::class, 'connect_members', 'conversation_id', 'user_id')->withPivot(['last_read_id', 'muted'])->withTimestamps(); }
     public function messages() { return $this->hasMany(ConnectMessage::class, 'conversation_id'); }
+    public function calls() { return $this->hasMany(ConnectVoiceCall::class, 'conversation_id'); }
 }
