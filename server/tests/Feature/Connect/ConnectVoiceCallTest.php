@@ -77,8 +77,17 @@ class ConnectVoiceCallTest extends TestCase
         $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated();
 
         Http::assertSent(function ($request) {
-            return $request->url() === 'https://exp.host/--/api/v2/push/send'
-                && in_array('ExponentPushToken[incoming-call]', array_column($request->data(), 'to'), true);
+            if ($request->url() !== 'https://exp.host/--/api/v2/push/send') return false;
+            $message = collect($request->data())->firstWhere('to', 'ExponentPushToken[incoming-call]');
+
+            // The dedicated 'calls' Android channel + iOS time-sensitive interruption
+            // level are what actually make this push break through Do Not Disturb /
+            // Focus and show as a heads-up banner while the app is backgrounded —
+            // without this, an incoming call was indistinguishable from any other
+            // low-priority notification (e.g. a leave approval).
+            return $message !== null
+                && $message['channelId'] === 'calls'
+                && $message['interruptionLevel'] === 'time-sensitive';
         });
     }
 
@@ -164,6 +173,29 @@ class ConnectVoiceCallTest extends TestCase
         $this->postJson("/api/connect/calls/{$call2}/actions", ['action' => 'end'])->assertOk()->assertJsonPath('data.status', 'ended');
         Http::assertSent(fn ($request) => str_ends_with($request->url(), '/DeleteRoom'));
         $this->assertNotNull(\App\Models\ConnectVoiceCall::findOrFail($call2)->room_closed_at);
+    }
+
+    public function test_a_direct_conversation_with_only_a_call_appears_in_the_list_with_a_call_label(): void
+    {
+        // A conversation created just to place a call, with no message ever sent,
+        // must still surface — unlike an opened-but-unused chat (see ConnectChatTest's
+        // "hidden until a message is sent") — just labeled as a call, not blank.
+        $id = $this->directWith($this->guest);
+        $callId = $this->postJson('/api/connect/calls', ['conversation_id' => $id])->assertCreated()->json('data.id');
+
+        $this->actingAsInOrganization($this->guest);
+        $this->postJson("/api/connect/calls/{$callId}/actions", ['action' => 'decline'])->assertOk();
+
+        $this->getJson('/api/connect/conversations')->assertOk()
+            ->assertJsonFragment(['id' => $id])
+            ->assertJsonPath('data.0.last_call.status', 'declined')
+            ->assertJsonPath('data.0.last_call.label', 'You declined a call');
+
+        $this->actingAsInOrganization($this->host);
+        $this->getJson('/api/connect/conversations')->assertOk()
+            ->assertJsonFragment(['id' => $id])
+            ->assertJsonPath('data.0.last_call.status', 'declined')
+            ->assertJsonPath('data.0.last_call.label', 'Call declined');
     }
 
     public function test_an_unanswered_call_expires_to_missed_and_notifies_the_callee(): void

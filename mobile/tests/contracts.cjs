@@ -102,7 +102,7 @@ test('a download completed after logout is deleted and never shared', async () =
     'expo-sharing': { isAvailableAsync: async () => true, shareAsync: async () => { shared = true; } },
     '../../lib/apiClient': { apiClient: { defaults: { baseURL: 'https://example.test/api' } } },
     '../../lib/secureToken': { getStoredToken: () => token },
-  });
+  }, { AbortController, setTimeout, clearTimeout });
   await assert.rejects(module.downloadAndShare('/documents/1/download', '../test.pdf'), /session changed/);
   assert.equal(shared, false);
   assert.equal(deleted, true);

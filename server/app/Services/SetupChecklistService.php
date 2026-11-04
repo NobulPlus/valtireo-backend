@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\Designation;
 use App\Models\DocumentRequirement;
 use App\Models\DocumentType;
+use App\Models\AssetCategory;
 use App\Models\Employee;
 use App\Models\EmployeeCustomField;
 use App\Models\EmploymentType;
@@ -19,6 +20,9 @@ use App\Models\LeaveType;
 use App\Models\LeaveWorkDay;
 use App\Models\Organization;
 use App\Models\OrganizationLocation;
+use App\Models\PayGroup;
+use App\Models\PayrollComponent;
+use App\Models\TicketCategory;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkShift;
@@ -185,6 +189,27 @@ class SetupChecklistService
             );
         }
 
+        // These three modules are commonly subscribed (service_desk and assets
+        // are part of PlatformModuleSeeder's default subscription set) but had
+        // no checklist coverage at all — they counted toward `modules` without
+        // ever appearing in `sections`/`items`, which is the exact discrepancy
+        // this block fixes.
+        if ($moduleKeys->contains('service_desk')) {
+            $items[] = $this->countItem($organization, TicketCategory::class, 'ticket_categories', 'service_desk', 'Add ticket categories', 'Define categories so service desk requests route and report correctly.', 'Open service desk', '/service-desk', true, 225);
+        }
+
+        if ($moduleKeys->contains('assets')) {
+            $items[] = $this->countItem($organization, AssetCategory::class, 'asset_categories', 'assets', 'Add asset categories', 'Define categories for the assets your organization tracks.', 'Open assets', '/settings/assets', true, 230);
+        }
+
+        if ($moduleKeys->contains('payroll')) {
+            // Recommended, not required: unlike service_desk/assets, payroll
+            // setup has no guaranteed demo data, so this must not block the
+            // "ready" checklist state for an org that hasn't configured payroll.
+            $items[] = $this->countItem($organization, PayGroup::class, 'pay_groups', 'payroll', 'Add pay groups', 'Define pay groups for salary scheduling and currency.', 'Open payroll', '/payroll', false, 235);
+            $items[] = $this->countItem($organization, PayrollComponent::class, 'payroll_components', 'payroll', 'Add payroll components', 'Define allowances, deductions, and other payroll components.', 'Open payroll', '/payroll', false, 240);
+        }
+
         return $items;
     }
 
@@ -283,6 +308,9 @@ class SetupChecklistService
             'leave' => 'Leave',
             'attendance' => 'Attendance',
             'reports' => 'Reports',
+            'service_desk' => 'Service Desk',
+            'assets' => 'Assets',
+            'payroll' => 'Payroll',
         ][$section] ?? str($section)->headline()->toString();
     }
 }

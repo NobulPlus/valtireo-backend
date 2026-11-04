@@ -30,6 +30,14 @@ class ExpoPushChannel
         $data = $notification->toArray($notifiable);
         $title = $data['title'] ?? 'Valtireo';
         $body = $data['message'] ?? '';
+        // Connect's incoming-call push gets the loudest treatment the managed-Expo
+        // push API allows: the dedicated MAX-importance, bypassDnd 'calls' Android
+        // channel (see pushTokenRegistration.ts) and iOS's "time-sensitive"
+        // interruption level, which breaks through Focus/Do Not Disturb. This is
+        // still a standard remote push, not VoIP/CallKit — it improves delivery
+        // while the app is backgrounded, but a fully killed app (especially on
+        // iOS) still won't get a native ringing screen from this alone.
+        $isIncomingCall = ($data['event'] ?? null) === 'connect.call.incoming';
 
         $messages = $tokens->map(fn (string $token) => [
             'to' => $token,
@@ -37,7 +45,8 @@ class ExpoPushChannel
             'body' => $body,
             'sound' => 'default',
             'priority' => 'high',
-            'channelId' => 'default',
+            'channelId' => $isIncomingCall ? 'calls' : 'default',
+            ...($isIncomingCall ? ['interruptionLevel' => 'time-sensitive'] : []),
             'data' => [
                 'entity_type' => $data['entity_type'] ?? null,
                 'entity_id' => $data['entity_id'] ?? null,

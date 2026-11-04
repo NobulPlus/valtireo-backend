@@ -117,6 +117,28 @@ class ConnectChatTest extends TestCase
         $this->getJson('/api/connect/conversations/'.$id)->assertOk()->assertJsonPath('data.kind', 'direct')->assertJsonPath('data.name', $this->guest->name);
     }
 
+    public function test_a_direct_conversation_is_hidden_from_the_list_until_a_message_is_sent(): void
+    {
+        // Tapping a colleague creates the conversation row immediately (see
+        // ConnectMessenger's openDirect / "tapping the person IS the action"),
+        // so without list-side filtering, every chat a user merely opened —
+        // and never actually used — would sit in their list forever looking
+        // like an ongoing conversation.
+        $id = $this->directWith($this->guest);
+
+        $this->getJson('/api/connect/conversations')->assertOk()->assertJsonMissing(['id' => $id]);
+
+        $this->actingAsInOrganization($this->guest);
+        $this->getJson('/api/connect/conversations')->assertOk()->assertJsonMissing(['id' => $id]);
+
+        $this->actingAsInOrganization($this->host);
+        $this->postJson('/api/connect/conversations/'.$id.'/messages', ['client_id' => \Illuminate\Support\Str::uuid()->toString(), 'body' => 'Hello'])->assertCreated();
+
+        $this->getJson('/api/connect/conversations')->assertOk()->assertJsonFragment(['id' => $id]);
+        $this->actingAsInOrganization($this->guest);
+        $this->getJson('/api/connect/conversations')->assertOk()->assertJsonFragment(['id' => $id]);
+    }
+
     public function test_conversation_creation_is_validated(): void
     {
         $this->postJson('/api/connect/conversations', ['kind' => 'direct', 'member_ids' => [$this->guest->id, $this->third->id]])->assertUnprocessable();

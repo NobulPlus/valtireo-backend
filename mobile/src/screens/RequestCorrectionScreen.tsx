@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, Pressable, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { useRequestAttendanceCorrection } from '../features/attendance/api';
 import { ApiError } from '../lib/apiClient';
@@ -53,6 +54,7 @@ export function RequestCorrectionScreen({ route, navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={typography.heading}>{record.attendance_date}</Text>
       <Text style={typography.caption}>Enter times in {timezone}.</Text>
@@ -80,6 +82,7 @@ export function RequestCorrectionScreen({ route, navigation }: Props) {
         {requestCorrection.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Submit correction</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

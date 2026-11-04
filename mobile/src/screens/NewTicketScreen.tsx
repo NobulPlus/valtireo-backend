@@ -1,4 +1,5 @@
 import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -81,6 +82,7 @@ export function NewTicketScreen({ navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Category</Text>
       {loadingCategories ? (
@@ -158,6 +160,7 @@ export function NewTicketScreen({ navigation }: Props) {
         {createTicket.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Submit ticket</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

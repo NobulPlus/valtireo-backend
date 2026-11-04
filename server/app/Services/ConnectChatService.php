@@ -46,6 +46,10 @@ class ConnectChatService
         $conversation->loadMissing('members.employee.profile', 'members.employee.department');
         $membership = $conversation->members->firstWhere('id', $actor->id)?->pivot;
         $lastMessage = $conversation->messages()->whereNull('deleted_at')->latest('id')->with('sender:id,name')->first();
+        // A direct conversation created by tapping a colleague (see ConnectMessenger's
+        // openDirect) has no message yet — if a call happened instead, that's still
+        // real activity worth a preview line, so fall back to it when there's no message.
+        $lastCall = $lastMessage ? null : $conversation->calls()->latest('id')->first();
         return ['id' => $conversation->id, 'kind' => $conversation->kind, 'visibility' => $conversation->visibility,
             'name' => $conversation->kind === 'direct' ? ($conversation->members->first(fn ($u) => $u->id !== $actor->id)?->name ?? 'Conversation') : $conversation->name,
             'owner_id' => $conversation->owner_id, 'archived' => $conversation->archived, 'muted' => (bool) $membership?->muted,
@@ -57,7 +61,19 @@ class ConnectChatService
                 'voice_note' => (bool) $lastMessage->voice_note,
                 'has_attachment' => $lastMessage->file_path !== null,
             ] : null,
+            'last_call' => $lastCall ? ['status' => $lastCall->status, 'label' => $this->callLabel($lastCall, $actor), 'created_at' => $lastCall->created_at->toISOString()] : null,
             'members' => $conversation->members->map(fn ($u) => $this->person($u))->values()];
+    }
+
+    private function callLabel(\App\Models\ConnectVoiceCall $call, User $actor): string
+    {
+        $isCaller = $call->caller_id === $actor->id;
+        return match ($call->status) {
+            'ringing', 'active' => $isCaller ? 'Calling…' : 'Incoming call',
+            'missed', 'cancelled' => $isCaller ? 'Call not answered' : 'Missed call',
+            'declined' => $isCaller ? 'Call declined' : 'You declined a call',
+            default => $isCaller ? 'You called' : 'Incoming call',
+        };
     }
 
     public function message(ConnectMessage $message, User $actor): array

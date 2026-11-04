@@ -26,7 +26,15 @@ class ConnectChatController extends Controller
     public function index(Request $request)
     {
         $actor = $this->actor($request);
-        return $this->chat->visible($actor)->orderByDesc('updated_at')->orderBy('id')->paginate(30)->through(fn ($c) => $this->chat->summary($c, $actor));
+        // Opening a direct conversation creates it immediately (see ConnectMessenger's
+        // openDirect — "tapping the person IS the action"), so without this filter every
+        // chat a user merely opened, and never actually messaged or called through,
+        // would sit in their list forever looking like an ongoing conversation. Group/
+        // channel creation already requires an explicit name + Create step, so those
+        // always represent a deliberate action and are never filtered.
+        return $this->chat->visible($actor)
+            ->where(fn ($q) => $q->where('kind', '!=', 'direct')->orWhereHas('messages')->orWhereHas('calls'))
+            ->orderByDesc('updated_at')->orderBy('id')->paginate(30)->through(fn ($c) => $this->chat->summary($c, $actor));
     }
 
     public function channels(Request $request)

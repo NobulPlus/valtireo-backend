@@ -9,8 +9,14 @@ class StoreLeaveRequestRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        // Submitting your own leave is baseline employee self-service, not a
+        // role-gated capability — mirrors the fallback in
+        // LeaveRequestController::index(). leave_requests.create/.approve
+        // additionally let an HR/approver submit or target someone else's
+        // employee_id (see LeaveRequestService::targetEmployee()).
         return $this->user()?->can('leave_requests.create') === true
-            || $this->user()?->can('leave_requests.approve') === true;
+            || $this->user()?->can('leave_requests.approve') === true
+            || $this->user()?->employee?->status === 'active';
     }
 
     public function rules(): array

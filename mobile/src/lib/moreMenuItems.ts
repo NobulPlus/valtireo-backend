@@ -15,6 +15,7 @@ export const MORE_MENU_ITEMS = [
   { key: 'Directory', icon: 'people-outline', label: 'Directory', moduleColorKey: 'directory', module: null },
   { key: 'Calendar', icon: 'calendar-outline', label: 'Calendar', moduleColorKey: 'calendar', module: null },
   { key: 'Connect', icon: 'chatbubbles-outline', label: 'Connect', moduleColorKey: 'connect', module: 'connect' },
+  { key: 'Orbit', icon: 'grid-outline', label: 'Orbit', moduleColorKey: 'orbit', module: 'orbit' },
   { key: 'Assets', icon: 'laptop-outline', label: 'My assets', moduleColorKey: 'assets', module: 'assets' },
   { key: 'Documents', icon: 'document-text-outline', label: 'Documents', moduleColorKey: 'documents', module: 'employee_self_service' },
   { key: 'Payslips', icon: 'cash-outline', label: 'Payslips', moduleColorKey: 'payslips', module: 'payroll' },

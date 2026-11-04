@@ -41,6 +41,12 @@ export function navigateFromRoot(destination: NotificationDestination): void {
     case 'approvalDetail':
       navigationRef.navigate('Main', { screen: 'ApprovalsTab', params: { screen: 'ApprovalDetail', params: { approvalRequestId: destination.approvalRequestId } } });
       return;
+    case 'orbitWorkItemDetail':
+      navigationRef.navigate('Main', { screen: 'MoreTab', params: { screen: 'Orbit', params: { screen: 'OrbitWorkItemDetail', params: { itemKey: destination.itemKey } } } });
+      return;
+    case 'orbitMyWork':
+      navigationRef.navigate('Main', { screen: 'MoreTab', params: { screen: 'Orbit' } });
+      return;
     case 'unsupported':
       return;
   }

@@ -1,4 +1,5 @@
 import { formatMaxSize, isFileTooLarge, MAX_UPLOAD_BYTES, uploadFile } from '../lib/uploadFile';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { QueryError } from '../components/QueryError';
 import { useMemo, useState } from 'react';
@@ -60,6 +61,7 @@ export function UploadDocumentScreen({ navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <Text style={styles.label}>Document type</Text>
       {loadingTypes ? (
@@ -88,6 +90,7 @@ export function UploadDocumentScreen({ navigation }: Props) {
         {submitDocument.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Upload</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

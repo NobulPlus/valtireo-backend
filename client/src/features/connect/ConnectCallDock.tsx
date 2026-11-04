@@ -8,6 +8,41 @@ import { Button } from '@/components/ui/Button';
 import { ConnectAvatar } from './ConnectMedia';
 import type { Page, VoiceCall } from './chatTypes';
 
+/**
+ * Flashes the browser tab title and fires a desktop notification for a
+ * ringing incoming call — a 4s-polled card in the corner of the page was
+ * easy to miss entirely if Connect wasn't the tab someone had open. The
+ * notification is best-effort and only makes sense once the page isn't
+ * already visible (no point alerting someone already looking at the call
+ * card), and only fires once per call, not on every 4s poll tick.
+ */
+function useIncomingCallAlert(active: boolean, callerName: string) {
+  const notifiedRef = useRef(false);
+
+  useEffect(() => {
+    if (!active) { notifiedRef.current = false; return; }
+
+    const originalTitle = document.title;
+    let flashed = false;
+    const titleInterval = setInterval(() => {
+      document.title = flashed ? originalTitle : `📞 Incoming call — ${callerName}`;
+      flashed = !flashed;
+    }, 1000);
+
+    if (!notifiedRef.current && document.visibilityState !== 'visible' && 'Notification' in window) {
+      notifiedRef.current = true;
+      if (Notification.permission === 'granted') {
+        const notification = new Notification(`Incoming call — ${callerName}`, { body: 'Open Valtireo to answer.', icon: '/pwa-192.png', tag: 'connect-incoming-call' });
+        notification.onclick = () => { window.focus(); notification.close(); };
+      } else if (Notification.permission === 'default') {
+        void Notification.requestPermission();
+      }
+    }
+
+    return () => { clearInterval(titleInterval); document.title = originalTitle; };
+  }, [active, callerName]);
+}
+
 export function ConnectCallDock() {
   const { session, moduleByKey } = useAuth();
   const user = session?.user;
@@ -25,7 +60,9 @@ function CallPanel({ call }: { call: VoiceCall }) {
   const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState('');
   const person = call.incoming ? call.caller : call.callee;
+  const isIncomingRing = call.status === 'ringing' && call.incoming;
   const action = useMutation({ mutationFn: (action: string) => api.post(`/connect/calls/${call.id}/actions`, { action }), onSuccess: () => cache.invalidateQueries({ queryKey: ['connect', 'calls'] }) });
+  useIncomingCallAlert(isIncomingRing, person.name);
   useEffect(() => {
     if (call.status !== 'active') return;
     let alive = true;
@@ -45,7 +82,7 @@ function CallPanel({ call }: { call: VoiceCall }) {
     }).catch((e) => { if (alive) setError(e instanceof Error ? e.message : 'Could not connect microphone.'); });
     return () => { alive = false; session.removeAllListeners(); void session.disconnect(); room.current = null; };
   }, [call.id, call.status]);
-  return <aside aria-label="Connect voice call" className="fixed bottom-5 right-5 z-50 w-80 space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-xl">
+  return <aside aria-label="Connect voice call" className={`fixed bottom-5 right-5 z-50 w-80 space-y-3 rounded-2xl border border-border bg-surface p-5 shadow-xl ${isIncomingRing ? 'connect-call-ring' : ''}`}>
     <div className="flex items-center gap-3"><ConnectAvatar person={person} /><div><strong>{person.name}</strong><p className="text-sm text-muted">{call.status === 'ringing' ? (call.incoming ? 'Incoming voice call' : 'Calling…') : status}</p></div></div>
     {error || action.error ? <p role="alert" className="text-sm text-red-600">{error || action.error?.message}</p> : null}
     <div ref={container} />

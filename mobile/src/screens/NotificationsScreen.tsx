@@ -9,7 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../context/AuthContext';
 import { useMarkAllNotificationsRead, useMarkNotificationRead, useNotificationList } from '../features/notifications/api';
-import { goIntoMoreTab, goToConnectConversation, type HomeAreaNavigation } from '../lib/navigation';
+import { goIntoMoreTab, goToConnectConversation, goToOrbitWorkItem, type HomeAreaNavigation } from '../lib/navigation';
 import { isEligibleForManagerHome } from '../lib/managerEligibility';
 import { resolveNotificationDestination, type NotificationDestination } from '../lib/notificationNavigation';
 import { radius, spacing, useTheme, type ThemeColors, type Typography } from '../theme';
@@ -42,6 +42,12 @@ function navigateForNotification(destination: NotificationDestination, navigatio
       return;
     case 'approvalDetail':
       navigation.navigate('ApprovalsTab', { screen: 'ApprovalDetail', params: { approvalRequestId: destination.approvalRequestId } });
+      return;
+    case 'orbitWorkItemDetail':
+      goToOrbitWorkItem(navigation, destination.itemKey);
+      return;
+    case 'orbitMyWork':
+      goIntoMoreTab(navigation, 'Orbit');
       return;
     case 'unsupported':
       return;
@@ -104,6 +110,7 @@ export function NotificationsScreen({ navigation }: Props) {
     employeeSelfService: moduleByKey('employee_self_service')?.can_access === true,
     connect: moduleByKey('connect')?.can_access === true,
     approvals: isEligibleForManagerHome(session),
+    orbit: moduleByKey('orbit')?.can_access === true,
   };
 
   function openNotification(item: NotificationEntry) {

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import {
   isCancellableTicket,
@@ -120,6 +121,7 @@ export function TicketDetailScreen({ route, navigation }: Props) {
   return (
     <View style={styles.root}>
     <ProductIconField />
+    <KeyboardAvoidingScreen>
     <ScrollView style={styles.flex} contentContainerStyle={styles.container}>
       <View style={styles.badgeRow}>
         <Text style={[styles.status, { color: statusColors[ticket.status] ?? colors.muted }]}>{ticket.status.replace('_', ' ')}</Text>
@@ -207,6 +209,7 @@ export function TicketDetailScreen({ route, navigation }: Props) {
         {addComment.isPending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Add comment</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingScreen>
     </View>
   );
 }

@@ -7,6 +7,7 @@ import { PayslipsStack } from './PayslipsStack';
 import { AssetsStack } from './AssetsStack';
 import { LifestyleStack, type LifestyleStackParamList } from './LifestyleStack';
 import { ConnectStack, type ConnectStackParamList } from './ConnectStack';
+import { OrbitStack, type OrbitStackParamList } from './OrbitStack';
 import { navigatorScreenOptions, useTheme } from '../theme';
 
 export type MoreStackParamList = {
@@ -24,6 +25,9 @@ export type MoreStackParamList = {
   /** Same nested-navigator convention as `Lifestyle` above — a notification deep link
    * lands straight on a specific conversation instead of the Connect list. */
   Connect: { screen: 'ConnectConversation'; params: ConnectStackParamList['ConnectConversation'] } | undefined;
+  /** Same nested-navigator convention as `Lifestyle`/`Connect` above — a notification
+   * deep link lands straight on a specific work item instead of the My Work list. */
+  Orbit: { screen: 'OrbitWorkItemDetail'; params: OrbitStackParamList['OrbitWorkItemDetail'] } | undefined;
 };
 
 const Stack = createNativeStackNavigator<MoreStackParamList>();
@@ -44,6 +48,7 @@ export function MoreStack() {
       <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: 'Calendar' }} />
       <Stack.Screen name="Lifestyle" component={LifestyleStack} options={{ headerShown: false }} />
       <Stack.Screen name="Connect" component={ConnectStack} options={{ headerShown: false }} />
+      <Stack.Screen name="Orbit" component={OrbitStack} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

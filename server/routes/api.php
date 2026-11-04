@@ -32,6 +32,14 @@ use App\Http\Controllers\Api\LeaveTypeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrganizationVerificationController;
 use App\Http\Controllers\Api\OperationsCenterController;
+use App\Http\Controllers\Api\OrbitAttachmentController;
+use App\Http\Controllers\Api\OrbitCommentController;
+use App\Http\Controllers\Api\OrbitLabelController;
+use App\Http\Controllers\Api\OrbitMyWorkController;
+use App\Http\Controllers\Api\OrbitProjectController;
+use App\Http\Controllers\Api\OrbitWorkItemController;
+use App\Http\Controllers\Api\OrbitWorkItemLinkController;
+use App\Http\Controllers\Api\OrbitWorkspaceController;
 use App\Http\Controllers\Api\PlatformModuleController;
 use App\Http\Controllers\Api\PlatformOrganizationController;
 use App\Http\Controllers\Api\PayrollConfigurationController;
@@ -131,6 +139,64 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/meetings/{meeting}/join', [\App\Http\Controllers\Api\ConnectController::class, 'join'])->whereUuid('meeting')->middleware('throttle:20,1,connect-join:');
         Route::post('/meetings/{meeting}/end', [\App\Http\Controllers\Api\ConnectController::class, 'end'])->whereUuid('meeting');
     });
+    Route::prefix('orbit')->middleware(EnsureModuleIsSubscribed::class.':orbit,true')->group(function () {
+        Route::get('/my-work', [OrbitMyWorkController::class, 'index']);
+        Route::get('/people', [OrbitWorkspaceController::class, 'people']);
+
+        Route::get('/workspaces', [OrbitWorkspaceController::class, 'index']);
+        Route::post('/workspaces', [OrbitWorkspaceController::class, 'store']);
+        Route::get('/workspaces/{workspace}', [OrbitWorkspaceController::class, 'show']);
+        Route::patch('/workspaces/{workspace}', [OrbitWorkspaceController::class, 'update']);
+        Route::post('/workspaces/{workspace}/archive', [OrbitWorkspaceController::class, 'archive']);
+        Route::post('/workspaces/{workspace}/restore', [OrbitWorkspaceController::class, 'restore']);
+        Route::get('/workspaces/{workspace}/members', [OrbitWorkspaceController::class, 'members']);
+        Route::post('/workspaces/{workspace}/members', [OrbitWorkspaceController::class, 'addMember']);
+        Route::patch('/workspaces/{workspace}/members/{member}', [OrbitWorkspaceController::class, 'updateMember']);
+        Route::delete('/workspaces/{workspace}/members/{member}', [OrbitWorkspaceController::class, 'removeMember']);
+
+        Route::get('/workspaces/{workspace}/projects', [OrbitProjectController::class, 'index']);
+        Route::post('/workspaces/{workspace}/projects', [OrbitProjectController::class, 'store']);
+        Route::get('/projects/{project}', [OrbitProjectController::class, 'show']);
+        Route::patch('/projects/{project}', [OrbitProjectController::class, 'update']);
+        Route::post('/projects/{project}/archive', [OrbitProjectController::class, 'archive']);
+        Route::post('/projects/{project}/restore', [OrbitProjectController::class, 'restore']);
+        Route::get('/projects/{project}/members', [OrbitProjectController::class, 'members']);
+        Route::post('/projects/{project}/members', [OrbitProjectController::class, 'addMember']);
+        Route::patch('/projects/{project}/members/{member}', [OrbitProjectController::class, 'updateMember']);
+        Route::delete('/projects/{project}/members/{member}', [OrbitProjectController::class, 'removeMember']);
+        Route::get('/projects/{project}/statuses', [OrbitProjectController::class, 'statuses']);
+        Route::post('/projects/{project}/statuses', [OrbitProjectController::class, 'storeStatus']);
+        Route::patch('/projects/{project}/statuses/{status}', [OrbitProjectController::class, 'updateStatus']);
+        Route::delete('/projects/{project}/statuses/{status}', [OrbitProjectController::class, 'destroyStatus']);
+        Route::get('/projects/{project}/labels', [OrbitLabelController::class, 'index']);
+        Route::post('/projects/{project}/labels', [OrbitLabelController::class, 'store']);
+        Route::patch('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'update']);
+        Route::delete('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'destroy']);
+
+        Route::get('/projects/{project}/work-items', [OrbitWorkItemController::class, 'index']);
+        Route::post('/projects/{project}/work-items', [OrbitWorkItemController::class, 'store']);
+        Route::get('/work-items/{workItem:key}', [OrbitWorkItemController::class, 'show']);
+        Route::patch('/work-items/{workItem:key}', [OrbitWorkItemController::class, 'update']);
+        Route::post('/work-items/{workItem:key}/move', [OrbitWorkItemController::class, 'move']);
+        Route::post('/work-items/{workItem:key}/archive', [OrbitWorkItemController::class, 'archive']);
+        Route::post('/work-items/{workItem:key}/watch', [OrbitWorkItemController::class, 'watch']);
+        Route::delete('/work-items/{workItem:key}/watch', [OrbitWorkItemController::class, 'unwatch']);
+
+        Route::get('/work-items/{workItem:key}/comments', [OrbitCommentController::class, 'index']);
+        Route::post('/work-items/{workItem:key}/comments', [OrbitCommentController::class, 'store']);
+        Route::patch('/comments/{comment}', [OrbitCommentController::class, 'update']);
+        Route::delete('/comments/{comment}', [OrbitCommentController::class, 'destroy']);
+
+        Route::post('/work-items/{workItem:key}/attachments', [OrbitAttachmentController::class, 'storeForWorkItem']);
+        Route::post('/comments/{comment}/attachments', [OrbitAttachmentController::class, 'storeForComment']);
+        Route::get('/attachments/{attachment}/file', [OrbitAttachmentController::class, 'file']);
+        Route::delete('/attachments/{attachment}', [OrbitAttachmentController::class, 'destroy']);
+
+        Route::get('/work-items/{workItem:key}/links', [OrbitWorkItemLinkController::class, 'index']);
+        Route::post('/work-items/{workItem:key}/links', [OrbitWorkItemLinkController::class, 'store']);
+        Route::delete('/work-item-links/{link}', [OrbitWorkItemLinkController::class, 'destroy']);
+    });
+
     Route::prefix('lifestyle')->middleware(EnsureModuleIsSubscribed::class.':employee_self_service')->group(function () {
         Route::get('/preferences', [EmployeeLifestyleController::class, 'preferences']);
         Route::patch('/preferences', [EmployeeLifestyleController::class, 'updatePreferences']);

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from '../components/Avatar';
+import { KeyboardAvoidingScreen } from '../components/KeyboardAvoidingScreen';
 import { ProductIconField } from '../components/ProductIconField';
 import { useConnectConversation, useConnectPeople, useConversationMembership } from '../features/connect/api';
 import { radius, spacing, useTheme, type ThemeColors } from '../theme';
@@ -40,6 +41,7 @@ export function ConnectMembersScreen({ route, navigation }: Props) {
   return (
     <View style={styles.flex}>
       <ProductIconField />
+      <KeyboardAvoidingScreen>
       <Text style={styles.notice}>New members can read existing history. Removed members lose conversation and attachment access.</Text>
       <FlatList
         data={c.members}
@@ -97,6 +99,7 @@ export function ConnectMembersScreen({ route, navigation }: Props) {
           </Pressable>
         ) : null}
       />
+      </KeyboardAvoidingScreen>
     </View>
   );
 }

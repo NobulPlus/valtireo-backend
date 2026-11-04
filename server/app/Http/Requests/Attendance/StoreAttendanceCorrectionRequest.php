@@ -8,8 +8,14 @@ class StoreAttendanceCorrectionRequest extends FormRequest
 {
     public function authorize(): bool
     {
+        // Requesting a correction to your own attendance is baseline self-service,
+        // not a role-gated capability — mirrors StoreLeaveRequestRequest's and
+        // StoreAttendanceRecordRequest's fallback. AttendanceService::requestCorrection()
+        // already rejects a caller without attendance.update whose employee_id
+        // doesn't match the record, so this fallback can't target someone else's record.
         return $this->user()?->can('attendance.create') === true
-            || $this->user()?->can('attendance.update') === true;
+            || $this->user()?->can('attendance.update') === true
+            || $this->user()?->employee?->status === 'active';
     }
 
     public function rules(): array

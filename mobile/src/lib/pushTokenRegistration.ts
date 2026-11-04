@@ -33,6 +33,26 @@ export async function ensurePushPermission(): Promise<boolean> {
       name: 'Valtireo',
       importance: Notifications.AndroidImportance.HIGH,
     });
+    // A separate, louder channel for Connect's incoming-call push (see
+    // ExpoPushChannel.php's channelId: 'calls' branch) — MAX importance and
+    // bypassDnd give it a heads-up banner + ringtone-style sound even over Do
+    // Not Disturb while the app is backgrounded. This is still an ordinary
+    // Android notification, not a true full-screen incoming-call UI: Expo's
+    // managed push API has no fullScreenIntent equivalent, and a fully killed
+    // app (especially on iOS) still needs real VoIP push + CallKit to wake
+    // into a native call screen, which is out of scope for this pass.
+    await Notifications.setNotificationChannelAsync('calls', {
+      name: 'Incoming calls',
+      importance: Notifications.AndroidImportance.MAX,
+      bypassDnd: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      vibrationPattern: [0, 400, 200, 400, 200, 400],
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.NOTIFICATION_RINGTONE,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+        flags: { enforceAudibility: true, requestHardwareAudioVideoSynchronization: false },
+      },
+    });
   }
   const current = await Notifications.getPermissionsAsync();
   if (current.status === 'granted') return true;

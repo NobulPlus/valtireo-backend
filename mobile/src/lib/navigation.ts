@@ -24,6 +24,7 @@ export interface HomeAreaNavigation {
   navigate(screen: 'ApprovalsTab', params: { screen: 'ApprovalDetail'; params: ApprovalsStackParamList['ApprovalDetail'] }): void;
   navigate(screen: 'MoreTab', params: { screen: 'Lifestyle'; params: MoreStackParamList['Lifestyle'] }): void;
   navigate(screen: 'MoreTab', params: { screen: 'Connect'; params: MoreStackParamList['Connect'] }): void;
+  navigate(screen: 'MoreTab', params: { screen: 'Orbit'; params: MoreStackParamList['Orbit'] }): void;
   navigate(screen: 'MoreTab', params: { screen: keyof MoreStackParamList }): void;
   getParent(): { getState(): unknown } | undefined;
 }
@@ -82,5 +83,16 @@ export function goToConnectConversation(navigation: HomeAreaNavigation, conversa
   navigation.navigate('MoreTab', {
     screen: 'Connect',
     params: { screen: 'ConnectConversation', params: { conversationId } },
+  });
+}
+
+/** Same reset-before-switch pattern as goToConnectConversation, for an Orbit work item deep link. */
+export function goToOrbitWorkItem(navigation: HomeAreaNavigation, itemKey: string) {
+  if (currentMoreTabScreen(navigation) !== 'Orbit') {
+    navigation.navigate('MoreTab', { screen: 'MoreMenu' });
+  }
+  navigation.navigate('MoreTab', {
+    screen: 'Orbit',
+    params: { screen: 'OrbitWorkItemDetail', params: { itemKey } },
   });
 }
