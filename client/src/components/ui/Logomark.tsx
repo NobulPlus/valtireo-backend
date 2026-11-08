@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 
 /**
- * The Valtireo mark: a layered V built from two converging strokes (teal +
+ * The OrgaviaHR mark: a layered V built from two converging strokes (teal +
  * blue, echoing the product's core identity colors), a gold node marking
  * decision/approval/governance moments, and a cyan node marking AI and
  * automation moments. Source: docs/valtireo-brand-guide-v1.pdf.

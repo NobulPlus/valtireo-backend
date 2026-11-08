@@ -32,7 +32,7 @@ function useIncomingCallAlert(active: boolean, callerName: string) {
     if (!notifiedRef.current && document.visibilityState !== 'visible' && 'Notification' in window) {
       notifiedRef.current = true;
       if (Notification.permission === 'granted') {
-        const notification = new Notification(`Incoming call — ${callerName}`, { body: 'Open Valtireo to answer.', icon: '/pwa-192.png', tag: 'connect-incoming-call' });
+        const notification = new Notification(`Incoming call — ${callerName}`, { body: 'Open OrgaviaHR to answer.', icon: '/pwa-192.png', tag: 'connect-incoming-call' });
         notification.onclick = () => { window.focus(); notification.close(); };
       } else if (Notification.permission === 'default') {
         void Notification.requestPermission();

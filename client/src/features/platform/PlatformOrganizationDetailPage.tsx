@@ -235,7 +235,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
       {isSuspended && (
         <div className="mb-5">
           <Alert tone="warning">
-            This organization is suspended. Its users cannot sign in or use protected Valtireo APIs until it is reactivated.
+            This organization is suspended. Its users cannot sign in or use protected OrgaviaHR APIs until it is reactivated.
           </Alert>
         </div>
       )}

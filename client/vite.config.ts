@@ -19,9 +19,9 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         manifest: {
-          name: 'Valtireo',
-          short_name: 'Valtireo',
-          description: 'Valtireo — the organizational OS for people, requests, and decisions.',
+          name: 'OrgaviaHR',
+          short_name: 'OrgaviaHR',
+          description: 'OrgaviaHR — the organizational OS for people, requests, and decisions.',
           theme_color: '#123F3A',
           background_color: '#F7FAF9',
           display: 'standalone',

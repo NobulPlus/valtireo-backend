@@ -73,7 +73,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Core',
     scope: 'core',
     items: [
-      { label: 'Valtireo console', to: '/platform', icon: ShieldCheck, platformAdminOnly: true },
+      { label: 'OrgaviaHR console', to: '/platform', icon: ShieldCheck, platformAdminOnly: true },
       { label: 'Error logs', to: '/platform/error-logs', icon: TriangleAlert, platformAdminOnly: true },
       { label: 'Dashboard', to: '/dashboard', icon: Gauge },
       { label: 'Calendar', to: '/calendar', icon: CalendarDays },

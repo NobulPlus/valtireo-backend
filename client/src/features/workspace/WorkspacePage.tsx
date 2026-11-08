@@ -173,7 +173,7 @@ function WorkspaceContent() {
                 <Input
                   value={form.short_name}
                   onChange={(event) => setForm({ ...form, short_name: event.target.value })}
-                  placeholder={form.name || 'e.g. Valtireo'}
+                  placeholder={form.name || 'e.g. OrgaviaHR'}
                   maxLength={40}
                 />
               </Field>
@@ -524,7 +524,7 @@ function OrgLogoField({ logoUrl }: { logoUrl: string | null }) {
   async function handleRemove() {
     try {
       await removeMutation.mutateAsync();
-      toast.success('Logo removed', 'Switched back to the Valtireo mark.');
+      toast.success('Logo removed', 'Switched back to the OrgaviaHR mark.');
     } catch (error) {
       toast.error('Could not remove logo', error instanceof ApiError ? error.message : 'Something went wrong. Please try again.');
     }

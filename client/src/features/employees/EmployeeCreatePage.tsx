@@ -566,7 +566,7 @@ function EmployeeCreateContent() {
               <div className="flex items-start gap-2.5 rounded-md bg-surface-soft px-3 py-2.5 text-xs leading-5 text-muted">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-teal" />
                 <span>
-                  Separate from designation — this controls what the employee can access in Valtireo, not their job title.{' '}
+                  Separate from designation — this controls what the employee can access in OrgaviaHR, not their job title.{' '}
                   {selectedRoleLabel ? (
                     <>
                       This employee will get <span className="font-medium text-strong">{selectedRoleLabel}</span> access once

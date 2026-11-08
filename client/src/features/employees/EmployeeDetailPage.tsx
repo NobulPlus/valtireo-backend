@@ -1115,7 +1115,7 @@ function EmployeeDetailContent({ employee }: { employee: Employee }) {
           <div className="border-t border-border pt-5">
             <h3 className="text-sm font-semibold text-strong">System access</h3>
             <p className="mt-1 text-xs text-muted">
-              Separate from designation — controls what this employee can access in Valtireo.
+              Separate from designation — controls what this employee can access in OrgaviaHR.
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {(lookups.data?.assignable_roles ?? []).length > 0 ? (

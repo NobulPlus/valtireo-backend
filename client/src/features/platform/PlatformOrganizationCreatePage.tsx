@@ -420,7 +420,7 @@ export function PlatformOrganizationCreatePage() {
     <div>
       <PageHeader
         title="Provision organization"
-        subtitle="Create a new customer workspace on behalf of Valtireo."
+        subtitle="Create a new customer workspace on behalf of OrgaviaHR."
         breadcrumbs={[{ label: 'Platform console', to: '/platform' }, { label: 'Provision organization' }]}
         actions={
           <Link
