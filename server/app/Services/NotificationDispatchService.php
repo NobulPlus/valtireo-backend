@@ -62,7 +62,7 @@ class NotificationDispatchService
         $this->notify($admin, [
             'category' => 'organization_onboarding',
             'event' => 'organization.admin_invited',
-            'title' => "Welcome to {$organization->name} on Valtireo",
+            'title' => "Welcome to {$organization->name} on OrgaviaHR",
             'message' => "You have been invited as the Organization Admin for {$organization->name}. Use the setup link to choose your password and complete workspace setup.",
             'action_label' => 'Set password',
             'action_url' => $setupUrl,
@@ -85,7 +85,7 @@ class NotificationDispatchService
             $this->notify($employee->user, [
                 'category' => 'employee_onboarding',
                 'event' => 'employee.invited',
-                'title' => 'Complete your Valtireo invitation',
+                'title' => 'Complete your OrgaviaHR invitation',
                 'message' => "You have been invited to join {$employee->organization?->name}.",
                 'action_label' => 'Accept invitation',
                 'action_url' => "/accept-invitation/{$plainToken}",

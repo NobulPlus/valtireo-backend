@@ -15,7 +15,7 @@ class EnsureOrganizationIsActive
             $user->tokens()->delete();
 
             return response()->json([
-                'message' => 'This account is not currently allowed to access Valtireo.',
+                'message' => 'This account is not currently allowed to access OrgaviaHR.',
                 'code' => 'account_access_revoked',
             ], 401);
         }
@@ -25,7 +25,7 @@ class EnsureOrganizationIsActive
         if (in_array($organization?->status, ['suspended', 'rejected'], true)) {
             $user->tokens()->delete();
             return response()->json([
-                'message' => 'This organization is not currently allowed to access Valtireo. Please contact Valtireo support.',
+                'message' => 'This organization is not currently allowed to access OrgaviaHR. Please contact OrgaviaHR support.',
                 'code' => 'organization_access_revoked',
             ], 403);
         }

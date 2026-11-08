@@ -28,7 +28,7 @@ class ExpoPushChannel
         if ($tokens->isEmpty()) return;
 
         $data = $notification->toArray($notifiable);
-        $title = $data['title'] ?? 'Valtireo';
+        $title = $data['title'] ?? 'OrgaviaHR';
         $body = $data['message'] ?? '';
         // Connect's incoming-call push gets the loudest treatment the managed-Expo
         // push API allows: the dedicated MAX-importance, bypassDnd 'calls' Android

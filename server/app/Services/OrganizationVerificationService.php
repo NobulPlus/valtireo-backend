@@ -133,7 +133,7 @@ class OrganizationVerificationService
 
         if (! $summary['is_ready_for_review']) {
             throw ValidationException::withMessages([
-                'documents' => ['Upload all required organization verification documents before submitting for Valtireo review.'],
+                'documents' => ['Upload all required organization verification documents before submitting for OrgaviaHR review.'],
             ]);
         }
 
@@ -143,7 +143,7 @@ class OrganizationVerificationService
             ]);
         }
 
-        $this->transitionOrganization($organization, $actor, 'pending_approval', 'Organization submitted verification documents for Valtireo review.');
+        $this->transitionOrganization($organization, $actor, 'pending_approval', 'Organization submitted verification documents for OrgaviaHR review.');
 
         return $this->summary($organization->refresh());
     }

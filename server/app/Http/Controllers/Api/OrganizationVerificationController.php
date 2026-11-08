@@ -64,7 +64,7 @@ class OrganizationVerificationController extends Controller
         abort_unless($request->user()->can('workspace_settings.update'), 403);
 
         return response()->json([
-            'message' => 'Organization verification submitted for Valtireo review.',
+            'message' => 'Organization verification submitted for OrgaviaHR review.',
             'verification' => $verification->submitForReview($request->user()),
         ]);
     }

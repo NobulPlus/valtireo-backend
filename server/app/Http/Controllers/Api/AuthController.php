@@ -28,7 +28,7 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request, ModuleEntitlementService $modules, WorkspaceSettingsService $workspace, DashboardService $dashboard): JsonResponse
     {
-        abort_unless(config('auth.public_registration'), 403, 'Public registration is disabled. Valtireo workspaces are created by platform admins.');
+        abort_unless(config('auth.public_registration'), 403, 'Public registration is disabled. OrgaviaHR workspaces are created by platform admins.');
 
         $user = User::query()->create([
             'name' => $request->string('name')->toString(),
@@ -58,7 +58,7 @@ class AuthController extends Controller
 
         if (in_array($user->organization?->status, ['suspended', 'rejected'], true)) {
             throw ValidationException::withMessages([
-                'email' => ['This organization is not currently allowed to access Valtireo. Please contact Valtireo support.'],
+                'email' => ['This organization is not currently allowed to access OrgaviaHR. Please contact OrgaviaHR support.'],
             ]);
         }
 
@@ -134,7 +134,7 @@ class AuthController extends Controller
             'token' => ['This invitation link is invalid or has already been used.'],
         ]));
         throw_if($outcome === 'expired', ValidationException::withMessages([
-            'token' => ['This invitation link has expired. Ask Valtireo to resend the organization admin invitation.'],
+            'token' => ['This invitation link has expired. Ask OrgaviaHR to resend the organization admin invitation.'],
         ]));
         throw_if($outcome === 'unlinked', ValidationException::withMessages([
             'token' => ['This invitation is not linked to an organization admin account.'],
@@ -189,7 +189,7 @@ class AuthController extends Controller
         }
 
         return response()->json([
-            'message' => 'If that email has a Valtireo account, we\'ve sent a password reset code to it.',
+            'message' => 'If that email has an OrgaviaHR account, we\'ve sent a password reset code to it.',
         ]);
     }
 

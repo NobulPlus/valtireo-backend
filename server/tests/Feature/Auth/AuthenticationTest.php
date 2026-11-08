@@ -25,7 +25,7 @@ class AuthenticationTest extends TestCase
             'password' => 'Password1!',
             'password_confirmation' => 'Password1!',
         ])->assertForbidden()
-            ->assertJsonPath('message', 'Public registration is disabled. Valtireo workspaces are created by platform admins.');
+            ->assertJsonPath('message', 'Public registration is disabled. OrgaviaHR workspaces are created by platform admins.');
     }
 
     public function test_user_can_register_when_public_registration_is_enabled(): void
@@ -242,7 +242,7 @@ class AuthenticationTest extends TestCase
 
         $this->postJson('/api/auth/forgot-password', ['email' => $user->email])
             ->assertOk()
-            ->assertJsonPath('message', 'If that email has a Valtireo account, we\'ve sent a password reset code to it.');
+            ->assertJsonPath('message', 'If that email has an OrgaviaHR account, we\'ve sent a password reset code to it.');
 
         Notification::assertSentTo($user, PasswordResetCodeNotification::class);
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
@@ -254,7 +254,7 @@ class AuthenticationTest extends TestCase
 
         $this->postJson('/api/auth/forgot-password', ['email' => 'nobody@valtireo.test'])
             ->assertOk()
-            ->assertJsonPath('message', 'If that email has a Valtireo account, we\'ve sent a password reset code to it.');
+            ->assertJsonPath('message', 'If that email has an OrgaviaHR account, we\'ve sent a password reset code to it.');
 
         Notification::assertNothingSent();
     }
