@@ -21,7 +21,7 @@
 @import 'flag-icons/css/flag-icons.min.css';
 
 /*
- * Valtireo design tokens.
+ * OrgaviaHR design tokens.
  * Source of truth: docs/valtireo-brand-guide-v1.pdf
  *                   docs/valtireo-design-system-foundations-v1.pdf
  *
@@ -512,6 +512,21 @@ body {
   }
 }
 
+.workspace-modal-rise {
+  animation: workspace-modal-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes workspace-modal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-fade-in {
     animation: none;
@@ -544,5 +559,11 @@ body {
 
   .connect-call-ring {
     animation: none;
+  }
+
+  .workspace-modal-rise {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 }

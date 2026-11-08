@@ -60,7 +60,7 @@ export function LoginPage() {
         if (error.status === 422) {
           toast.error('Sign in failed', error.fieldError('email') ?? error.message);
         } else if (error.status >= 500 || error.status === 0) {
-          toast.error('Sign in failed', 'Valtireo could not complete sign in right now. Please try again in a moment.');
+          toast.error('Sign in failed', 'OrgaviaHR could not complete sign in right now. Please try again in a moment.');
         } else {
           toast.error('Sign in failed', error.message);
         }
@@ -78,10 +78,7 @@ export function LoginPage() {
           <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-10 py-9 xl:px-14">
             <header className="login-fade-in flex items-center gap-3">
               <Logomark size={22} />
-              <div>
-                <p className="font-display text-base font-semibold tracking-normal">Valtireo</p>
-                <p className="text-xs text-white/52">Organizational OS</p>
-              </div>
+              <p className="font-display text-base font-semibold tracking-normal">OrgaviaHR</p>
             </header>
 
             <div className="grid gap-8 xl:grid-cols-[minmax(360px,0.82fr)_minmax(320px,0.9fr)] xl:items-center">
@@ -116,10 +113,7 @@ export function LoginPage() {
           <div className="w-full max-w-[390px]">
             <div className="mb-9 flex items-center gap-3 lg:hidden">
               <Logomark size={21} />
-              <div>
-                <p className="font-display text-base font-semibold text-strong">Valtireo</p>
-                <p className="text-xs text-muted">Organizational OS</p>
-              </div>
+              <p className="font-display text-base font-semibold text-strong">OrgaviaHR</p>
             </div>
 
             <div
@@ -134,7 +128,7 @@ export function LoginPage() {
                   Sign in to your workspace
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Use your organization-issued Valtireo credentials to continue.
+                  Use your organization-issued OrgaviaHR credentials to continue.
                 </p>
               </div>
 
@@ -264,7 +258,7 @@ function ModuleOrbit() {
 
       <div className="login-orbit-hub">
         <Logomark size={26} withBackground={false} />
-        <span>Valtireo</span>
+        <span>OrgaviaHR</span>
       </div>
 
       {ORBIT_NODES.map((node, index) => {
