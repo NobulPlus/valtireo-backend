@@ -30,7 +30,7 @@ export async function ensurePushPermission(): Promise<boolean> {
     // app, 'default' included — passing it throws "Custom sound 'default' not
     // found". Omitting the field is what actually gets the system default.
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'Valtireo',
+      name: 'OrgaviaHR',
       importance: Notifications.AndroidImportance.HIGH,
     });
     // A separate, louder channel for Connect's incoming-call push (see

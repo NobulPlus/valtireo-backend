@@ -20,7 +20,7 @@ async function ensureMicrophonePermission(): Promise<boolean> {
   if (Platform.OS !== 'android') return true;
   const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
     title: 'Microphone access',
-    message: 'Valtireo needs your microphone to make and receive Connect voice calls.',
+    message: 'OrgaviaHR needs your microphone to make and receive Connect voice calls.',
     buttonPositive: 'Allow',
   });
   return granted === PermissionsAndroid.RESULTS.GRANTED;

@@ -4,8 +4,22 @@ Employee self-service app using Expo SDK 57. The brand assets match the web clie
 
 ## Local checks
 
-Run `npm ci`, `npm run lint`, `npm run typecheck`, and `npm test` in this directory. Run `npm start` to open Expo.
-Copy `.env.example` to `.env` and set `EXPO_PUBLIC_API_BASE_URL` to the API address reachable by your device. An Android emulator can use `10.0.2.2`; a physical phone needs a reachable LAN or HTTPS address.
+Run `npm ci`, `npm run lint`, `npm run typecheck`, and `npm test` in this directory.
+
+Use an explicit target when opening Expo:
+
+```bash
+npm run start:local
+npm run start:staging
+npm run android:local
+npm run android:staging
+```
+
+The local target uses the configured Tailscale/LAN Laravel address. The staging
+target uses `https://orgaviahr-staging-api.onrender.com/api`. These commands
+clear Metro's cache and inject the target for that process, so switching never
+requires editing `.env`. An Android emulator can instead use `10.0.2.2`; a
+physical phone needs a reachable LAN or HTTPS address.
 
 ## Installable builds
 

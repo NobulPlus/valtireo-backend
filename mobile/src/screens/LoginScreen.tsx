@@ -127,8 +127,8 @@ export function LoginScreen({ navigation }: Props) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.brandBlock}>
-            <Image source={require('../../assets/brand-mark.png')} style={styles.logo} accessibilityLabel="Valtireo logo" />
-            <Text style={styles.wordmark}>Valtireo</Text>
+            <Image source={require('../../assets/brand-mark.png')} style={styles.logo} accessibilityLabel="OrgaviaHR logo" />
+            <Text style={styles.wordmark}>OrgaviaHR</Text>
             <Text style={styles.tagline}>People · Work · Progress</Text>
           </View>
 

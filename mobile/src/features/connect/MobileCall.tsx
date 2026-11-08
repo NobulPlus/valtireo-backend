@@ -83,7 +83,7 @@ export function MobileCall({ call }: { call: VoiceCall }) {
       </View>
 
       {!nativeCallsSupported ? (
-        <Text style={styles.notice}>Live calls need a Valtireo development build. Expo Go supports messaging and voice notes.</Text>
+        <Text style={styles.notice}>Live calls need an OrgaviaHR development build. Expo Go supports messaging and voice notes.</Text>
       ) : null}
 
       {call.status === 'active' && credentials ? (

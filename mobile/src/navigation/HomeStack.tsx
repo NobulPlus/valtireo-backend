@@ -25,7 +25,7 @@ export type HomeStackParamList = {
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
-/** The org's own short name, not the Valtireo product name — this is the employee's workspace, not an ad for the platform. Falls back to "Valtireo" only if the org hasn't set one. The logo sits here, next to the name, instead of being repeated again in the Home screen body. */
+/** The org's own short name, not the OrgaviaHR product name — this is the employee's workspace, not an ad for the platform. Falls back to "OrgaviaHR" only if the org hasn't set one. The logo sits here, next to the name, instead of being repeated again in the Home screen body. */
 function HomeHeaderTitle() {
   const { session } = useAuth();
   const { typography } = useTheme();
@@ -33,7 +33,7 @@ function HomeHeaderTitle() {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       {workspace ? <Avatar uri={workspace.identity.logo_url} name={workspace.workspace_name} size={22} /> : null}
-      <Text style={typography.heading}>{workspace?.identity.short_name || 'Valtireo'}</Text>
+      <Text style={typography.heading}>{workspace?.identity.short_name || 'OrgaviaHR'}</Text>
     </View>
   );
 }
