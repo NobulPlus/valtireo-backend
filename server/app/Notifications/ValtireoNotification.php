@@ -4,10 +4,21 @@ namespace App\Notifications;
 
 use App\Notifications\Channels\ExpoPushChannel;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ValtireoNotification extends Notification
+/**
+ * Runs through the queue (QUEUE_CONNECTION, worker already running via
+ * `composer dev`'s queue:listen) rather than inline on the request that
+ * triggered it. Fanning out to every recipient of e.g. an org-wide
+ * calendar event means one HTTP push call per recipient with a device
+ * token (ExpoPushChannel, up to a 10s timeout each) — synchronously,
+ * that held the triggering request open until every recipient was
+ * processed. Tests run with QUEUE_CONNECTION=sync, so this executes
+ * inline there and existing assertions are unaffected.
+ */
+class ValtireoNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
