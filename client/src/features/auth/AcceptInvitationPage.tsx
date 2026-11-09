@@ -88,10 +88,7 @@ export function AcceptInvitationPage({ mode = 'employee' }: { mode?: 'employee' 
       <div className="w-full max-w-[390px]">
         <div className="mb-9 flex items-center justify-center gap-3">
           <Logomark size={21} />
-          <div>
-            <p className="font-display text-base font-semibold text-strong">OrgaviaHR</p>
-            <p className="text-xs text-muted">Organizational OS</p>
-          </div>
+          <p className="font-display text-base font-semibold text-strong">OrgaviaHR</p>
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-6 shadow-[0_18px_60px_rgba(18,63,58,0.10)] sm:p-8">

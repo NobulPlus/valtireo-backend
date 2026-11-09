@@ -50,7 +50,7 @@ export const industries = [
 
 export const faqCategories = [
   { category: 'About OrgaviaHR', qa: [
-    ['What is an Organizational OS?', 'A connected workspace for the people, structure, documents, requests, and decisions that keep an organization running. OrgaviaHR brings these workflows together instead of treating each one as a separate tool.'],
+    ['What is OrgaviaHR?', 'A connected workspace for the people, structure, documents, requests, and decisions that keep an organization running. OrgaviaHR brings these workflows together instead of treating each one as a separate tool.'],
     ['Is OrgaviaHR only for HR teams?', 'People operations are a core part of OrgaviaHR, but the platform also covers approval workflows, document compliance, internal services, assets, and reporting. Managers, employees, administrators, and support teams each have a role.'],
   ]},
   { category: 'Getting started', qa: [
