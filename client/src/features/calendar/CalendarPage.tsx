@@ -147,11 +147,13 @@ function EventFormModal({
   event,
   canManageOrgWide,
   departmentOptions,
+  defaultDate,
   onClose,
 }: {
   event: CompanyEvent | 'new' | null;
   canManageOrgWide: boolean;
   departmentOptions: Array<{ value: string; label: string }>;
+  defaultDate: string;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -162,8 +164,8 @@ function EventFormModal({
 
   const [title, setTitle] = useState(event && event !== 'new' ? event.title : '');
   const [description, setDescription] = useState(event && event !== 'new' ? (event.description ?? '') : '');
-  const [startsOn, setStartsOn] = useState(event && event !== 'new' ? event.starts_on.slice(0, 10) : '');
-  const [endsOn, setEndsOn] = useState(event && event !== 'new' ? event.ends_on.slice(0, 10) : '');
+  const [startsOn, setStartsOn] = useState(event && event !== 'new' ? event.starts_on.slice(0, 10) : defaultDate);
+  const [endsOn, setEndsOn] = useState(event && event !== 'new' ? event.ends_on.slice(0, 10) : defaultDate);
   const [scope, setScope] = useState(event && event !== 'new' && event.department_id ? String(event.department_id) : '');
 
   const scopeOptions = [
@@ -643,6 +645,7 @@ function CalendarContent() {
         event={editingEvent}
         canManageOrgWide={canManageOrgWide}
         departmentOptions={departmentOptions}
+        defaultDate={selectedDate}
         onClose={() => setEditingEvent(null)}
       />
       <DeleteEventModal event={deletingEvent} onClose={() => setDeletingEvent(null)} />
