@@ -76,6 +76,8 @@ export interface OrbitWorkItem {
   assignee?: { id: number; name: string } | null;
   epic_id: number | null;
   epic?: { id: number; key: string; title: string } | null;
+  iteration_id: number | null;
+  iteration?: { id: number; name: string } | null;
   labels?: OrbitLabel[];
   acceptance_criteria: string | null;
   due_at: string | null;
@@ -83,6 +85,21 @@ export interface OrbitWorkItem {
   version: number;
   archived_at: string | null;
   attachments?: OrbitAttachment[];
+}
+
+export interface OrbitIteration {
+  id: number;
+  project_id: number;
+  name: string;
+  goal: string | null;
+  starts_at: string;
+  ends_at: string;
+  capacity_note: string | null;
+  status: 'planned' | 'active' | 'completed';
+  started_at: string | null;
+  completed_at: string | null;
+  work_items_count?: number;
+  work_items?: OrbitWorkItem[];
 }
 
 export interface OrbitComment {
@@ -408,6 +425,76 @@ export function useDeleteOrbitStatus(projectId: number | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'statuses'] });
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId] });
+    },
+  });
+}
+
+// --- Sprints (iterations) ---------------------------------------------------
+
+export function useOrbitIterations(projectId: number | undefined) {
+  return useQuery({
+    queryKey: ['orbit', 'projects', projectId, 'iterations'],
+    queryFn: () => api.get<{ data: OrbitIteration[] }>(`/orbit/projects/${projectId}/iterations`),
+    enabled: Boolean(projectId),
+  });
+}
+
+export function useOrbitIteration(iterationId: number | undefined) {
+  return useQuery({
+    queryKey: ['orbit', 'iterations', iterationId],
+    queryFn: () => api.get<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}`),
+    enabled: Boolean(iterationId),
+  });
+}
+
+export function useCreateOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { name: string; goal?: string; starts_at: string; ends_at: string; capacity_note?: string }) =>
+      api.post<{ iteration: OrbitIteration }>(`/orbit/projects/${projectId}/iterations`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] }),
+  });
+}
+
+export function useUpdateOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ iterationId, ...payload }: { iterationId: number } & Partial<Pick<OrbitIteration, 'name' | 'goal' | 'starts_at' | 'ends_at' | 'capacity_note'>>) =>
+      api.patch<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}`, payload),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'iterations', variables.iterationId] });
+    },
+  });
+}
+
+export function useStartOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (iterationId: number) => api.post<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}/start`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] }),
+  });
+}
+
+export function useCompleteOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ iterationId, carry_to_iteration_id }: { iterationId: number; carry_to_iteration_id?: number | null }) =>
+      api.post<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}/complete`, { carry_to_iteration_id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] });
+    },
+  });
+}
+
+export function useDeleteOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (iterationId: number) => api.delete(`/orbit/iterations/${iterationId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] });
     },
   });
 }

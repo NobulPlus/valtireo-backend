@@ -154,6 +154,7 @@ class OrbitWorkItemController extends Controller
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'assignee_id' => ['nullable', 'integer'],
             'epic_id' => ['nullable', 'integer'],
+            'iteration_id' => ['nullable', 'integer'],
             'acceptance_criteria' => ['nullable', 'string'],
             'definition_of_done' => ['nullable', 'string'],
             'estimate' => ['nullable', 'numeric', 'min:0'],
@@ -168,9 +169,14 @@ class OrbitWorkItemController extends Controller
 
         $previousAssignee = $workItem->assignee_id;
         $previousPriority = $workItem->priority;
+        $previousIteration = $workItem->iteration_id;
 
         if (! empty($data['assignee_id'])) {
             User::query()->where('organization_id', $user->organization_id)->findOrFail($data['assignee_id']);
+        }
+
+        if (! empty($data['iteration_id'])) {
+            $project->iterations()->findOrFail($data['iteration_id']);
         }
 
         $update = array_diff_key($data, ['version' => null, 'label_ids' => null]);
@@ -192,6 +198,10 @@ class OrbitWorkItemController extends Controller
 
         if (array_key_exists('priority', $data) && $data['priority'] !== $previousPriority) {
             $this->activity->record($workItem, $user, 'priority_changed', "{$user->name} changed the priority.", ['priority' => $previousPriority], ['priority' => $workItem->priority]);
+        }
+
+        if (array_key_exists('iteration_id', $data) && $data['iteration_id'] !== $previousIteration) {
+            $this->activity->record($workItem, $user, 'iteration_changed', "{$user->name} changed the sprint.", ['iteration_id' => $previousIteration], ['iteration_id' => $workItem->iteration_id]);
         }
 
         return response()->json(['work_item' => $workItem->fresh(['status', 'assignee:id,name', 'labels'])]);

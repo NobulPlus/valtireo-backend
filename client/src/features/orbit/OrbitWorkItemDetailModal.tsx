@@ -16,10 +16,12 @@ import {
   useDeleteOrbitAttachment,
   useDeleteOrbitWorkItemLink,
   useOrbitComments,
+  useOrbitIterations,
   useOrbitProject,
   useOrbitProjectMembers,
   useOrbitWorkItem,
   useOrbitWorkItemLinks,
+  useUpdateOrbitWorkItem,
   useUploadOrbitWorkItemAttachment,
 } from '@/features/orbit/api';
 import { ApiError } from '@/lib/apiClient';
@@ -60,6 +62,8 @@ export function OrbitWorkItemDetailModal({
   const { data: commentsData } = useOrbitComments(itemKey);
   const { data: linksData } = useOrbitWorkItemLinks(itemKey);
   const { data: membersData } = useOrbitProjectMembers(projectId);
+  const { data: iterationsData } = useOrbitIterations(projectId);
+  const updateWorkItem = useUpdateOrbitWorkItem(projectId);
   const createComment = useCreateOrbitComment(itemKey);
   const uploadAttachment = useUploadOrbitWorkItemAttachment(itemKey);
   const deleteAttachment = useDeleteOrbitAttachment(itemKey);
@@ -82,6 +86,18 @@ export function OrbitWorkItemDetailModal({
   const members = membersData?.data ?? [];
   const canEdit = Boolean(project?.can_edit_work_items);
   const commentError = createComment.error instanceof ApiError ? createComment.error.message : null;
+  const iterations = iterationsData?.data ?? [];
+  const [sprintError, setSprintError] = useState<string | null>(null);
+
+  async function handleSprintChange(value: string) {
+    if (!item) return;
+    setSprintError(null);
+    try {
+      await updateWorkItem.mutateAsync({ key: item.key, version: item.version, iteration_id: value === 'backlog' ? null : Number(value) });
+    } catch (err) {
+      setSprintError(err instanceof ApiError ? err.message : 'Could not update the sprint.');
+    }
+  }
 
   const mentionCandidates = useMemo(() => {
     if (mentionQuery === null) return [];
@@ -183,6 +199,23 @@ export function OrbitWorkItemDetailModal({
             {item.status && <span className="text-xs text-muted">· {item.status.name}</span>}
             {item.assignee && <span className="text-xs text-muted">· Assigned to {item.assignee.name}</span>}
           </div>
+
+          {project?.mode === 'scrum' && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-muted">Sprint</span>
+              <SelectMenu
+                value={item.iteration_id ? String(item.iteration_id) : 'backlog'}
+                onChange={handleSprintChange}
+                disabled={!canEdit || updateWorkItem.isPending}
+                className="w-56"
+                options={[
+                  { value: 'backlog', label: 'Backlog' },
+                  ...iterations.map((iteration) => ({ value: String(iteration.id), label: iteration.name })),
+                ]}
+              />
+              {sprintError && <p className="text-xs text-danger">{sprintError}</p>}
+            </div>
+          )}
 
           {item.description && <p className="text-sm text-strong whitespace-pre-wrap">{item.description}</p>}
 

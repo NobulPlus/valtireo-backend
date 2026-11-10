@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\OrganizationVerificationController;
 use App\Http\Controllers\Api\OperationsCenterController;
 use App\Http\Controllers\Api\OrbitAttachmentController;
 use App\Http\Controllers\Api\OrbitCommentController;
+use App\Http\Controllers\Api\OrbitIterationController;
 use App\Http\Controllers\Api\OrbitLabelController;
 use App\Http\Controllers\Api\OrbitMyWorkController;
 use App\Http\Controllers\Api\OrbitProjectController;
@@ -172,6 +173,14 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/projects/{project}/labels', [OrbitLabelController::class, 'store']);
         Route::patch('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'update']);
         Route::delete('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'destroy']);
+
+        Route::get('/projects/{project}/iterations', [OrbitIterationController::class, 'index']);
+        Route::post('/projects/{project}/iterations', [OrbitIterationController::class, 'store']);
+        Route::get('/iterations/{iteration}', [OrbitIterationController::class, 'show']);
+        Route::patch('/iterations/{iteration}', [OrbitIterationController::class, 'update']);
+        Route::post('/iterations/{iteration}/start', [OrbitIterationController::class, 'start']);
+        Route::post('/iterations/{iteration}/complete', [OrbitIterationController::class, 'complete']);
+        Route::delete('/iterations/{iteration}', [OrbitIterationController::class, 'destroy']);
 
         Route::get('/projects/{project}/work-items', [OrbitWorkItemController::class, 'index']);
         Route::post('/projects/{project}/work-items', [OrbitWorkItemController::class, 'store']);

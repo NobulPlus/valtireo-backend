@@ -36,6 +36,7 @@ import {
 import { ApiError } from '@/lib/apiClient';
 import { OrbitWorkItemDetailModal } from '@/features/orbit/OrbitWorkItemDetailModal';
 import { OrbitProjectSettingsModal } from '@/features/orbit/OrbitProjectSettingsModal';
+import { OrbitSprintsPanel } from '@/features/orbit/OrbitSprintsPanel';
 
 // Categorical, not severity — reuses the chart palette index.css reserves
 // for "distinguish categories, don't imply severity" rather than the
@@ -173,6 +174,7 @@ export function OrbitProjectBoardPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [draggingItem, setDraggingItem] = useState<OrbitWorkItem | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [tab, setTab] = useState<'board' | 'sprints'>('board');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -268,33 +270,57 @@ export function OrbitProjectBoardPage() {
         }
       />
 
-      {moveError && <p className="mb-3 text-sm text-danger">{moveError}</p>}
-      {isLoading && <LoadingState fill />}
-      {isError && <ErrorState error={error} onRetry={refetch} />}
+      {project?.mode === 'scrum' && (
+        <div className="mb-4 flex gap-1 border-b border-border">
+          {(['board', 'sprints'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTab(value)}
+              className={cn(
+                'px-3 py-2 text-sm font-medium capitalize transition-colors',
+                tab === value ? 'border-b-2 border-pine text-strong' : 'text-muted hover:text-strong',
+              )}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {!isLoading && !isError && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {statuses.map((status) => (
-              <StatusColumn
-                key={status.id}
-                status={status}
-                items={byStatus.get(status.id) ?? []}
-                allStatuses={statuses}
-                onOpenItem={setActiveKey}
-                onMoveViaDropdown={handleMoveViaDropdown}
-              />
-            ))}
-          </div>
-          <DragOverlay>
-            {draggingItem && (
-              <div className="w-72 rounded-md border border-border bg-surface p-3 shadow-lg">
-                <span className="mr-1 text-xs text-muted">{draggingItem.key}</span>
-                <span className="text-sm font-medium text-strong">{draggingItem.title}</span>
+      {tab === 'sprints' && project?.mode === 'scrum' ? (
+        <OrbitSprintsPanel project={project} />
+      ) : (
+        <>
+          {moveError && <p className="mb-3 text-sm text-danger">{moveError}</p>}
+          {isLoading && <LoadingState fill />}
+          {isError && <ErrorState error={error} onRetry={refetch} />}
+
+          {!isLoading && !isError && (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {statuses.map((status) => (
+                  <StatusColumn
+                    key={status.id}
+                    status={status}
+                    items={byStatus.get(status.id) ?? []}
+                    allStatuses={statuses}
+                    onOpenItem={setActiveKey}
+                    onMoveViaDropdown={handleMoveViaDropdown}
+                  />
+                ))}
               </div>
-            )}
-          </DragOverlay>
-        </DndContext>
+              <DragOverlay>
+                {draggingItem && (
+                  <div className="w-72 rounded-md border border-border bg-surface p-3 shadow-lg">
+                    <span className="mr-1 text-xs text-muted">{draggingItem.key}</span>
+                    <span className="text-sm font-medium text-strong">{draggingItem.title}</span>
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+          )}
+        </>
       )}
 
       <Modal
