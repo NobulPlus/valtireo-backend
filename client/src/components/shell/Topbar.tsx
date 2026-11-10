@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme, type ThemePreference } from '@/context/ThemeContext';
 import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { NotificationBell } from '@/components/shell/NotificationBell';
+import { InstallAppButton } from '@/components/shell/InstallAppButton';
 import { useAuthenticatedImage } from '@/lib/useAuthenticatedImage';
 
 const THEME_SEQUENCE: ThemePreference[] = ['light', 'dark', 'system'];
@@ -73,6 +74,7 @@ export function Topbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
 
       <div className="flex items-center gap-3">
         <ThemeToggle />
+        <InstallAppButton />
         <NotificationBell />
 
         <Dropdown

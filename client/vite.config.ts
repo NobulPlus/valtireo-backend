@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'OrgaviaHR',
           short_name: 'OrgaviaHR',
-          description: 'OrgaviaHR — the organizational OS for people, requests, and decisions.',
+          description: 'OrgaviaHR — people, requests, and decisions in one connected workspace.',
           theme_color: '#123F3A',
           background_color: '#F7FAF9',
           display: 'standalone',
