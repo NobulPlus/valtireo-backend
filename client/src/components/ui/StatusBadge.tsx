@@ -64,6 +64,8 @@ const STATUS_TONE: Record<string, Tone> = {
   // Operational tasks / automation runs
   open: 'info',
   completed: 'success',
+  // Orbit work-item status categories
+  done: 'success',
   running: 'info',
   skipped: 'draft',
   failed: 'danger',

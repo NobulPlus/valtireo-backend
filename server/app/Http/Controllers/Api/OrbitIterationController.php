@@ -33,6 +33,7 @@ class OrbitIterationController extends Controller
         $user = $request->user();
         abort_unless($this->auth->canViewProject($user, $project), 404);
         abort_unless($this->auth->canAdministerProject($user, $project), 403);
+        abort_unless($project->mode === 'scrum', 422, 'Sprints are only available on Scrum projects.');
 
         $data = $this->validatePlan($request);
 

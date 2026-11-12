@@ -67,11 +67,18 @@ class OrbitProjectController extends Controller
             'visibility' => $data['visibility'] ?? 'organization',
         ]);
 
-        foreach ([
-            ['name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true],
-            ['name' => 'In Progress', 'category' => 'in_progress', 'position' => 2, 'is_default' => false],
-            ['name' => 'Done', 'category' => 'done', 'position' => 3, 'is_default' => false],
-        ] as $status) {
+        $defaultStatuses = $data['mode'] === 'simple'
+            ? [
+                ['name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true],
+                ['name' => 'Done', 'category' => 'done', 'position' => 2, 'is_default' => false],
+            ]
+            : [
+                ['name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true],
+                ['name' => 'In Progress', 'category' => 'in_progress', 'position' => 2, 'is_default' => false],
+                ['name' => 'Done', 'category' => 'done', 'position' => 3, 'is_default' => false],
+            ];
+
+        foreach ($defaultStatuses as $status) {
             OrbitStatus::create([...$status, 'project_id' => $project->id]);
         }
 

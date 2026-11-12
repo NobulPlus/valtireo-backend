@@ -37,6 +37,9 @@ import { ApiError } from '@/lib/apiClient';
 import { OrbitWorkItemDetailModal } from '@/features/orbit/OrbitWorkItemDetailModal';
 import { OrbitProjectSettingsModal } from '@/features/orbit/OrbitProjectSettingsModal';
 import { OrbitSprintsPanel } from '@/features/orbit/OrbitSprintsPanel';
+import { OrbitSimpleTaskList } from '@/features/orbit/OrbitSimpleTaskList';
+
+const MODE_LABELS: Record<string, string> = { kanban: 'Kanban', scrum: 'Scrum', simple: 'Simple' };
 
 // Categorical, not severity — reuses the chart palette index.css reserves
 // for "distinguish categories, don't imply severity" rather than the
@@ -181,6 +184,7 @@ export function OrbitProjectBoardPage() {
   const project = projectData?.project;
   const statuses = project?.statuses ?? [];
   const items = data?.data ?? [];
+  const isSimple = project?.mode === 'simple';
   const createError = createItem.error instanceof ApiError ? createItem.error.message : null;
 
   const byStatus = useMemo(() => {
@@ -222,6 +226,16 @@ export function OrbitProjectBoardPage() {
     void persistMove(item, statusId, String(maxPosition + 1024));
   }
 
+  function handleComplete(item: OrbitWorkItem) {
+    const doneStatus = statuses.find((status) => status.category === 'done');
+    if (doneStatus) handleMoveViaDropdown(item, doneStatus.id);
+  }
+
+  function handleReopen(item: OrbitWorkItem) {
+    const todoStatus = statuses.find((status) => status.category === 'todo') ?? statuses[0];
+    if (todoStatus) handleMoveViaDropdown(item, todoStatus.id);
+  }
+
   function handleDragStart(event: DragStartEvent) {
     const item = items.find((candidate) => candidate.id === event.active.id);
     setDraggingItem(item ?? null);
@@ -252,7 +266,7 @@ export function OrbitProjectBoardPage() {
     <div>
       <PageHeader
         title={project?.name ?? 'Board'}
-        subtitle={project ? `${project.key_prefix} · ${project.mode}${project.archived_at ? ' · Archived' : ''}` : undefined}
+        subtitle={project ? `${project.key_prefix} · ${MODE_LABELS[project.mode] ?? project.mode}${project.archived_at ? ' · Archived' : ''}` : undefined}
         breadcrumbs={[{ label: 'Orbit', to: '/orbit' }, { label: 'Workspaces', to: '/orbit/workspaces' }, { label: project?.name ?? '...' }]}
         actions={
           <div className="flex items-center gap-2">
@@ -296,7 +310,17 @@ export function OrbitProjectBoardPage() {
           {isLoading && <LoadingState fill />}
           {isError && <ErrorState error={error} onRetry={refetch} />}
 
-          {!isLoading && !isError && (
+          {!isLoading && !isError && isSimple && (
+            <OrbitSimpleTaskList
+              items={items}
+              canEdit={Boolean(project?.can_edit_work_items)}
+              onOpenItem={setActiveKey}
+              onComplete={handleComplete}
+              onReopen={handleReopen}
+            />
+          )}
+
+          {!isLoading && !isError && !isSimple && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
               <div className="flex gap-4 overflow-x-auto pb-4">
                 {statuses.map((status) => (

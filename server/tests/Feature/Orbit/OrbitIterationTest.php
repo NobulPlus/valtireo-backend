@@ -15,10 +15,10 @@ class OrbitIterationTest extends TestCase
 {
     use RefreshDatabase, SetsUpOrbitOrganization;
 
-    private function projectFor(array $fixture, string $prefix = 'PROJ'): OrbitProject
+    private function projectFor(array $fixture, string $prefix = 'PROJ', string $mode = 'scrum'): OrbitProject
     {
         $workspace = OrbitWorkspace::create(['organization_id' => $fixture['organization']->id, 'name' => 'WS', 'slug' => 'ws-'.strtolower($prefix), 'owner_id' => $fixture['admin']->id]);
-        $project = OrbitProject::create(['organization_id' => $fixture['organization']->id, 'workspace_id' => $workspace->id, 'name' => 'Project', 'key_prefix' => $prefix, 'mode' => 'scrum']);
+        $project = OrbitProject::create(['organization_id' => $fixture['organization']->id, 'workspace_id' => $workspace->id, 'name' => 'Project', 'key_prefix' => $prefix, 'mode' => $mode]);
         \App\Models\OrbitStatus::create(['project_id' => $project->id, 'name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true]);
         \App\Models\OrbitStatus::create(['project_id' => $project->id, 'name' => 'Done', 'category' => 'done', 'position' => 2]);
         OrbitProjectMember::create(['organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'user_id' => $fixture['admin']->id, 'role' => 'admin']);
@@ -37,6 +37,17 @@ class OrbitIterationTest extends TestCase
             'type' => 'task', 'title' => "Item {$number}", 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id,
             'position' => $number,
         ]);
+    }
+
+    public function test_creating_a_sprint_on_a_kanban_project_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'KNBN', 'kanban');
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/iterations", [
+            'name' => 'Sprint 1', 'starts_at' => '2026-12-01', 'ends_at' => '2026-12-14',
+        ])->assertStatus(422);
     }
 
     public function test_project_admin_can_create_update_and_delete_a_planned_sprint(): void

@@ -71,6 +71,8 @@ class OrbitWorkItemController extends Controller
             'label_ids.*' => ['integer'],
         ]);
 
+        $this->assertScrumFieldsAllowed($project, $data);
+
         $status = isset($data['status_id'])
             ? $project->statuses()->findOrFail($data['status_id'])
             : $project->statuses()->where('is_default', true)->first() ?? $project->statuses()->orderBy('position')->first();
@@ -165,6 +167,7 @@ class OrbitWorkItemController extends Controller
             'label_ids.*' => ['integer'],
         ]);
 
+        $this->assertScrumFieldsAllowed($project, $data);
         $this->assertVersion($workItem, $data['version']);
 
         $previousAssignee = $workItem->assignee_id;
@@ -294,5 +297,22 @@ class OrbitWorkItemController extends Controller
         if ($workItem->version !== $version) {
             abort(409, 'This work item was changed by someone else. Refresh and try again.');
         }
+    }
+
+    private function assertScrumFieldsAllowed(OrbitProject $project, array $data): void
+    {
+        if ($project->mode === 'scrum') {
+            return;
+        }
+
+        $scrumOnlyFields = ['estimate', 'remaining_estimate', 'epic_id', 'story_template', 'acceptance_criteria', 'definition_of_done'];
+
+        $hasScrumValue = collect($scrumOnlyFields)->contains(fn (string $field) => array_key_exists($field, $data) && $data[$field] !== null);
+
+        abort_if(
+            $hasScrumValue,
+            422,
+            'Epics, estimates, story templates, acceptance criteria, and definition of done are only available on Scrum projects.'
+        );
     }
 }

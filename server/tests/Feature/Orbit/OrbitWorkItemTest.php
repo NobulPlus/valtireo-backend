@@ -15,10 +15,10 @@ class OrbitWorkItemTest extends TestCase
 {
     use RefreshDatabase, SetsUpOrbitOrganization;
 
-    private function projectFor(array $fixture, string $prefix = 'PROJ'): OrbitProject
+    private function projectFor(array $fixture, string $prefix = 'PROJ', string $mode = 'kanban'): OrbitProject
     {
         $workspace = OrbitWorkspace::create(['organization_id' => $fixture['organization']->id, 'name' => 'WS', 'slug' => 'ws-'.strtolower($prefix), 'owner_id' => $fixture['admin']->id]);
-        $project = OrbitProject::create(['organization_id' => $fixture['organization']->id, 'workspace_id' => $workspace->id, 'name' => 'Project', 'key_prefix' => $prefix, 'mode' => 'kanban']);
+        $project = OrbitProject::create(['organization_id' => $fixture['organization']->id, 'workspace_id' => $workspace->id, 'name' => 'Project', 'key_prefix' => $prefix, 'mode' => $mode]);
         \App\Models\OrbitStatus::create(['project_id' => $project->id, 'name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true]);
         \App\Models\OrbitStatus::create(['project_id' => $project->id, 'name' => 'Done', 'category' => 'done', 'position' => 2]);
         OrbitProjectMember::create(['organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'user_id' => $fixture['admin']->id, 'role' => 'admin']);
@@ -50,6 +50,46 @@ class OrbitWorkItemTest extends TestCase
 
         $this->assertSame(array_unique($keys), $keys);
         $this->assertSame(["{$project->key_prefix}-1", "{$project->key_prefix}-2", "{$project->key_prefix}-3"], $keys);
+    }
+
+    public function test_creating_a_work_item_with_an_estimate_on_a_kanban_project_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'KNBN', 'kanban');
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'task', 'title' => 'Needs an estimate', 'estimate' => 5,
+        ])->assertStatus(422);
+    }
+
+    public function test_creating_a_work_item_with_an_estimate_on_a_scrum_project_succeeds(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'task', 'title' => 'Needs an estimate', 'estimate' => 5,
+        ])->assertCreated();
+    }
+
+    public function test_updating_a_work_item_with_acceptance_criteria_on_a_kanban_project_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'KNBN', 'kanban');
+        Sanctum::actingAs($fixture['admin']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'A kanban task', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id,
+            'position' => 1,
+        ]);
+
+        $this->patchJson("/api/orbit/work-items/{$item->key}", [
+            'version' => 1, 'acceptance_criteria' => 'Given/When/Then',
+        ])->assertStatus(422);
     }
 
     public function test_updating_a_work_item_with_a_stale_version_is_rejected(): void

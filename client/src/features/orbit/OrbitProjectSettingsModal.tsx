@@ -51,15 +51,17 @@ export function OrbitProjectSettingsModal({ project, onClose }: { project: Orbit
   const [tab, setTab] = useState<Tab>('members');
   const canAdminister = Boolean(project.can_administer);
 
+  const tabs = ([
+    ['members', 'Members'],
+    ['statuses', 'Workflow'],
+    ['labels', 'Labels'],
+  ] as const).filter(([value]) => value !== 'statuses' || project.mode !== 'simple');
+
   return (
     <Modal open onClose={onClose} title={`${project.name} settings`} size="lg">
       <div className="flex flex-col gap-4">
         <div className="flex gap-1 rounded-md bg-surface-soft p-1">
-          {([
-            ['members', 'Members'],
-            ['statuses', 'Workflow'],
-            ['labels', 'Labels'],
-          ] as const).map(([value, label]) => (
+          {tabs.map(([value, label]) => (
             <button
               key={value}
               type="button"
