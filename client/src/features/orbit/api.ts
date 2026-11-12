@@ -72,19 +72,36 @@ export interface OrbitWorkItem {
   status?: OrbitStatus;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   reporter_id: number;
+  reporter?: { id: number; name: string } | null;
   assignee_id: number | null;
   assignee?: { id: number; name: string } | null;
+  parent_id: number | null;
+  parent?: { id: number; key: string; title: string } | null;
   epic_id: number | null;
   epic?: { id: number; key: string; title: string } | null;
   iteration_id: number | null;
   iteration?: { id: number; name: string } | null;
   labels?: OrbitLabel[];
   acceptance_criteria: string | null;
+  definition_of_done: string | null;
+  estimate: number | null;
+  remaining_estimate: number | null;
   due_at: string | null;
+  start_at: string | null;
   position: string;
   version: number;
   archived_at: string | null;
   attachments?: OrbitAttachment[];
+  watchers?: { id: number; name: string }[];
+  activities?: OrbitWorkItemActivity[];
+}
+
+export interface OrbitWorkItemActivity {
+  id: number;
+  event: string;
+  title: string;
+  actor?: { id: number; name: string } | null;
+  created_at: string;
 }
 
 export interface OrbitIteration {
@@ -109,6 +126,8 @@ export interface OrbitComment {
   author?: { id: number; name: string };
   body: string;
   mentions: number[];
+  reply_to_id: number | null;
+  reply_to?: { id: number; body: string; author_id: number } | null;
   created_at: string;
   edited_at: string | null;
 }
@@ -246,9 +265,25 @@ export function useOrbitComments(key: string | undefined) {
 export function useCreateOrbitComment(key: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { body: string; mentions?: number[] }) =>
+    mutationFn: (payload: { body: string; mentions?: number[]; reply_to_id?: number | null }) =>
       api.post<{ comment: OrbitComment }>(`/orbit/work-items/${key}/comments`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key, 'comments'] }),
+  });
+}
+
+export function useWatchOrbitWorkItem(key: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post(`/orbit/work-items/${key}/watch`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
+  });
+}
+
+export function useUnwatchOrbitWorkItem(key: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete(`/orbit/work-items/${key}/watch`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
   });
 }
 

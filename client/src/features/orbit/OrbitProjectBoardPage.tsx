@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Plus, Settings } from 'lucide-react';
 import {
   DndContext,
@@ -174,7 +174,8 @@ export function OrbitProjectBoardPage() {
   const [type, setType] = useState('task');
   const [priority, setPriority] = useState('medium');
   const [description, setDescription] = useState('');
-  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeKey = searchParams.get('item');
   const [draggingItem, setDraggingItem] = useState<OrbitWorkItem | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [tab, setTab] = useState<'board' | 'sprints'>('board');
@@ -186,6 +187,18 @@ export function OrbitProjectBoardPage() {
   const items = data?.data ?? [];
   const isSimple = project?.mode === 'simple';
   const createError = createItem.error instanceof ApiError ? createItem.error.message : null;
+
+  function setActiveKey(key: string | null) {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (key) next.set('item', key);
+        else next.delete('item');
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   const byStatus = useMemo(() => {
     const map = new Map<number, OrbitWorkItem[]>();
@@ -375,7 +388,15 @@ export function OrbitProjectBoardPage() {
         </form>
       </Modal>
 
-      {activeKey && <OrbitWorkItemDetailModal itemKey={activeKey} projectId={id} onClose={() => setActiveKey(null)} />}
+      {activeKey && (
+        <OrbitWorkItemDetailModal
+          itemKey={activeKey}
+          projectId={id}
+          statuses={statuses}
+          onChangeStatus={handleMoveViaDropdown}
+          onClose={() => setActiveKey(null)}
+        />
+      )}
       {settingsOpen && project && <OrbitProjectSettingsModal project={project} onClose={() => setSettingsOpen(false)} />}
     </div>
   );

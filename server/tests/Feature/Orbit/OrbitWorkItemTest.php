@@ -164,4 +164,40 @@ class OrbitWorkItemTest extends TestCase
         $this->patchJson("/api/orbit/work-items/{$item->key}", ['version' => 1, 'title' => 'Hacked'])->assertForbidden();
         $this->getJson("/api/orbit/work-items/{$item->key}")->assertOk();
     }
+
+    public function test_viewing_a_work_item_includes_its_watchers_and_activity_history(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $response = $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'task', 'title' => 'Track this',
+        ])->assertCreated();
+        $key = $response->json('work_item.key');
+
+        $show = $this->getJson("/api/orbit/work-items/{$key}")->assertOk();
+        $this->assertSame([], $show->json('work_item.watchers'));
+        $this->assertSame('created', $show->json('work_item.activities.0.event'));
+    }
+
+    public function test_a_user_can_watch_and_unwatch_a_work_item(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $response = $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'task', 'title' => 'Watch me',
+        ])->assertCreated();
+        $key = $response->json('work_item.key');
+
+        $this->postJson("/api/orbit/work-items/{$key}/watch")->assertOk();
+        $watching = $this->getJson("/api/orbit/work-items/{$key}")->assertOk();
+        $this->assertSame([$fixture['admin']->id], collect($watching->json('work_item.watchers'))->pluck('id')->all());
+
+        $this->deleteJson("/api/orbit/work-items/{$key}/watch")->assertOk();
+        $unwatched = $this->getJson("/api/orbit/work-items/{$key}")->assertOk();
+        $this->assertSame([], $unwatched->json('work_item.watchers'));
+    }
 }

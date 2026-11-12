@@ -137,6 +137,8 @@ class OrbitWorkItemController extends Controller
             'status', 'assignee:id,name', 'reporter:id,name', 'labels',
             'parent:id,key,title', 'epic:id,key,title', 'project:id,name,key_prefix,mode',
             'attachments' => fn ($query) => $query->whereNull('deleted_at')->with('uploadedBy:id,name'),
+            'watchers:id,name',
+            'activities' => fn ($query) => $query->with('actor:id,name')->latest(),
         ]);
 
         return response()->json(['work_item' => $workItem]);

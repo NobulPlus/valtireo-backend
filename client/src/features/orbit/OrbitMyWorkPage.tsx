@@ -58,7 +58,7 @@ export function OrbitMyWorkPage() {
             {items.map((item) => (
               <li key={item.id}>
                 <Link
-                  to={`/orbit/projects/${item.project?.id}`}
+                  to={`/orbit/projects/${item.project?.id}?item=${item.key}`}
                   className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-surface-soft"
                 >
                   <div className="min-w-0">
