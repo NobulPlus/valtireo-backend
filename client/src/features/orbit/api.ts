@@ -208,10 +208,21 @@ export function useOrbitProject(projectId: number | undefined) {
   });
 }
 
-export function useOrbitWorkItems(projectId: number | undefined) {
+export interface OrbitWorkItemFilters {
+  status_id?: number;
+  assignee_id?: number;
+  type?: string;
+  label_id?: number;
+  epic_id?: number;
+  iteration_id?: number | 'none';
+  parent_id?: number | 'none';
+  due_before?: string;
+}
+
+export function useOrbitWorkItems(projectId: number | undefined, filters: OrbitWorkItemFilters = {}) {
   return useQuery({
-    queryKey: ['orbit', 'projects', projectId, 'work-items'],
-    queryFn: () => api.get<{ data: OrbitWorkItem[] }>(`/orbit/projects/${projectId}/work-items`),
+    queryKey: ['orbit', 'projects', projectId, 'work-items', filters],
+    queryFn: () => api.get<{ data: OrbitWorkItem[] }>(`/orbit/projects/${projectId}/work-items`, { params: filters }),
     enabled: Boolean(projectId),
   });
 }
@@ -219,7 +230,23 @@ export function useOrbitWorkItems(projectId: number | undefined) {
 export function useCreateOrbitWorkItem(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { type: string; title: string; description?: string; priority?: string; assignee_id?: number | null; status_id?: number }) =>
+    mutationFn: (payload: {
+      type: OrbitWorkItem['type'];
+      title: string;
+      description?: string;
+      priority?: OrbitWorkItem['priority'];
+      assignee_id?: number | null;
+      status_id?: number;
+      parent_id?: number | null;
+      epic_id?: number | null;
+      acceptance_criteria?: string;
+      definition_of_done?: string;
+      estimate?: number;
+      due_at?: string;
+      start_at?: string;
+      label_ids?: number[];
+      iteration_id?: number | null;
+    }) =>
       api.post<{ work_item: OrbitWorkItem }>(`/orbit/projects/${projectId}/work-items`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
   });
@@ -466,11 +493,11 @@ export function useDeleteOrbitStatus(projectId: number | undefined) {
 
 // --- Sprints (iterations) ---------------------------------------------------
 
-export function useOrbitIterations(projectId: number | undefined) {
+export function useOrbitIterations(projectId: number | undefined, enabled = true) {
   return useQuery({
     queryKey: ['orbit', 'projects', projectId, 'iterations'],
     queryFn: () => api.get<{ data: OrbitIteration[] }>(`/orbit/projects/${projectId}/iterations`),
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && enabled,
   });
 }
 

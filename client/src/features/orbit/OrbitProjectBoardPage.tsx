@@ -21,13 +21,19 @@ import { ModalCancelAction, ModalSaveAction } from '@/components/ui/ModalActions
 import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
 import { SelectMenu } from '@/components/ui/SelectMenu';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { OptionDot } from '@/components/ui/OptionDot';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
+import { EpicChip } from '@/components/ui/EpicChip';
+import { LabelDots } from '@/components/ui/LabelDots';
 import { ErrorState, LoadingState } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
 import {
   useCreateOrbitWorkItem,
   useMoveOrbitWorkItem,
+  useOrbitIterations,
+  useOrbitLabels,
+  useOrbitProjectMembers,
   useOrbitProject,
   useOrbitWorkItems,
   type OrbitStatus,
@@ -37,6 +43,7 @@ import { ApiError } from '@/lib/apiClient';
 import { OrbitWorkItemDetailModal } from '@/features/orbit/OrbitWorkItemDetailModal';
 import { OrbitProjectSettingsModal } from '@/features/orbit/OrbitProjectSettingsModal';
 import { OrbitSprintsPanel } from '@/features/orbit/OrbitSprintsPanel';
+import { OrbitBacklogPanel } from '@/features/orbit/OrbitBacklogPanel';
 import { OrbitSimpleTaskList } from '@/features/orbit/OrbitSimpleTaskList';
 
 const MODE_LABELS: Record<string, string> = { kanban: 'Kanban', scrum: 'Scrum', simple: 'Simple' };
@@ -49,6 +56,8 @@ const TYPES = [
   { value: 'bug', label: 'Bug', icon: <OptionDot className="bg-chart-2" /> },
   { value: 'story', label: 'Story', icon: <OptionDot className="bg-chart-3" /> },
 ];
+
+const EPIC_TYPE = { value: 'epic', label: 'Epic', icon: <OptionDot className="bg-chart-4" /> };
 
 // Severity — reuses PriorityBadge's exact tone mapping (low: draft,
 // medium: info, high: warning, urgent: danger).
@@ -94,6 +103,7 @@ function WorkItemCard({ item, onOpen }: { item: OrbitWorkItem; onOpen: () => voi
       {...attributes}
       {...listeners}
     >
+      <EpicChip epic={item.epic} className="mb-1.5" />
       <button
         type="button"
         onClick={onOpen}
@@ -103,6 +113,7 @@ function WorkItemCard({ item, onOpen }: { item: OrbitWorkItem; onOpen: () => voi
         <span className="mr-1 text-xs text-muted">{item.key}</span>
         {item.title}
       </button>
+      <LabelDots labels={item.labels} className="mt-1.5" />
       <div className="mt-2 flex items-center justify-between gap-2">
         <PriorityBadge priority={item.priority} />
         {item.assignee && <span className="text-xs text-muted">{item.assignee.name}</span>}
@@ -115,14 +126,10 @@ function StatusColumn({
   status,
   items,
   onOpenItem,
-  onMoveViaDropdown,
-  allStatuses,
 }: {
   status: OrbitStatus;
   items: OrbitWorkItem[];
   onOpenItem: (key: string) => void;
-  onMoveViaDropdown: (item: OrbitWorkItem, statusId: number) => void;
-  allStatuses: OrbitStatus[];
 }) {
   const { setNodeRef } = useDroppable({ id: `column-${status.id}`, data: { type: 'column', statusId: status.id } });
   const sorted = [...items].sort((a, b) => Number(a.position) - Number(b.position));
@@ -138,20 +145,6 @@ function StatusColumn({
           {sorted.map((item) => (
             <div key={item.id}>
               <WorkItemCard item={item} onOpen={() => onOpenItem(item.key)} />
-              {allStatuses.length > 1 && (
-                <select
-                  value={item.status_id}
-                  onChange={(event) => onMoveViaDropdown(item, Number(event.target.value))}
-                  aria-label={`Move ${item.key} to a different column`}
-                  className="mt-1 h-7 w-full rounded border border-border bg-surface px-1 text-xs text-muted"
-                >
-                  {allStatuses.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      Move to: {candidate.name}
-                    </option>
-                  ))}
-                </select>
-              )}
             </div>
           ))}
         </div>
@@ -165,6 +158,9 @@ export function OrbitProjectBoardPage() {
   const id = Number(projectId);
   const { data: projectData } = useOrbitProject(id);
   const { data, isLoading, isError, error, refetch } = useOrbitWorkItems(id);
+  const { data: membersData } = useOrbitProjectMembers(id);
+  const { data: labelsData } = useOrbitLabels(id);
+  const { data: iterationsData } = useOrbitIterations(id, projectData?.project.mode === 'scrum');
   const createItem = useCreateOrbitWorkItem(id);
   const moveItem = useMoveOrbitWorkItem(id);
 
@@ -174,17 +170,29 @@ export function OrbitProjectBoardPage() {
   const [type, setType] = useState('task');
   const [priority, setPriority] = useState('medium');
   const [description, setDescription] = useState('');
+  const [assigneeId, setAssigneeId] = useState('unassigned');
+  const [dueAt, setDueAt] = useState('');
+  const [startAt, setStartAt] = useState('');
+  const [epicId, setEpicId] = useState('none');
+  const [iterationId, setIterationId] = useState('backlog');
+  const [estimate, setEstimate] = useState('');
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
+  const [definitionOfDone, setDefinitionOfDone] = useState('');
+  const [selectedLabels, setSelectedLabels] = useState<Set<number>>(new Set());
   const [searchParams, setSearchParams] = useSearchParams();
   const activeKey = searchParams.get('item');
   const [draggingItem, setDraggingItem] = useState<OrbitWorkItem | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'board' | 'sprints'>('board');
+  const [tab, setTab] = useState<'board' | 'backlog' | 'sprints'>('board');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const project = projectData?.project;
   const statuses = project?.statuses ?? [];
   const items = data?.data ?? [];
+  const members = membersData?.data ?? [];
+  const labels = labelsData?.data ?? [];
+  const iterations = iterationsData?.data ?? [];
   const isSimple = project?.mode === 'simple';
   const createError = createItem.error instanceof ApiError ? createItem.error.message : null;
 
@@ -210,12 +218,68 @@ export function OrbitProjectBoardPage() {
     return map;
   }, [items]);
 
+  const isScrum = project?.mode === 'scrum';
+  const typeOptions = isScrum ? [...TYPES, EPIC_TYPE] : TYPES;
+  const assigneeOptions = [{ value: 'unassigned', label: 'Unassigned' }, ...members.map((member) => ({ value: String(member.id), label: member.name }))];
+  const epicOptions = [{ value: 'none', label: 'No epic' }, ...items.filter((item) => item.type === 'epic').map((item) => ({ value: String(item.id), label: `${item.key} · ${item.title}` }))];
+  const iterationOptions = [
+    { value: 'backlog', label: 'Backlog' },
+    ...iterations.filter((iteration) => iteration.status !== 'completed').map((iteration) => ({ value: String(iteration.id), label: iteration.status === 'active' ? `${iteration.name} (active)` : iteration.name })),
+  ];
+
+  function resetCreateForm() {
+    setTitle('');
+    setType('task');
+    setPriority('medium');
+    setDescription('');
+    setAssigneeId('unassigned');
+    setDueAt('');
+    setStartAt('');
+    setEpicId('none');
+    setIterationId('backlog');
+    setEstimate('');
+    setAcceptanceCriteria('');
+    setDefinitionOfDone('');
+    setSelectedLabels(new Set());
+  }
+
+  function openCreate(prefilledEpicId?: number) {
+    resetCreateForm();
+    if (prefilledEpicId) {
+      setType('story');
+      setEpicId(String(prefilledEpicId));
+    }
+    setOpen(true);
+  }
+
+  function toggleLabel(labelId: number) {
+    setSelectedLabels((current) => {
+      const next = new Set(current);
+      if (next.has(labelId)) next.delete(labelId);
+      else next.add(labelId);
+      return next;
+    });
+  }
+
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
-    await createItem.mutateAsync({ type, title, priority, description: description || undefined });
+    await createItem.mutateAsync({
+      type: type as OrbitWorkItem['type'],
+      title,
+      priority: priority as OrbitWorkItem['priority'],
+      description: description || undefined,
+      assignee_id: assigneeId === 'unassigned' ? undefined : Number(assigneeId),
+      due_at: dueAt || undefined,
+      start_at: isScrum ? startAt || undefined : undefined,
+      epic_id: isScrum && epicId !== 'none' ? Number(epicId) : undefined,
+      iteration_id: isScrum && iterationId !== 'backlog' ? Number(iterationId) : undefined,
+      estimate: isScrum && estimate ? Number(estimate) : undefined,
+      acceptance_criteria: isScrum ? acceptanceCriteria || undefined : undefined,
+      definition_of_done: isScrum ? definitionOfDone || undefined : undefined,
+      label_ids: selectedLabels.size > 0 ? [...selectedLabels] : undefined,
+    });
     setOpen(false);
-    setTitle('');
-    setDescription('');
+    resetCreateForm();
   }
 
   async function persistMove(item: OrbitWorkItem, statusId: number, position: string) {
@@ -289,7 +353,7 @@ export function OrbitProjectBoardPage() {
               </Button>
             )}
             {project?.can_edit_work_items && (
-              <Button variant="primary" onClick={() => setOpen(true)}>
+                <Button variant="primary" onClick={() => openCreate()}>
                 <Plus className="h-3.5 w-3.5" /> New item
               </Button>
             )}
@@ -299,7 +363,7 @@ export function OrbitProjectBoardPage() {
 
       {project?.mode === 'scrum' && (
         <div className="mb-4 flex gap-1 border-b border-border">
-          {(['board', 'sprints'] as const).map((value) => (
+          {(['backlog', 'board', 'sprints'] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -315,7 +379,9 @@ export function OrbitProjectBoardPage() {
         </div>
       )}
 
-      {tab === 'sprints' && project?.mode === 'scrum' ? (
+      {tab === 'backlog' && project?.mode === 'scrum' ? (
+        <OrbitBacklogPanel project={project} onOpenItem={setActiveKey} onAddItem={openCreate} />
+      ) : tab === 'sprints' && project?.mode === 'scrum' ? (
         <OrbitSprintsPanel project={project} />
       ) : (
         <>
@@ -341,9 +407,7 @@ export function OrbitProjectBoardPage() {
                     key={status.id}
                     status={status}
                     items={byStatus.get(status.id) ?? []}
-                    allStatuses={statuses}
                     onOpenItem={setActiveKey}
-                    onMoveViaDropdown={handleMoveViaDropdown}
                   />
                 ))}
               </div>
@@ -364,6 +428,7 @@ export function OrbitProjectBoardPage() {
         open={open}
         onClose={() => setOpen(false)}
         title="New work item"
+        size={isScrum ? 'lg' : 'md'}
         footer={
           <>
             <ModalCancelAction onClick={() => setOpen(false)} disabled={createItem.isPending} />
@@ -373,18 +438,88 @@ export function OrbitProjectBoardPage() {
       >
         <form id="create-orbit-item" onSubmit={handleCreate} className="flex flex-col gap-4">
           {createError && <p className="text-sm text-danger">{createError}</p>}
-          <Field label="Type" required>
-            <SelectMenu value={type} onChange={setType} options={TYPES} />
-          </Field>
-          <Field label="Title" required>
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} autoFocus />
-          </Field>
-          <Field label="Priority">
-            <SelectMenu value={priority} onChange={setPriority} options={PRIORITIES} />
-          </Field>
-          <Field label="Description" hint="Optional">
-            <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
-          </Field>
+          {isScrum ? (
+            // Landscape, two-pane layout: identity/content on the left, scheduling/delivery
+            // metadata on the right, filling height in parallel instead of stacking every
+            // field — the Scrum form has 13 fields vs. Kanban/Simple's 7, so only it needs
+            // the wider (lg) modal and this split; the simpler form below keeps the modal
+            // at its default width and a single stacked column.
+            <div className="grid grid-cols-2 gap-7">
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Type" required>
+                    <SelectMenu value={type} onChange={setType} options={typeOptions} />
+                  </Field>
+                  <Field label="Priority">
+                    <SelectMenu value={priority} onChange={setPriority} options={PRIORITIES} />
+                  </Field>
+                </div>
+                <Field label="Title" required>
+                  <Input value={title} onChange={(event) => setTitle(event.target.value)} autoFocus />
+                </Field>
+                <Field label="Description" hint="Optional">
+                  <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={5} />
+                </Field>
+                {labels.length > 0 && (
+                  <Field label="Labels" hint="Optional">
+                    <div className="flex flex-wrap gap-1.5">
+                      {labels.map((label) => {
+                        const selected = selectedLabels.has(label.id);
+                        return <button key={label.id} type="button" onClick={() => toggleLabel(label.id)} className={cn('rounded-full px-2 py-0.5 text-xs font-medium transition', selected ? 'text-white' : 'border border-border text-muted hover:text-strong')} style={selected ? { backgroundColor: label.color } : undefined}>{label.name}</button>;
+                      })}
+                    </div>
+                  </Field>
+                )}
+              </div>
+              <div className="flex flex-col gap-4 border-l border-border pl-7">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Assignee"><SelectMenu value={assigneeId} onChange={setAssigneeId} options={assigneeOptions} /></Field>
+                  <Field label="Due date"><DatePicker value={dueAt} onChange={setDueAt} /></Field>
+                  <Field label="Start date"><DatePicker value={startAt} onChange={setStartAt} /></Field>
+                  <Field label="Epic"><SelectMenu value={epicId} onChange={setEpicId} options={epicOptions} /></Field>
+                  <Field label="Sprint"><SelectMenu value={iterationId} onChange={setIterationId} options={iterationOptions} /></Field>
+                  <Field label="Estimate"><Input value={estimate} onChange={(event) => setEstimate(event.target.value.replace(/[^0-9.]/g, ''))} placeholder="Story points or hours" /></Field>
+                </div>
+                <Field label="Acceptance criteria" hint="Optional"><Textarea value={acceptanceCriteria} onChange={(event) => setAcceptanceCriteria(event.target.value)} rows={2} /></Field>
+                <Field label="Definition of done" hint="Optional"><Textarea value={definitionOfDone} onChange={(event) => setDefinitionOfDone(event.target.value)} rows={2} /></Field>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Type" required>
+                  <SelectMenu value={type} onChange={setType} options={typeOptions} />
+                </Field>
+                <Field label="Priority">
+                  <SelectMenu value={priority} onChange={setPriority} options={PRIORITIES} />
+                </Field>
+              </div>
+              <Field label="Title" required>
+                <Input value={title} onChange={(event) => setTitle(event.target.value)} autoFocus />
+              </Field>
+              <Field label="Description" hint="Optional">
+                <Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
+              </Field>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Assignee">
+                  <SelectMenu value={assigneeId} onChange={setAssigneeId} options={assigneeOptions} />
+                </Field>
+                <Field label="Due date">
+                  <DatePicker value={dueAt} onChange={setDueAt} />
+                </Field>
+              </div>
+              {labels.length > 0 && (
+                <Field label="Labels" hint="Optional">
+                  <div className="flex flex-wrap gap-1.5">
+                    {labels.map((label) => {
+                      const selected = selectedLabels.has(label.id);
+                      return <button key={label.id} type="button" onClick={() => toggleLabel(label.id)} className={cn('rounded-full px-2 py-0.5 text-xs font-medium transition', selected ? 'text-white' : 'border border-border text-muted hover:text-strong')} style={selected ? { backgroundColor: label.color } : undefined}>{label.name}</button>;
+                    })}
+                  </div>
+                </Field>
+              )}
+            </>
+          )}
         </form>
       </Modal>
 

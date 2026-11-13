@@ -74,6 +74,76 @@ class OrbitWorkItemTest extends TestCase
         ])->assertCreated();
     }
 
+    public function test_creating_a_scrum_item_can_set_its_sprint_and_definition_of_done(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $iteration = \App\Models\OrbitIteration::create([
+            'project_id' => $project->id, 'name' => 'Sprint 1', 'starts_at' => '2026-01-01', 'ends_at' => '2026-01-14', 'status' => 'planned',
+        ]);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'story', 'title' => 'Plan the release', 'iteration_id' => $iteration->id,
+            'definition_of_done' => 'Reviewed, tested, and accepted.', 'acceptance_criteria' => 'Given the plan, the team can deliver it.',
+        ])->assertCreated()
+            ->assertJsonPath('work_item.iteration_id', $iteration->id)
+            ->assertJsonPath('work_item.definition_of_done', 'Reviewed, tested, and accepted.');
+    }
+
+    public function test_creating_an_item_in_a_completed_sprint_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $iteration = \App\Models\OrbitIteration::create([
+            'project_id' => $project->id, 'name' => 'Finished', 'starts_at' => '2026-01-01', 'ends_at' => '2026-01-14', 'status' => 'completed',
+        ]);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'task', 'title' => 'Too late', 'iteration_id' => $iteration->id,
+        ])->assertStatus(422);
+    }
+
+    public function test_backlog_filters_return_only_unscheduled_top_level_items(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+        $status = $project->statuses()->first();
+        $iteration = \App\Models\OrbitIteration::create([
+            'project_id' => $project->id, 'name' => 'Sprint 1', 'starts_at' => '2026-01-01', 'ends_at' => '2026-01-14', 'status' => 'planned',
+        ]);
+
+        $topLevel = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => 'SCRM-1', 'type' => 'task', 'title' => 'Backlog item', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+        OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => 'SCRM-2', 'type' => 'subtask', 'title' => 'Child item', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'parent_id' => $topLevel->id, 'position' => 2,
+        ]);
+        OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => 'SCRM-3', 'type' => 'task', 'title' => 'Scheduled item', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'iteration_id' => $iteration->id, 'position' => 3,
+        ]);
+
+        $this->getJson("/api/orbit/projects/{$project->id}/work-items?iteration_id=none&parent_id=none")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $topLevel->id);
+    }
+
+    public function test_iterations_cannot_be_set_on_a_non_scrum_project(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'KNBN', 'kanban');
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/work-items", [
+            'type' => 'task', 'title' => 'No sprint here', 'iteration_id' => 1,
+        ])->assertStatus(422);
+    }
+
     public function test_updating_a_work_item_with_acceptance_criteria_on_a_kanban_project_is_rejected(): void
     {
         $fixture = $this->createOrbitOrganization();
@@ -89,6 +159,28 @@ class OrbitWorkItemTest extends TestCase
 
         $this->patchJson("/api/orbit/work-items/{$item->key}", [
             'version' => 1, 'acceptance_criteria' => 'Given/When/Then',
+        ])->assertStatus(422);
+    }
+
+    public function test_assigning_a_work_item_to_a_completed_sprint_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Needs a sprint', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id,
+            'position' => 1,
+        ]);
+
+        $iteration = \App\Models\OrbitIteration::create([
+            'project_id' => $project->id, 'name' => 'Sprint 1', 'starts_at' => '2026-01-01', 'ends_at' => '2026-01-14', 'status' => 'completed',
+        ]);
+
+        $this->patchJson("/api/orbit/work-items/{$item->key}", [
+            'version' => 1, 'iteration_id' => $iteration->id,
         ])->assertStatus(422);
     }
 

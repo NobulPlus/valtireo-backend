@@ -31,6 +31,17 @@ class OrbitWorkItemController extends Controller
     {
         abort_unless($this->auth->canViewProject($request->user(), $project), 404);
 
+        $iterationId = $request->query('iteration_id');
+        $parentId = $request->query('parent_id');
+
+        if ($iterationId !== null && $iterationId !== 'none') {
+            $request->validate(['iteration_id' => ['integer', 'min:1']]);
+        }
+
+        if ($parentId !== null && $parentId !== 'none') {
+            $request->validate(['parent_id' => ['integer', 'min:1']]);
+        }
+
         $items = $project->workItems()
             ->with(['status', 'assignee:id,name', 'reporter:id,name', 'labels', 'epic:id,key,title'])
             ->whereNull('archived_at')
@@ -39,7 +50,10 @@ class OrbitWorkItemController extends Controller
             ->when($request->string('type')->toString(), fn ($q, $value) => $q->where('type', $value))
             ->when($request->integer('label_id'), fn ($q, $value) => $q->whereHas('labels', fn ($lq) => $lq->where('orbit_labels.id', $value)))
             ->when($request->integer('epic_id'), fn ($q, $value) => $q->where('epic_id', $value))
-            ->when($request->integer('iteration_id'), fn ($q, $value) => $q->where('iteration_id', $value))
+            ->when($iterationId === 'none', fn ($q) => $q->whereNull('iteration_id'))
+            ->when($iterationId !== null && $iterationId !== 'none', fn ($q) => $q->where('iteration_id', $iterationId))
+            ->when($parentId === 'none', fn ($q) => $q->whereNull('parent_id'))
+            ->when($parentId !== null && $parentId !== 'none', fn ($q) => $q->where('parent_id', $parentId))
             ->when($request->string('due_before')->toString(), fn ($q, $value) => $q->whereNotNull('due_at')->where('due_at', '<=', $value))
             ->orderBy('position')
             ->get();
@@ -64,9 +78,11 @@ class OrbitWorkItemController extends Controller
             'epic_id' => ['nullable', 'integer'],
             'story_template' => ['nullable', 'array'],
             'acceptance_criteria' => ['nullable', 'string'],
+            'definition_of_done' => ['nullable', 'string'],
             'estimate' => ['nullable', 'numeric', 'min:0'],
             'due_at' => ['nullable', 'date'],
             'start_at' => ['nullable', 'date'],
+            'iteration_id' => ['nullable', 'integer'],
             'label_ids' => ['sometimes', 'array'],
             'label_ids.*' => ['integer'],
         ]);
@@ -91,6 +107,11 @@ class OrbitWorkItemController extends Controller
             $project->workItems()->where('type', 'epic')->findOrFail($data['epic_id']);
         }
 
+        if (! empty($data['iteration_id'])) {
+            $iteration = $project->iterations()->findOrFail($data['iteration_id']);
+            abort_if($iteration->status === 'completed', 422, 'This sprint is completed. Choose the backlog or an upcoming sprint instead.');
+        }
+
         $key = $this->keys->next($project);
 
         $item = OrbitWorkItem::create([
@@ -108,10 +129,12 @@ class OrbitWorkItemController extends Controller
             'epic_id' => $data['epic_id'] ?? null,
             'story_template' => $data['story_template'] ?? null,
             'acceptance_criteria' => $data['acceptance_criteria'] ?? null,
+            'definition_of_done' => $data['definition_of_done'] ?? null,
             'estimate' => $data['estimate'] ?? null,
             'remaining_estimate' => $data['estimate'] ?? null,
             'due_at' => $data['due_at'] ?? null,
             'start_at' => $data['start_at'] ?? null,
+            'iteration_id' => $data['iteration_id'] ?? null,
             'position' => $this->ordering->nextPosition($status->id),
         ]);
 
@@ -181,7 +204,8 @@ class OrbitWorkItemController extends Controller
         }
 
         if (! empty($data['iteration_id'])) {
-            $project->iterations()->findOrFail($data['iteration_id']);
+            $targetIteration = $project->iterations()->findOrFail($data['iteration_id']);
+            abort_if($targetIteration->status === 'completed', 422, 'This sprint is completed. Choose the backlog or an upcoming sprint instead.');
         }
 
         $update = array_diff_key($data, ['version' => null, 'label_ids' => null]);
@@ -307,7 +331,7 @@ class OrbitWorkItemController extends Controller
             return;
         }
 
-        $scrumOnlyFields = ['estimate', 'remaining_estimate', 'epic_id', 'story_template', 'acceptance_criteria', 'definition_of_done'];
+        $scrumOnlyFields = ['estimate', 'remaining_estimate', 'epic_id', 'story_template', 'acceptance_criteria', 'definition_of_done', 'iteration_id'];
 
         $hasScrumValue = collect($scrumOnlyFields)->contains(fn (string $field) => array_key_exists($field, $data) && $data[$field] !== null);
 

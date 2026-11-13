@@ -91,7 +91,7 @@ export function OrbitWorkItemDetailModal({
   const { data: commentsData } = useOrbitComments(itemKey);
   const { data: linksData } = useOrbitWorkItemLinks(itemKey);
   const { data: membersData } = useOrbitProjectMembers(projectId);
-  const { data: iterationsData } = useOrbitIterations(projectId);
+  const { data: iterationsData } = useOrbitIterations(projectId, projectData?.project.mode === 'scrum');
   const { data: workItemsData } = useOrbitWorkItems(projectId);
   const { data: labelsData } = useOrbitLabels(projectId);
   const updateWorkItem = useUpdateOrbitWorkItem(projectId);
@@ -391,7 +391,12 @@ export function OrbitWorkItemDetailModal({
                 className="w-56"
                 options={[
                   { value: 'backlog', label: 'Backlog' },
-                  ...iterations.map((iteration) => ({ value: String(iteration.id), label: iteration.name })),
+                  ...iterations
+                    .filter((iteration) => iteration.status !== 'completed' || iteration.id === item.iteration_id)
+                    .map((iteration) => ({
+                      value: String(iteration.id),
+                      label: iteration.status === 'completed' ? `${iteration.name} (completed)` : iteration.name,
+                    })),
                 ]}
               />
               {sprintError && <p className="text-xs text-danger">{sprintError}</p>}

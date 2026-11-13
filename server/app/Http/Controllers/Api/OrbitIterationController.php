@@ -19,6 +19,7 @@ class OrbitIterationController extends Controller
     public function index(Request $request, OrbitProject $project): JsonResponse
     {
         abort_unless($this->auth->canViewProject($request->user(), $project), 404);
+        $this->assertScrumProject($project);
 
         $iterations = $project->iterations()
             ->withCount('workItems')
@@ -33,6 +34,7 @@ class OrbitIterationController extends Controller
         $user = $request->user();
         abort_unless($this->auth->canViewProject($user, $project), 404);
         abort_unless($this->auth->canAdministerProject($user, $project), 403);
+        $this->assertScrumProject($project);
         abort_unless($project->mode === 'scrum', 422, 'Sprints are only available on Scrum projects.');
 
         $data = $this->validatePlan($request);
@@ -48,6 +50,7 @@ class OrbitIterationController extends Controller
     public function show(Request $request, OrbitIteration $iteration): JsonResponse
     {
         abort_unless($this->auth->canViewProject($request->user(), $iteration->project), 404);
+        $this->assertScrumProject($iteration->project);
 
         $iteration->load(['workItems.status', 'workItems.assignee:id,name', 'workItems.labels']);
         $iteration->loadCount('workItems');
@@ -60,6 +63,7 @@ class OrbitIterationController extends Controller
         $user = $request->user();
         abort_unless($this->auth->canViewProject($user, $iteration->project), 404);
         abort_unless($this->auth->canAdministerProject($user, $iteration->project), 403);
+        $this->assertScrumProject($iteration->project);
         abort_if($iteration->status === 'completed', 422, 'A completed sprint cannot be edited.');
 
         $data = $this->validatePlan($request, sometimes: true);
@@ -75,6 +79,7 @@ class OrbitIterationController extends Controller
         $project = $iteration->project;
         abort_unless($this->auth->canViewProject($user, $project), 404);
         abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+        $this->assertScrumProject($project);
         abort_unless($iteration->status === 'planned', 422, 'Only a planned sprint can be started.');
 
         abort_if(
@@ -94,6 +99,7 @@ class OrbitIterationController extends Controller
         $project = $iteration->project;
         abort_unless($this->auth->canViewProject($user, $project), 404);
         abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+        $this->assertScrumProject($project);
         abort_unless($iteration->status === 'active', 422, 'Only an active sprint can be completed.');
 
         $data = $request->validate([
@@ -129,6 +135,7 @@ class OrbitIterationController extends Controller
         $user = $request->user();
         abort_unless($this->auth->canViewProject($user, $iteration->project), 404);
         abort_unless($this->auth->canAdministerProject($user, $iteration->project), 403);
+        $this->assertScrumProject($iteration->project);
         abort_unless($iteration->status === 'planned', 422, 'Only a planned sprint can be deleted.');
 
         $iteration->delete();
@@ -156,5 +163,10 @@ class OrbitIterationController extends Controller
         }
 
         return $data;
+    }
+
+    private function assertScrumProject(OrbitProject $project): void
+    {
+        abort_unless($project->mode === 'scrum', 422, 'Iterations are only available on Scrum projects.');
     }
 }

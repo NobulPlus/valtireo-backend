@@ -4,6 +4,9 @@ import { LayoutGrid } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
+import { DueDateChip } from '@/components/ui/DueDateChip';
+import { EpicChip } from '@/components/ui/EpicChip';
+import { LabelDots } from '@/components/ui/LabelDots';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useMyOrbitWork } from '@/features/orbit/api';
 
@@ -65,10 +68,14 @@ export function OrbitMyWorkPage() {
                     <p className="truncate text-sm font-medium text-strong">
                       <span className="text-muted">{item.key}</span> {item.title}
                     </p>
-                    <p className="text-xs text-muted">{item.project?.name}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-muted">{item.project?.name}</p>
+                      <EpicChip epic={item.epic} />
+                      <LabelDots labels={item.labels} />
+                    </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-3">
-                    {item.due_at && <span className="text-xs text-muted">Due {item.due_at}</span>}
+                    <DueDateChip dueAt={item.due_at} />
                     <PriorityBadge priority={item.priority} />
                   </div>
                 </Link>
