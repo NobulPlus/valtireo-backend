@@ -89,6 +89,7 @@ export interface OrbitWorkItem {
   due_at: string | null;
   start_at: string | null;
   position: string;
+  backlog_rank: string;
   version: number;
   archived_at: string | null;
   attachments?: OrbitAttachment[];
@@ -265,6 +266,15 @@ export function useMoveOrbitWorkItem(projectId: number | undefined) {
   return useMutation({
     mutationFn: ({ key, status_id, position, version }: { key: string; status_id: number; position: string; version: number }) =>
       api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/move`, { status_id, position, version }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
+  });
+}
+
+export function useReorderOrbitBacklogItem(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, backlog_rank, version }: { key: string; backlog_rank: string; version: number }) =>
+      api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/reorder-backlog`, { backlog_rank, version }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
   });
 }

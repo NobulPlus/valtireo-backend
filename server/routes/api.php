@@ -187,6 +187,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/work-items/{workItem:key}', [OrbitWorkItemController::class, 'show']);
         Route::patch('/work-items/{workItem:key}', [OrbitWorkItemController::class, 'update']);
         Route::post('/work-items/{workItem:key}/move', [OrbitWorkItemController::class, 'move']);
+        Route::post('/work-items/{workItem:key}/reorder-backlog', [OrbitWorkItemController::class, 'reorderBacklog']);
         Route::post('/work-items/{workItem:key}/archive', [OrbitWorkItemController::class, 'archive']);
         Route::post('/work-items/{workItem:key}/watch', [OrbitWorkItemController::class, 'watch']);
         Route::delete('/work-items/{workItem:key}/watch', [OrbitWorkItemController::class, 'unwatch']);

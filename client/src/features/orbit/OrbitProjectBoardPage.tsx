@@ -45,6 +45,7 @@ import { OrbitProjectSettingsModal } from '@/features/orbit/OrbitProjectSettings
 import { OrbitSprintsPanel } from '@/features/orbit/OrbitSprintsPanel';
 import { OrbitBacklogPanel } from '@/features/orbit/OrbitBacklogPanel';
 import { OrbitSimpleTaskList } from '@/features/orbit/OrbitSimpleTaskList';
+import { computeDropPosition } from '@/features/orbit/positionMath';
 
 const MODE_LABELS: Record<string, string> = { kanban: 'Kanban', scrum: 'Scrum', simple: 'Simple' };
 
@@ -67,27 +68,6 @@ const PRIORITIES = [
   { value: 'high', label: 'High', icon: <OptionDot className="bg-warning" /> },
   { value: 'urgent', label: 'Urgent', icon: <OptionDot className="bg-danger" /> },
 ];
-
-/** Midpoint-insertion position math mirroring OrbitBoardOrderingService::between() on the server — the server is the source of truth (it re-derives nothing from this value beyond storing it), this just picks a sensible number to send. */
-function computeDropPosition(columnItems: OrbitWorkItem[], overId: number | null): string {
-  const sorted = [...columnItems].sort((a, b) => Number(a.position) - Number(b.position));
-  const appendToEnd = () => String((sorted.length ? Number(sorted[sorted.length - 1].position) : 0) + 1024);
-
-  if (overId === null) return appendToEnd();
-
-  const overIndex = sorted.findIndex((item) => item.id === overId);
-  if (overIndex === -1) return appendToEnd();
-
-  const afterPos = Number(sorted[overIndex].position);
-  const beforePos = overIndex > 0 ? Number(sorted[overIndex - 1].position) : null;
-
-  if (beforePos === null) return String(afterPos / 2);
-
-  const mid = (beforePos + afterPos) / 2;
-  if (mid <= beforePos || mid >= afterPos) return appendToEnd();
-
-  return String(mid);
-}
 
 function WorkItemCard({ item, onOpen }: { item: OrbitWorkItem; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -330,7 +310,9 @@ export function OrbitProjectBoardPage() {
     if (!overData) return;
 
     const targetStatusId = overData.statusId;
-    const targetColumnItems = items.filter((candidate) => candidate.status_id === targetStatusId && candidate.id !== activeItem.id);
+    const targetColumnItems = items
+      .filter((candidate) => candidate.status_id === targetStatusId && candidate.id !== activeItem.id)
+      .map((candidate) => ({ id: candidate.id, rank: candidate.position }));
     const overId = overData.type === 'item' ? Number(over.id) : null;
     const position = computeDropPosition(targetColumnItems, overId);
 

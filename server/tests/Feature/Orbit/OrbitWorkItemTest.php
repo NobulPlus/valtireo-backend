@@ -133,6 +133,57 @@ class OrbitWorkItemTest extends TestCase
             ->assertJsonPath('data.0.id', $topLevel->id);
     }
 
+    public function test_items_created_back_to_back_get_increasing_backlog_ranks(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $first = $this->postJson("/api/orbit/projects/{$project->id}/work-items", ['type' => 'task', 'title' => 'First'])->assertCreated();
+        $second = $this->postJson("/api/orbit/projects/{$project->id}/work-items", ['type' => 'task', 'title' => 'Second'])->assertCreated();
+
+        $this->assertGreaterThan((float) $first->json('work_item.backlog_rank'), (float) $second->json('work_item.backlog_rank'));
+    }
+
+    public function test_reordering_the_backlog_persists_and_is_reflected_in_index_ordering(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+        $status = $project->statuses()->first();
+
+        $first = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => 'SCRM-1', 'type' => 'task', 'title' => 'First', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1, 'backlog_rank' => 1024,
+        ]);
+        $second = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => 'SCRM-2', 'type' => 'task', 'title' => 'Second', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 2, 'backlog_rank' => 2048,
+        ]);
+
+        // Move "Second" ahead of "First".
+        $this->postJson("/api/orbit/work-items/{$second->key}/reorder-backlog", [
+            'backlog_rank' => '512', 'version' => 1,
+        ])->assertOk();
+
+        $response = $this->getJson("/api/orbit/projects/{$project->id}/work-items?iteration_id=none&parent_id=none")->assertOk();
+        $this->assertSame([$second->id, $first->id], $response->json('data.*.id'));
+    }
+
+    public function test_reordering_the_backlog_with_a_stale_version_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+        $status = $project->statuses()->first();
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => 'SCRM-1', 'type' => 'task', 'title' => 'First', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1, 'backlog_rank' => 1024,
+        ]);
+
+        $this->postJson("/api/orbit/work-items/{$item->key}/reorder-backlog", [
+            'backlog_rank' => '512', 'version' => 0,
+        ])->assertStatus(409);
+    }
+
     public function test_iterations_cannot_be_set_on_a_non_scrum_project(): void
     {
         $fixture = $this->createOrbitOrganization();

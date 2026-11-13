@@ -55,7 +55,7 @@ class OrbitWorkItemController extends Controller
             ->when($parentId === 'none', fn ($q) => $q->whereNull('parent_id'))
             ->when($parentId !== null && $parentId !== 'none', fn ($q) => $q->where('parent_id', $parentId))
             ->when($request->string('due_before')->toString(), fn ($q, $value) => $q->whereNotNull('due_at')->where('due_at', '<=', $value))
-            ->orderBy('position')
+            ->orderBy($iterationId === 'none' && $parentId === 'none' ? 'backlog_rank' : 'position')
             ->get();
 
         return response()->json(['data' => $items]);
@@ -136,6 +136,7 @@ class OrbitWorkItemController extends Controller
             'start_at' => $data['start_at'] ?? null,
             'iteration_id' => $data['iteration_id'] ?? null,
             'position' => $this->ordering->nextPosition($status->id),
+            'backlog_rank' => $this->ordering->nextBacklogRank($project->id),
         ]);
 
         if (! empty($data['label_ids'])) {
@@ -283,6 +284,28 @@ class OrbitWorkItemController extends Controller
         }
 
         return response()->json(['work_item' => $workItem->fresh('status')]);
+    }
+
+    public function reorderBacklog(Request $request, OrbitWorkItem $workItem): JsonResponse
+    {
+        $user = $request->user();
+        $project = $workItem->project;
+        abort_unless($this->auth->canViewProject($user, $project), 404);
+        abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+
+        $data = $request->validate([
+            'backlog_rank' => ['required', 'numeric'],
+            'version' => ['required', 'integer'],
+        ]);
+
+        $this->assertVersion($workItem, $data['version']);
+
+        $workItem->update([
+            'backlog_rank' => $data['backlog_rank'],
+            'version' => $workItem->version + 1,
+        ]);
+
+        return response()->json(['work_item' => $workItem->fresh()]);
     }
 
     public function archive(Request $request, OrbitWorkItem $workItem): JsonResponse

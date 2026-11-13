@@ -23,6 +23,18 @@ class OrbitBoardOrderingService
     }
 
     /**
+     * backlog_rank is a project-wide scale (not status-scoped like
+     * `position`), so it survives an item moving between sprints and
+     * board columns — needed for the Backlog screen's manual ordering.
+     */
+    public function nextBacklogRank(int $projectId): string
+    {
+        $max = OrbitWorkItem::query()->where('project_id', $projectId)->max('backlog_rank');
+
+        return $this->format(((float) ($max ?? 0)) + self::GAP);
+    }
+
+    /**
      * Midpoint between two neighboring positions, or null when precision is
      * exhausted (the computed midpoint collapses onto one of its
      * neighbors) — the caller should renumber() and retry in that case.
