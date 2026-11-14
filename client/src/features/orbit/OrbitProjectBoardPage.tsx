@@ -26,8 +26,9 @@ import { OptionDot } from '@/components/ui/OptionDot';
 import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { EpicChip } from '@/components/ui/EpicChip';
 import { LabelDots } from '@/components/ui/LabelDots';
-import { ErrorState, LoadingState } from '@/components/ui/States';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import {
   useCreateOrbitWorkItem,
   useMoveOrbitWorkItem,
@@ -59,6 +60,11 @@ const TYPES = [
 ];
 
 const EPIC_TYPE = { value: 'epic', label: 'Epic', icon: <OptionDot className="bg-chart-4" /> };
+
+// Fetched independently of the (now sprint-scoped) board items so the create
+// form's epic picker always lists every epic in the project, not just the
+// ones that happen to be in the active sprint.
+const EPIC_FILTERS = { type: 'epic' } as const;
 
 // Severity — reuses PriorityBadge's exact tone mapping (low: draft,
 // medium: info, high: warning, urgent: danger).
@@ -137,10 +143,22 @@ export function OrbitProjectBoardPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const id = Number(projectId);
   const { data: projectData } = useOrbitProject(id);
-  const { data, isLoading, isError, error, refetch } = useOrbitWorkItems(id);
+  const project = projectData?.project;
+  const isScrum = project?.mode === 'scrum';
+  const { data: iterationsData } = useOrbitIterations(id, isScrum);
+  const iterations = iterationsData?.data ?? [];
+  const activeIteration = iterations.find((iteration) => iteration.status === 'active');
+  // Scrum's "Board" is the active sprint's board, not every item in the
+  // project — the Backlog tab is where unscheduled work lives. Disable the
+  // fetch entirely (rather than fetch-then-filter) when there's nothing to
+  // scope to yet, so a fresh Scrum project doesn't render a misleading
+  // "everything" board before its first sprint starts.
+  const boardFilters = useMemo(() => (isScrum && activeIteration ? { iteration_id: activeIteration.id } : {}), [isScrum, activeIteration]);
+  const boardEnabled = !isScrum || Boolean(activeIteration);
+  const { data, isLoading, isError, error, refetch } = useOrbitWorkItems(id, boardFilters, boardEnabled);
+  const { data: epicsData } = useOrbitWorkItems(id, EPIC_FILTERS, isScrum);
   const { data: membersData } = useOrbitProjectMembers(id);
   const { data: labelsData } = useOrbitLabels(id);
-  const { data: iterationsData } = useOrbitIterations(id, projectData?.project.mode === 'scrum');
   const createItem = useCreateOrbitWorkItem(id);
   const moveItem = useMoveOrbitWorkItem(id);
 
@@ -166,13 +184,13 @@ export function OrbitProjectBoardPage() {
   const [tab, setTab] = useState<'board' | 'backlog' | 'sprints'>('board');
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const { formatDate } = useDateFormatter();
 
-  const project = projectData?.project;
   const statuses = project?.statuses ?? [];
   const items = data?.data ?? [];
+  const epicItems = epicsData?.data ?? [];
   const members = membersData?.data ?? [];
   const labels = labelsData?.data ?? [];
-  const iterations = iterationsData?.data ?? [];
   const isSimple = project?.mode === 'simple';
   const createError = createItem.error instanceof ApiError ? createItem.error.message : null;
 
@@ -198,10 +216,9 @@ export function OrbitProjectBoardPage() {
     return map;
   }, [items]);
 
-  const isScrum = project?.mode === 'scrum';
   const typeOptions = isScrum ? [...TYPES, EPIC_TYPE] : TYPES;
   const assigneeOptions = [{ value: 'unassigned', label: 'Unassigned' }, ...members.map((member) => ({ value: String(member.id), label: member.name }))];
-  const epicOptions = [{ value: 'none', label: 'No epic' }, ...items.filter((item) => item.type === 'epic').map((item) => ({ value: String(item.id), label: `${item.key} · ${item.title}` }))];
+  const epicOptions = [{ value: 'none', label: 'No epic' }, ...epicItems.map((item) => ({ value: String(item.id), label: `${item.key} · ${item.title}` }))];
   const iterationOptions = [
     { value: 'backlog', label: 'Backlog' },
     ...iterations.filter((iteration) => iteration.status !== 'completed').map((iteration) => ({ value: String(iteration.id), label: iteration.status === 'active' ? `${iteration.name} (active)` : iteration.name })),
@@ -228,6 +245,12 @@ export function OrbitProjectBoardPage() {
     if (prefilledEpicId) {
       setType('story');
       setEpicId(String(prefilledEpicId));
+    }
+    // Creating while looking at the sprint board should land the item in
+    // that sprint — otherwise it would immediately vanish from view into
+    // the backlog. Creating from the Backlog tab keeps defaulting there.
+    if (tab === 'board' && activeIteration) {
+      setIterationId(String(activeIteration.id));
     }
     setOpen(true);
   }
@@ -365,8 +388,30 @@ export function OrbitProjectBoardPage() {
         <OrbitBacklogPanel project={project} onOpenItem={setActiveKey} onAddItem={openCreate} />
       ) : tab === 'sprints' && project?.mode === 'scrum' ? (
         <OrbitSprintsPanel project={project} />
+      ) : isScrum && !activeIteration ? (
+        <EmptyState
+          title="No active sprint"
+          description="Start a sprint from the Backlog or Sprints tab to see its board here."
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setTab('sprints')}>
+              Go to Sprints
+            </Button>
+          }
+        />
       ) : (
         <>
+          {isScrum && activeIteration && (
+            <div className="mb-4 rounded-lg border border-border bg-surface-soft px-4 py-3">
+              <p className="text-sm font-medium text-strong">
+                {activeIteration.name}{' '}
+                <span className="text-xs font-normal text-muted">
+                  · {formatDate(activeIteration.starts_at)} – {formatDate(activeIteration.ends_at)}
+                </span>
+              </p>
+              {activeIteration.goal && <p className="mt-1 text-xs text-muted">{activeIteration.goal}</p>}
+            </div>
+          )}
+
           {moveError && <p className="mb-3 text-sm text-danger">{moveError}</p>}
           {isLoading && <LoadingState fill />}
           {isError && <ErrorState error={error} onRetry={refetch} />}

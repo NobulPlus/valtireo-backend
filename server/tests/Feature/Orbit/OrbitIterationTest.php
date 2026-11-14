@@ -70,6 +70,33 @@ class OrbitIterationTest extends TestCase
         $this->assertDatabaseMissing('orbit_iterations', ['id' => $iterationId]);
     }
 
+    public function test_a_sprint_can_be_created_and_updated_with_a_numeric_capacity(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $response = $this->postJson("/api/orbit/projects/{$project->id}/iterations", [
+            'name' => 'Sprint 1', 'starts_at' => '2026-12-01', 'ends_at' => '2026-12-14', 'capacity_points' => 20,
+        ])->assertCreated();
+        $this->assertSame('20.00', $response->json('iteration.capacity_points'));
+
+        $iterationId = $response->json('iteration.id');
+        $this->patchJson("/api/orbit/iterations/{$iterationId}", ['capacity_points' => 15.5])->assertOk()
+            ->assertJsonPath('iteration.capacity_points', '15.50');
+    }
+
+    public function test_a_negative_sprint_capacity_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/iterations", [
+            'name' => 'Sprint 1', 'starts_at' => '2026-12-01', 'ends_at' => '2026-12-14', 'capacity_points' => -5,
+        ])->assertStatus(422);
+    }
+
     public function test_a_contributor_cannot_create_update_or_delete_a_sprint(): void
     {
         $fixture = $this->createOrbitOrganization();

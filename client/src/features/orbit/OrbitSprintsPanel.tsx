@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { MoreHorizontal, Plus } from 'lucide-react';
+import { MoreHorizontal, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
@@ -7,9 +7,10 @@ import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
 import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { SelectMenu } from '@/components/ui/SelectMenu';
-import { StatusBadge } from '@/components/ui/StatusBadge';
+import { StatusBadge, toneClasses } from '@/components/ui/StatusBadge';
 import { Dropdown, DropdownMenuItem } from '@/components/ui/Dropdown';
 import { LoadingState } from '@/components/ui/States';
+import { cn } from '@/lib/cn';
 import { useDateFormatter } from '@/lib/dateFormat';
 import { ApiError } from '@/lib/apiClient';
 import {
@@ -20,8 +21,10 @@ import {
   useOrbitWorkItems,
   useStartOrbitIteration,
   useUpdateOrbitIteration,
+  useUpdateOrbitWorkItem,
   type OrbitIteration,
   type OrbitProject,
+  type OrbitWorkItem,
 } from '@/features/orbit/api';
 
 interface SprintFormState {
@@ -30,9 +33,10 @@ interface SprintFormState {
   dateFrom: string;
   dateTo: string;
   capacityNote: string;
+  capacityPoints: string;
 }
 
-const EMPTY_FORM: SprintFormState = { name: '', goal: '', dateFrom: '', dateTo: '', capacityNote: '' };
+const EMPTY_FORM: SprintFormState = { name: '', goal: '', dateFrom: '', dateTo: '', capacityNote: '', capacityPoints: '' };
 
 function SprintForm({ value, onChange }: { value: SprintFormState; onChange: (next: SprintFormState) => void }) {
   return (
@@ -50,9 +54,94 @@ function SprintForm({ value, onChange }: { value: SprintFormState; onChange: (ne
       <Field label="Goal" hint="Optional">
         <Textarea value={value.goal} onChange={(event) => onChange({ ...value, goal: event.target.value })} rows={2} />
       </Field>
-      <Field label="Capacity note" hint="Optional — e.g. team availability, holidays">
-        <Input value={value.capacityNote} onChange={(event) => onChange({ ...value, capacityNote: event.target.value })} />
-      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Capacity (points)" hint="Optional">
+          <Input type="number" min="0" step="0.5" value={value.capacityPoints} onChange={(event) => onChange({ ...value, capacityPoints: event.target.value })} />
+        </Field>
+        <Field label="Capacity note" hint="Optional — e.g. team availability">
+          <Input value={value.capacityNote} onChange={(event) => onChange({ ...value, capacityNote: event.target.value })} />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+function SprintPlanner({ project, iteration }: { project: OrbitProject; iteration: OrbitIteration }) {
+  const { data: committedData, isLoading: committedLoading } = useOrbitWorkItems(project.id, { iteration_id: iteration.id });
+  const { data: backlogData, isLoading: backlogLoading } = useOrbitWorkItems(project.id, { iteration_id: 'none', parent_id: 'none' });
+  const updateItem = useUpdateOrbitWorkItem(project.id);
+  const [error, setError] = useState<string | null>(null);
+  const canEdit = Boolean(project.can_edit_work_items);
+
+  const committed = committedData?.data ?? [];
+  const backlog = backlogData?.data ?? [];
+  const committedTotal = committed.reduce((sum, item) => sum + Number(item.estimate ?? 0), 0);
+  const capacity = iteration.capacity_points;
+  const overCapacity = capacity != null && committedTotal > capacity;
+
+  async function moveItem(item: OrbitWorkItem, iterationId: number | null) {
+    setError(null);
+    try {
+      await updateItem.mutateAsync({ key: item.key, version: item.version, iteration_id: iterationId });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not update this item.');
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <span className={cn('inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium', capacity != null ? toneClasses[overCapacity ? 'warning' : 'success'] : 'bg-surface-soft text-muted')}>
+        {committedTotal} {capacity != null ? `/ ${capacity}` : ''} pts committed
+      </span>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">In this sprint</h4>
+          {committedLoading ? (
+            <LoadingState />
+          ) : committed.length === 0 ? (
+            <p className="py-2 text-sm text-muted">No items planned yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {committed.map((item) => (
+                <li key={item.id} className="flex items-center gap-2 py-2">
+                  <span className="flex-shrink-0 text-xs text-muted">{item.key}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-strong">{item.title}</span>
+                  {item.estimate != null && <span className="flex-shrink-0 text-xs text-muted">{item.estimate} pts</span>}
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" aria-label="Remove from sprint" onClick={() => void moveItem(item, null)} disabled={updateItem.isPending}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Backlog</h4>
+          {backlogLoading ? (
+            <LoadingState />
+          ) : backlog.length === 0 ? (
+            <p className="py-2 text-sm text-muted">Backlog is empty.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {backlog.map((item) => (
+                <li key={item.id} className="flex items-center gap-2 py-2">
+                  <span className="flex-shrink-0 text-xs text-muted">{item.key}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-strong">{item.title}</span>
+                  {item.estimate != null && <span className="flex-shrink-0 text-xs text-muted">{item.estimate} pts</span>}
+                  {canEdit && (
+                    <Button variant="secondary" size="sm" onClick={() => void moveItem(item, iteration.id)} disabled={updateItem.isPending}>
+                      Add
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -177,7 +266,11 @@ function SprintCard({
 
       {expanded && (
         <div className="mt-3 border-t border-border pt-2">
-          <SprintItems projectId={project.id} iterationId={iteration.id} />
+          {iteration.status === 'planned' ? (
+            <SprintPlanner project={project} iteration={iteration} />
+          ) : (
+            <SprintItems projectId={project.id} iterationId={iteration.id} />
+          )}
         </div>
       )}
 
@@ -224,7 +317,14 @@ export function OrbitSprintsPanel({ project }: { project: OrbitProject }) {
 
   function openEdit(iteration: OrbitIteration) {
     setEditing(iteration);
-    setForm({ name: iteration.name, goal: iteration.goal ?? '', dateFrom: iteration.starts_at, dateTo: iteration.ends_at, capacityNote: iteration.capacity_note ?? '' });
+    setForm({
+      name: iteration.name,
+      goal: iteration.goal ?? '',
+      dateFrom: iteration.starts_at,
+      dateTo: iteration.ends_at,
+      capacityNote: iteration.capacity_note ?? '',
+      capacityPoints: iteration.capacity_points != null ? String(iteration.capacity_points) : '',
+    });
     setError(null);
   }
 
@@ -238,6 +338,7 @@ export function OrbitSprintsPanel({ project }: { project: OrbitProject }) {
       starts_at: form.dateFrom,
       ends_at: form.dateTo,
       capacity_note: form.capacityNote || undefined,
+      capacity_points: form.capacityPoints ? Number(form.capacityPoints) : undefined,
     };
 
     try {

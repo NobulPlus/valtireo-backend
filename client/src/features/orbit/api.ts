@@ -113,6 +113,7 @@ export interface OrbitIteration {
   starts_at: string;
   ends_at: string;
   capacity_note: string | null;
+  capacity_points: number | null;
   status: 'planned' | 'active' | 'completed';
   started_at: string | null;
   completed_at: string | null;
@@ -220,11 +221,11 @@ export interface OrbitWorkItemFilters {
   due_before?: string;
 }
 
-export function useOrbitWorkItems(projectId: number | undefined, filters: OrbitWorkItemFilters = {}) {
+export function useOrbitWorkItems(projectId: number | undefined, filters: OrbitWorkItemFilters = {}, enabled = true) {
   return useQuery({
     queryKey: ['orbit', 'projects', projectId, 'work-items', filters],
     queryFn: () => api.get<{ data: OrbitWorkItem[] }>(`/orbit/projects/${projectId}/work-items`, { params: filters }),
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId) && enabled,
   });
 }
 
@@ -522,7 +523,7 @@ export function useOrbitIteration(iterationId: number | undefined) {
 export function useCreateOrbitIteration(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { name: string; goal?: string; starts_at: string; ends_at: string; capacity_note?: string }) =>
+    mutationFn: (payload: { name: string; goal?: string; starts_at: string; ends_at: string; capacity_note?: string; capacity_points?: number }) =>
       api.post<{ iteration: OrbitIteration }>(`/orbit/projects/${projectId}/iterations`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] }),
   });
@@ -531,7 +532,7 @@ export function useCreateOrbitIteration(projectId: number | undefined) {
 export function useUpdateOrbitIteration(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ iterationId, ...payload }: { iterationId: number } & Partial<Pick<OrbitIteration, 'name' | 'goal' | 'starts_at' | 'ends_at' | 'capacity_note'>>) =>
+    mutationFn: ({ iterationId, ...payload }: { iterationId: number } & Partial<Pick<OrbitIteration, 'name' | 'goal' | 'starts_at' | 'ends_at' | 'capacity_note' | 'capacity_points'>>) =>
       api.patch<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}`, payload),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });

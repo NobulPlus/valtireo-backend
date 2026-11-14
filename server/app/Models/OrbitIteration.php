@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['project_id', 'name', 'goal', 'starts_at', 'ends_at', 'capacity_note', 'status', 'started_at', 'completed_at'])]
+#[Fillable(['project_id', 'name', 'goal', 'starts_at', 'ends_at', 'capacity_note', 'capacity_points', 'status', 'started_at', 'completed_at'])]
 class OrbitIteration extends Model
 {
     public function project(): BelongsTo
@@ -25,6 +25,7 @@ class OrbitIteration extends Model
         return [
             'starts_at' => 'date',
             'ends_at' => 'date',
+            'capacity_points' => 'decimal:2',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

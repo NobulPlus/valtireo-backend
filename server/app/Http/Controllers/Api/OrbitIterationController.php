@@ -156,6 +156,7 @@ class OrbitIterationController extends Controller
             'starts_at' => [$required, 'date'],
             'ends_at' => [$required, 'date'],
             'capacity_note' => ['nullable', 'string', 'max:255'],
+            'capacity_points' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         if (isset($data['starts_at'], $data['ends_at'])) {
