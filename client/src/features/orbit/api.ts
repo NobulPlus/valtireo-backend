@@ -92,6 +92,9 @@ export interface OrbitWorkItem {
   backlog_rank: string;
   version: number;
   archived_at: string | null;
+  completed_at: string | null;
+  completed_by: { id: number; name: string } | null;
+  completion_note: string | null;
   attachments?: OrbitAttachment[];
   watchers?: { id: number; name: string }[];
   activities?: OrbitWorkItemActivity[];
@@ -159,6 +162,7 @@ export interface OrbitAttachment {
   file_name: string;
   mime_type: string;
   file_size: number;
+  is_deliverable: boolean;
 }
 
 export function useOrbitWorkspaces() {
@@ -265,8 +269,8 @@ export function useOrbitWorkItem(key: string | undefined) {
 export function useMoveOrbitWorkItem(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, status_id, position, version }: { key: string; status_id: number; position: string; version: number }) =>
-      api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/move`, { status_id, position, version }),
+    mutationFn: ({ key, status_id, position, version, completion_note }: { key: string; status_id: number; position: string; version: number; completion_note?: string }) =>
+      api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/move`, { status_id, position, version, completion_note }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
   });
 }
@@ -648,6 +652,15 @@ export function useUploadOrbitWorkItemAttachment(key: string | undefined) {
       formData.append('file', file);
       return api.post<{ attachment: OrbitAttachment }>(`/orbit/work-items/${key}/attachments`, formData);
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
+  });
+}
+
+export function useSetAttachmentDeliverable(key: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ attachmentId, is_deliverable }: { attachmentId: number; is_deliverable: boolean }) =>
+      api.patch<{ attachment: OrbitAttachment }>(`/orbit/attachments/${attachmentId}/deliverable`, { is_deliverable }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
   });
 }

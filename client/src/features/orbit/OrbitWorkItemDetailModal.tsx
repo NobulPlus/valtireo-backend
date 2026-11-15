@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Eye, EyeOff, Link2, Paperclip, Reply, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Link2, Package, PackageCheck, Paperclip, Reply, Trash2, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
@@ -27,6 +27,7 @@ import {
   useOrbitWorkItem,
   useOrbitWorkItemLinks,
   useOrbitWorkItems,
+  useSetAttachmentDeliverable,
   useUnwatchOrbitWorkItem,
   useUpdateOrbitWorkItem,
   useUploadOrbitWorkItemAttachment,
@@ -98,6 +99,7 @@ export function OrbitWorkItemDetailModal({
   const createComment = useCreateOrbitComment(itemKey);
   const uploadAttachment = useUploadOrbitWorkItemAttachment(itemKey);
   const deleteAttachment = useDeleteOrbitAttachment(itemKey);
+  const setDeliverable = useSetAttachmentDeliverable(itemKey);
   const createLink = useCreateOrbitWorkItemLink(itemKey);
   const deleteLink = useDeleteOrbitWorkItemLink(itemKey);
   const watchItem = useWatchOrbitWorkItem(itemKey);
@@ -403,6 +405,18 @@ export function OrbitWorkItemDetailModal({
             </div>
           )}
 
+          {item.status?.category === 'done' && (item.completed_by || item.completion_note) && (
+            <div className="rounded-lg border border-border bg-surface-soft px-3 py-2 text-xs text-muted">
+              {item.completed_by && (
+                <p>
+                  Completed by <span className="font-medium text-strong">{item.completed_by.name}</span>
+                  {item.completed_at ? ` · ${formatDateTime(item.completed_at)}` : ''}
+                </p>
+              )}
+              {item.completion_note && <p className="mt-1 whitespace-pre-wrap text-strong">{item.completion_note}</p>}
+            </div>
+          )}
+
           {canEdit ? (
             <div className="flex flex-col gap-4">
               <Field label="Title">
@@ -549,6 +563,18 @@ export function OrbitWorkItemDetailModal({
                   </button>
                   <div className="flex flex-shrink-0 items-center gap-2">
                     <span className="text-xs text-muted">{formatFileSize(attachment.file_size)}</span>
+                    {canEdit && project?.mode === 'scrum' && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={attachment.is_deliverable ? `Unmark ${attachment.file_name} as deliverable` : `Mark ${attachment.file_name} as deliverable`}
+                        title={attachment.is_deliverable ? 'Unmark as deliverable' : 'Mark as deliverable'}
+                        onClick={() => void setDeliverable.mutateAsync({ attachmentId: attachment.id, is_deliverable: !attachment.is_deliverable })}
+                        isLoading={setDeliverable.isPending}
+                      >
+                        {attachment.is_deliverable ? <PackageCheck className="h-3.5 w-3.5 text-pine" /> : <Package className="h-3.5 w-3.5 text-muted" />}
+                      </Button>
+                    )}
                     {(attachment.uploaded_by_id === session?.user.id || project?.can_administer) && (
                       <Button variant="ghost" size="icon" aria-label={`Remove ${attachment.file_name}`} onClick={() => void handleRemoveAttachment(attachment.id)}>
                         <Trash2 className="h-3.5 w-3.5 text-danger" />

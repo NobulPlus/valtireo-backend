@@ -17,7 +17,7 @@ import { useDroppable } from '@dnd-kit/core';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { ModalCancelAction, ModalSaveAction } from '@/components/ui/ModalActions';
+import { ModalCancelAction, ModalConfirmAction, ModalSaveAction } from '@/components/ui/ModalActions';
 import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
 import { SelectMenu } from '@/components/ui/SelectMenu';
@@ -182,6 +182,9 @@ export function OrbitProjectBoardPage() {
   const [draggingItem, setDraggingItem] = useState<OrbitWorkItem | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [tab, setTab] = useState<'board' | 'backlog' | 'sprints'>('board');
+  const [pendingCompletion, setPendingCompletion] = useState<{ item: OrbitWorkItem; statusId: number; position: string } | null>(null);
+  const [completionNote, setCompletionNote] = useState('');
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const { formatDate } = useDateFormatter();
@@ -299,11 +302,40 @@ export function OrbitProjectBoardPage() {
     }
   }
 
+  function requestMove(item: OrbitWorkItem, statusId: number, position: string) {
+    const targetIsDone = statuses.find((status) => status.id === statusId)?.category === 'done';
+    const alreadyDone = item.status?.category === 'done';
+    if (targetIsDone && !alreadyDone) {
+      setCompletionNote('');
+      setCompletionError(null);
+      setPendingCompletion({ item, statusId, position });
+      return;
+    }
+    void persistMove(item, statusId, position);
+  }
+
+  async function confirmCompletion() {
+    if (!pendingCompletion) return;
+    setCompletionError(null);
+    try {
+      await moveItem.mutateAsync({
+        key: pendingCompletion.item.key,
+        status_id: pendingCompletion.statusId,
+        position: pendingCompletion.position,
+        version: pendingCompletion.item.version,
+        completion_note: completionNote || undefined,
+      });
+      setPendingCompletion(null);
+    } catch (err) {
+      setCompletionError(err instanceof ApiError ? err.message : 'Could not complete this item.');
+    }
+  }
+
   function handleMoveViaDropdown(item: OrbitWorkItem, statusId: number) {
     if (statusId === item.status_id) return;
     const column = items.filter((candidate) => candidate.status_id === statusId);
     const maxPosition = column.reduce((max, candidate) => Math.max(max, Number(candidate.position)), 0);
-    void persistMove(item, statusId, String(maxPosition + 1024));
+    requestMove(item, statusId, String(maxPosition + 1024));
   }
 
   function handleComplete(item: OrbitWorkItem) {
@@ -341,7 +373,7 @@ export function OrbitProjectBoardPage() {
 
     if (targetStatusId === activeItem.status_id && Number(position) === Number(activeItem.position)) return;
 
-    void persistMove(activeItem, targetStatusId, position);
+    requestMove(activeItem, targetStatusId, position);
   }
 
   return (
@@ -549,6 +581,43 @@ export function OrbitProjectBoardPage() {
           )}
         </form>
       </Modal>
+
+      {pendingCompletion && (
+        <Modal
+          open
+          onClose={() => setPendingCompletion(null)}
+          title="Confirm completion"
+          footer={
+            <>
+              <ModalCancelAction onClick={() => setPendingCompletion(null)} disabled={moveItem.isPending} />
+              <ModalConfirmAction onClick={() => void confirmCompletion()} isLoading={moveItem.isPending} title="Confirm completion" />
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            {(pendingCompletion.item.acceptance_criteria || pendingCompletion.item.definition_of_done) && (
+              <div className="rounded-lg border border-border bg-surface-soft p-3">
+                {pendingCompletion.item.acceptance_criteria && (
+                  <>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">Acceptance criteria</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-strong">{pendingCompletion.item.acceptance_criteria}</p>
+                  </>
+                )}
+                {pendingCompletion.item.definition_of_done && (
+                  <>
+                    <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted">Definition of done</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-strong">{pendingCompletion.item.definition_of_done}</p>
+                  </>
+                )}
+              </div>
+            )}
+            <Field label="Completion note" hint="Optional">
+              <Textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} rows={3} />
+            </Field>
+            {completionError && <p className="text-sm text-danger">{completionError}</p>}
+          </div>
+        </Modal>
+      )}
 
       {activeKey && (
         <OrbitWorkItemDetailModal

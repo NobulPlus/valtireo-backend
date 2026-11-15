@@ -16,7 +16,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'story_template', 'acceptance_criteria', 'definition_of_done',
     'status_id', 'priority', 'reporter_id', 'assignee_id', 'parent_id', 'epic_id', 'iteration_id',
     'estimate', 'remaining_estimate', 'due_at', 'start_at', 'position', 'backlog_rank', 'version',
-    'started_at', 'completed_at', 'archived_at',
+    'started_at', 'completed_at', 'completed_by_id', 'completion_note', 'archived_at',
 ])]
 class OrbitWorkItem extends Model implements AuditableContract
 {
@@ -45,6 +45,11 @@ class OrbitWorkItem extends Model implements AuditableContract
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function completedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by_id');
     }
 
     public function parent(): BelongsTo

@@ -119,4 +119,46 @@ class OrbitCollaborationTest extends TestCase
 
         $this->getJson("/api/orbit/attachments/{$attachment->id}/file")->assertNotFound();
     }
+
+    public function test_a_project_member_can_flag_and_unflag_an_attachment_as_the_deliverable(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        ['item' => $item] = $this->projectWithItem($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $attachment = \App\Models\OrbitAttachment::create([
+            'organization_id' => $fixture['organization']->id, 'work_item_id' => $item->id,
+            'uploaded_by_id' => $fixture['admin']->id, 'file_name' => 'spec.pdf', 'file_path' => 'orbit/fake/spec.pdf',
+            'mime_type' => 'application/pdf', 'file_size' => 1024,
+        ]);
+
+        $this->patchJson("/api/orbit/attachments/{$attachment->id}/deliverable", ['is_deliverable' => true])
+            ->assertOk()
+            ->assertJsonPath('attachment.is_deliverable', true);
+
+        $this->patchJson("/api/orbit/attachments/{$attachment->id}/deliverable", ['is_deliverable' => false])
+            ->assertOk()
+            ->assertJsonPath('attachment.is_deliverable', false);
+    }
+
+    public function test_a_viewer_cannot_flag_an_attachment_as_the_deliverable(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        ['project' => $project, 'item' => $item] = $this->projectWithItem($fixture);
+
+        $viewer = User::create(['organization_id' => $fixture['organization']->id, 'name' => 'Viewer', 'email' => 'viewer-deliverable@test.local', 'password' => 'Password1!']);
+        $viewer->syncRoles([$fixture['roles']->get('employee')]);
+        $fixture['roles']->get('employee')->givePermissionTo('orbit.access');
+        OrbitProjectMember::create(['organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'user_id' => $viewer->id, 'role' => 'viewer']);
+
+        $attachment = \App\Models\OrbitAttachment::create([
+            'organization_id' => $fixture['organization']->id, 'work_item_id' => $item->id,
+            'uploaded_by_id' => $fixture['admin']->id, 'file_name' => 'spec.pdf', 'file_path' => 'orbit/fake/spec.pdf',
+            'mime_type' => 'application/pdf', 'file_size' => 1024,
+        ]);
+
+        Sanctum::actingAs($viewer);
+
+        $this->patchJson("/api/orbit/attachments/{$attachment->id}/deliverable", ['is_deliverable' => true])->assertForbidden();
+    }
 }

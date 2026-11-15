@@ -200,6 +200,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/work-items/{workItem:key}/attachments', [OrbitAttachmentController::class, 'storeForWorkItem']);
         Route::post('/comments/{comment}/attachments', [OrbitAttachmentController::class, 'storeForComment']);
         Route::get('/attachments/{attachment}/file', [OrbitAttachmentController::class, 'file']);
+        Route::patch('/attachments/{attachment}/deliverable', [OrbitAttachmentController::class, 'setDeliverable']);
         Route::delete('/attachments/{attachment}', [OrbitAttachmentController::class, 'destroy']);
 
         Route::get('/work-items/{workItem:key}/links', [OrbitWorkItemLinkController::class, 'index']);

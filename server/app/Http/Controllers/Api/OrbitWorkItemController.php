@@ -158,7 +158,7 @@ class OrbitWorkItemController extends Controller
         abort_unless($this->auth->canViewProject($request->user(), $workItem->project), 404);
 
         $workItem->load([
-            'status', 'assignee:id,name', 'reporter:id,name', 'labels',
+            'status', 'assignee:id,name', 'reporter:id,name', 'completedBy:id,name', 'labels',
             'parent:id,key,title', 'epic:id,key,title', 'project:id,name,key_prefix,mode',
             'attachments' => fn ($query) => $query->whereNull('deleted_at')->with('uploadedBy:id,name'),
             'watchers:id,name',
@@ -248,12 +248,23 @@ class OrbitWorkItemController extends Controller
             'status_id' => ['required', 'integer'],
             'position' => ['required', 'numeric'],
             'version' => ['required', 'integer'],
+            'completion_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $this->assertVersion($workItem, $data['version']);
 
         $newStatus = $project->statuses()->findOrFail($data['status_id']);
         $previousStatusId = $workItem->status_id;
+        $wasDone = OrbitStatus::where('id', $previousStatusId)->value('category') === 'done';
+        $completingNow = $newStatus->category === 'done' && ! $wasDone;
+
+        if ($completingNow && $project->mode === 'scrum' && in_array($workItem->type, ['story', 'task'], true)) {
+            abort_unless(
+                $workItem->attachments()->whereNull('deleted_at')->where('is_deliverable', true)->exists(),
+                422,
+                'Attach a deliverable before marking this item complete.'
+            );
+        }
 
         $workItem->update([
             'status_id' => $newStatus->id,
@@ -261,17 +272,30 @@ class OrbitWorkItemController extends Controller
             'version' => $workItem->version + 1,
             'started_at' => $workItem->started_at ?? ($newStatus->category === 'in_progress' ? now() : null),
             'completed_at' => $newStatus->category === 'done' ? ($workItem->completed_at ?? now()) : null,
+            'completed_by_id' => $newStatus->category === 'done' ? ($workItem->completed_by_id ?? $user->id) : null,
+            'completion_note' => $newStatus->category === 'done' ? ($data['completion_note'] ?? $workItem->completion_note) : null,
         ]);
 
         if ($previousStatusId !== $newStatus->id) {
-            $this->activity->record(
-                $workItem,
-                $user,
-                'moved',
-                "{$user->name} moved this item to {$newStatus->name}.",
-                ['status_id' => $previousStatusId],
-                ['status_id' => $newStatus->id]
-            );
+            if ($completingNow) {
+                $this->activity->record(
+                    $workItem,
+                    $user,
+                    'completed',
+                    "{$user->name} marked this item complete.",
+                    ['status_id' => $previousStatusId],
+                    ['status_id' => $newStatus->id, 'completion_note' => $data['completion_note'] ?? null]
+                );
+            } else {
+                $this->activity->record(
+                    $workItem,
+                    $user,
+                    'moved',
+                    "{$user->name} moved this item to {$newStatus->name}.",
+                    ['status_id' => $previousStatusId],
+                    ['status_id' => $newStatus->id]
+                );
+            }
 
             $this->notifications->orbitWorkItemStatusChanged($workItem, $user);
         } else {
@@ -283,7 +307,7 @@ class OrbitWorkItemController extends Controller
             );
         }
 
-        return response()->json(['work_item' => $workItem->fresh('status')]);
+        return response()->json(['work_item' => $workItem->fresh(['status', 'completedBy:id,name'])]);
     }
 
     public function reorderBacklog(Request $request, OrbitWorkItem $workItem): JsonResponse

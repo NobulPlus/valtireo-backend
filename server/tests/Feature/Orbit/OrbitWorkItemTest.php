@@ -257,7 +257,59 @@ class OrbitWorkItemTest extends TestCase
         $this->assertSame('First edit', $item->fresh()->title);
     }
 
-    public function test_moving_a_work_item_records_an_activity_with_previous_and_new_status(): void
+    public function test_moving_a_work_item_between_non_done_statuses_records_a_moved_activity(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $todo = $project->statuses()->where('category', 'todo')->first();
+        $inProgress = \App\Models\OrbitStatus::create(['project_id' => $project->id, 'name' => 'In progress', 'category' => 'in_progress', 'position' => 2]);
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Ship it', 'status_id' => $todo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $inProgress->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertOk();
+
+        $activity = \App\Models\OrbitWorkItemActivity::where('work_item_id', $item->id)->where('event', 'moved')->first();
+        $this->assertNotNull($activity);
+        $this->assertSame(['status_id' => $todo->id], $activity->from_value);
+        $this->assertSame(['status_id' => $inProgress->id], $activity->to_value);
+    }
+
+    public function test_moving_a_work_item_to_done_records_a_completed_activity_and_who_confirmed_it(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $todo = $project->statuses()->where('category', 'todo')->first();
+        $done = $project->statuses()->where('category', 'done')->first();
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Ship it', 'status_id' => $todo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $response = $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $done->id, 'position' => '2.0000000000', 'version' => 1, 'completion_note' => 'Verified in staging.',
+        ])->assertOk();
+
+        $this->assertSame($fixture['admin']->id, $response->json('work_item.completed_by.id'));
+        $this->assertSame('Verified in staging.', $response->json('work_item.completion_note'));
+
+        $activity = \App\Models\OrbitWorkItemActivity::where('work_item_id', $item->id)->where('event', 'completed')->first();
+        $this->assertNotNull($activity);
+        $this->assertSame(['status_id' => $todo->id], $activity->from_value);
+        $this->assertSame($done->id, $activity->to_value['status_id']);
+        $this->assertNotNull($item->fresh()->completed_at);
+    }
+
+    public function test_reopening_a_completed_work_item_clears_completion_fields(): void
     {
         $fixture = $this->createOrbitOrganization();
         $project = $this->projectFor($fixture);
@@ -275,15 +327,88 @@ class OrbitWorkItemTest extends TestCase
             'status_id' => $done->id, 'position' => '2.0000000000', 'version' => 1,
         ])->assertOk();
 
-        $this->assertDatabaseHas('orbit_work_item_activities', [
-            'work_item_id' => $item->id,
-            'event' => 'moved',
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $todo->id, 'position' => '3.0000000000', 'version' => 2,
+        ])->assertOk();
+
+        $fresh = $item->fresh();
+        $this->assertNull($fresh->completed_at);
+        $this->assertNull($fresh->completed_by_id);
+        $this->assertNull($fresh->completion_note);
+    }
+
+    public function test_moving_a_scrum_story_to_done_without_a_deliverable_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $todo = $project->statuses()->where('category', 'todo')->first();
+        $done = $project->statuses()->where('category', 'done')->first();
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'story', 'title' => 'Ship the feature', 'status_id' => $todo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
         ]);
 
-        $activity = \App\Models\OrbitWorkItemActivity::where('work_item_id', $item->id)->where('event', 'moved')->first();
-        $this->assertSame(['status_id' => $todo->id], $activity->from_value);
-        $this->assertSame(['status_id' => $done->id], $activity->to_value);
-        $this->assertNotNull($item->fresh()->completed_at);
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $done->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertStatus(422);
+    }
+
+    public function test_moving_a_scrum_story_to_done_with_a_flagged_deliverable_succeeds(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture, 'SCRM', 'scrum');
+        Sanctum::actingAs($fixture['admin']);
+
+        $todo = $project->statuses()->where('category', 'todo')->first();
+        $done = $project->statuses()->where('category', 'done')->first();
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'story', 'title' => 'Ship the feature', 'status_id' => $todo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+        \App\Models\OrbitAttachment::create([
+            'organization_id' => $fixture['organization']->id, 'work_item_id' => $item->id, 'uploaded_by_id' => $fixture['admin']->id,
+            'file_name' => 'release-notes.pdf', 'file_path' => 'orbit/release-notes.pdf', 'mime_type' => 'application/pdf', 'file_size' => 1024,
+            'is_deliverable' => true,
+        ]);
+
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $done->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertOk();
+    }
+
+    public function test_the_deliverable_requirement_does_not_apply_to_a_kanban_project_or_to_a_bug(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+
+        $kanbanProject = $this->projectFor($fixture, 'KNBN', 'kanban');
+        $kanbanTodo = $kanbanProject->statuses()->where('category', 'todo')->first();
+        $kanbanDone = $kanbanProject->statuses()->where('category', 'done')->first();
+        $kanbanItem = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $kanbanProject->id, 'key' => "{$kanbanProject->key_prefix}-1",
+            'type' => 'task', 'title' => 'A kanban task', 'status_id' => $kanbanTodo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $scrumProject = $this->projectFor($fixture, 'SCRM', 'scrum');
+        $scrumTodo = $scrumProject->statuses()->where('category', 'todo')->first();
+        $scrumDone = $scrumProject->statuses()->where('category', 'done')->first();
+        $bug = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $scrumProject->id, 'key' => "{$scrumProject->key_prefix}-1",
+            'type' => 'bug', 'title' => 'A scrum bug', 'status_id' => $scrumTodo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/work-items/{$kanbanItem->key}/move", [
+            'status_id' => $kanbanDone->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertOk();
+
+        $this->postJson("/api/orbit/work-items/{$bug->key}/move", [
+            'status_id' => $scrumDone->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertOk();
     }
 
     public function test_a_viewer_cannot_move_or_edit_work_items(): void
