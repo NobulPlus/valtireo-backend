@@ -45,6 +45,7 @@ import { OrbitWorkItemDetailModal } from '@/features/orbit/OrbitWorkItemDetailMo
 import { OrbitProjectSettingsModal } from '@/features/orbit/OrbitProjectSettingsModal';
 import { OrbitSprintsPanel } from '@/features/orbit/OrbitSprintsPanel';
 import { OrbitBacklogPanel } from '@/features/orbit/OrbitBacklogPanel';
+import { OrbitReportsPanel } from '@/features/orbit/OrbitReportsPanel';
 import { OrbitSimpleTaskList } from '@/features/orbit/OrbitSimpleTaskList';
 import { computeDropPosition } from '@/features/orbit/positionMath';
 
@@ -181,7 +182,7 @@ export function OrbitProjectBoardPage() {
   const activeKey = searchParams.get('item');
   const [draggingItem, setDraggingItem] = useState<OrbitWorkItem | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'board' | 'backlog' | 'sprints'>('board');
+  const [tab, setTab] = useState<'board' | 'backlog' | 'sprints' | 'reports'>('board');
   const [pendingCompletion, setPendingCompletion] = useState<{ item: OrbitWorkItem; statusId: number; position: string } | null>(null);
   const [completionNote, setCompletionNote] = useState('');
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -400,7 +401,7 @@ export function OrbitProjectBoardPage() {
 
       {project?.mode === 'scrum' && (
         <div className="mb-4 flex gap-1 border-b border-border">
-          {(['backlog', 'board', 'sprints'] as const).map((value) => (
+          {(['backlog', 'board', 'sprints', 'reports'] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -420,6 +421,8 @@ export function OrbitProjectBoardPage() {
         <OrbitBacklogPanel project={project} onOpenItem={setActiveKey} onAddItem={openCreate} />
       ) : tab === 'sprints' && project?.mode === 'scrum' ? (
         <OrbitSprintsPanel project={project} />
+      ) : tab === 'reports' && project?.mode === 'scrum' ? (
+        <OrbitReportsPanel project={project} />
       ) : isScrum && !activeIteration ? (
         <EmptyState
           title="No active sprint"

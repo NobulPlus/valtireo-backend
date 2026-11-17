@@ -214,6 +214,72 @@ export function useOrbitProject(projectId: number | undefined) {
   });
 }
 
+export interface OrbitVelocityEntry {
+  id: number;
+  label: string;
+  value: number;
+  completed_at: string | null;
+}
+
+export interface OrbitSprintSummaryEntry {
+  iteration_id: number;
+  name: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  completed_at: string | null;
+  committed_count: number;
+  committed_points: number;
+  done_count: number;
+  done_points: number;
+  carried_over_count: number;
+  carried_over_points: number;
+}
+
+export interface OrbitCycleTimeByType {
+  type: string;
+  average_hours: number;
+  sample_size: number;
+}
+
+export interface OrbitBurndownSeriesEntry {
+  label: string;
+  values: { ideal: number; actual: number };
+}
+
+export interface OrbitProjectReporting {
+  generated_at: string;
+  velocity: {
+    entries: OrbitVelocityEntry[];
+    average_points: number | null;
+    median_points: number | null;
+  };
+  sprint_summary: OrbitSprintSummaryEntry[];
+  cycle_time: {
+    average_hours: number | null;
+    median_hours: number | null;
+    sample_size: number;
+    by_type: OrbitCycleTimeByType[];
+  };
+  active_sprint_burndown: {
+    iteration_id: number;
+    name: string;
+    starts_at: string | null;
+    ends_at: string | null;
+    total_points: number;
+    series: OrbitBurndownSeriesEntry[];
+    approximation_note: string;
+  } | null;
+}
+
+export function useOrbitProjectReporting(projectId: number | undefined) {
+  return useQuery({
+    queryKey: ['orbit', 'projects', projectId, 'reporting'],
+    queryFn: () => api.get<{ data: OrbitProjectReporting }>(`/orbit/projects/${projectId}/reporting`),
+    enabled: Boolean(projectId),
+    select: (response) => response.data,
+  });
+}
+
 export interface OrbitWorkItemFilters {
   status_id?: number;
   assignee_id?: number;

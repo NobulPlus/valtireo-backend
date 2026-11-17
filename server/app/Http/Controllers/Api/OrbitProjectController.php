@@ -9,6 +9,7 @@ use App\Models\OrbitStatus;
 use App\Models\OrbitWorkspace;
 use App\Models\User;
 use App\Services\OrbitAuthorizationService;
+use App\Services\OrbitReportingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -110,6 +111,13 @@ class OrbitProjectController extends Controller
         $project->can_edit_work_items = $this->auth->canEditWorkItems($user, $project);
 
         return response()->json(['project' => $project]);
+    }
+
+    public function reporting(Request $request, OrbitProject $project, OrbitReportingService $reporting): JsonResponse
+    {
+        abort_unless($this->auth->canViewProject($request->user(), $project), 404);
+
+        return response()->json(['data' => $reporting->forProject($project)]);
     }
 
     public function update(Request $request, OrbitProject $project): JsonResponse

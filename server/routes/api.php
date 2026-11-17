@@ -173,6 +173,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/projects/{project}/labels', [OrbitLabelController::class, 'store']);
         Route::patch('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'update']);
         Route::delete('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'destroy']);
+        Route::get('/projects/{project}/reporting', [OrbitProjectController::class, 'reporting']);
 
         Route::get('/projects/{project}/iterations', [OrbitIterationController::class, 'index']);
         Route::post('/projects/{project}/iterations', [OrbitIterationController::class, 'store']);
