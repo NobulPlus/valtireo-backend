@@ -211,6 +211,42 @@ class OrbitGovernanceTest extends TestCase
         $this->assertDatabaseMissing('orbit_statuses', ['id' => $statusId]);
     }
 
+    public function test_project_admin_can_set_update_and_clear_a_columns_wip_limit(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $workspace = $this->workspaceFor($fixture, 'ws-wip');
+        $project = $this->projectFor($fixture, $workspace, 'WIP1');
+        Sanctum::actingAs($fixture['admin']);
+
+        $response = $this->postJson("/api/orbit/projects/{$project->id}/statuses", ['name' => 'Doing', 'category' => 'in_progress', 'wip_limit' => 3])
+            ->assertCreated();
+        $statusId = $response->json('status.id');
+        $this->assertSame(3, $response->json('status.wip_limit'));
+
+        $this->patchJson("/api/orbit/projects/{$project->id}/statuses/{$statusId}", ['wip_limit' => 5])
+            ->assertOk()
+            ->assertJsonPath('status.wip_limit', 5);
+
+        $this->patchJson("/api/orbit/projects/{$project->id}/statuses/{$statusId}", ['wip_limit' => null])
+            ->assertOk()
+            ->assertJsonPath('status.wip_limit', null);
+    }
+
+    public function test_a_negative_wip_limit_is_rejected(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $workspace = $this->workspaceFor($fixture, 'ws-wip2');
+        $project = $this->projectFor($fixture, $workspace, 'WIP2');
+        Sanctum::actingAs($fixture['admin']);
+
+        $this->postJson("/api/orbit/projects/{$project->id}/statuses", ['name' => 'Doing', 'category' => 'in_progress', 'wip_limit' => -1])
+            ->assertStatus(422);
+
+        $status = $project->statuses()->first();
+        $this->patchJson("/api/orbit/projects/{$project->id}/statuses/{$status->id}", ['wip_limit' => -1])
+            ->assertStatus(422);
+    }
+
     public function test_a_status_column_with_work_items_on_it_cannot_be_deleted(): void
     {
         $fixture = $this->createOrbitOrganization();

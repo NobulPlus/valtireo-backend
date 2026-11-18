@@ -47,6 +47,7 @@ import { OrbitSprintsPanel } from '@/features/orbit/OrbitSprintsPanel';
 import { OrbitBacklogPanel } from '@/features/orbit/OrbitBacklogPanel';
 import { OrbitReportsPanel } from '@/features/orbit/OrbitReportsPanel';
 import { OrbitSimpleTaskList } from '@/features/orbit/OrbitSimpleTaskList';
+import { OrbitKanbanBoard } from '@/features/orbit/OrbitKanbanBoard';
 import { computeDropPosition } from '@/features/orbit/positionMath';
 
 const MODE_LABELS: Record<string, string> = { kanban: 'Kanban', scrum: 'Scrum', simple: 'Simple' };
@@ -196,6 +197,7 @@ export function OrbitProjectBoardPage() {
   const members = membersData?.data ?? [];
   const labels = labelsData?.data ?? [];
   const isSimple = project?.mode === 'simple';
+  const isKanban = project?.mode === 'kanban';
   const createError = createItem.error instanceof ApiError ? createItem.error.message : null;
 
   function setActiveKey(key: string | null) {
@@ -461,7 +463,11 @@ export function OrbitProjectBoardPage() {
             />
           )}
 
-          {!isLoading && !isError && !isSimple && (
+          {!isLoading && !isError && isKanban && (
+            <OrbitKanbanBoard statuses={statuses} items={items} onOpenItem={setActiveKey} onMove={requestMove} />
+          )}
+
+          {!isLoading && !isError && !isSimple && !isKanban && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
               <div className="flex gap-4 overflow-x-auto pb-4">
                 {statuses.map((status) => (

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['project_id', 'name', 'category', 'position', 'is_default'])]
+#[Fillable(['project_id', 'name', 'category', 'position', 'is_default', 'wip_limit'])]
 class OrbitStatus extends Model
 {
     public function project(): BelongsTo
@@ -22,6 +22,6 @@ class OrbitStatus extends Model
 
     protected function casts(): array
     {
-        return ['position' => 'integer', 'is_default' => 'boolean'];
+        return ['position' => 'integer', 'is_default' => 'boolean', 'wip_limit' => 'integer'];
     }
 }

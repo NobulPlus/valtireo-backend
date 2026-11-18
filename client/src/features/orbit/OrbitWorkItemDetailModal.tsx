@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { Eye, EyeOff, Link2, Package, PackageCheck, Paperclip, Reply, Trash2, X } from 'lucide-react';
+import { Ban, Eye, EyeOff, Link2, Package, PackageCheck, Paperclip, Reply, Trash2, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ModalCancelAction, ModalConfirmAction } from '@/components/ui/ModalActions';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
@@ -28,6 +29,7 @@ import {
   useOrbitWorkItemLinks,
   useOrbitWorkItems,
   useSetAttachmentDeliverable,
+  useSetWorkItemBlocked,
   useUnwatchOrbitWorkItem,
   useUpdateOrbitWorkItem,
   useUploadOrbitWorkItemAttachment,
@@ -104,6 +106,7 @@ export function OrbitWorkItemDetailModal({
   const deleteLink = useDeleteOrbitWorkItemLink(itemKey);
   const watchItem = useWatchOrbitWorkItem(itemKey);
   const unwatchItem = useUnwatchOrbitWorkItem(itemKey);
+  const setBlocked = useSetWorkItemBlocked(projectId);
 
   const [body, setBody] = useState('');
   const [mentions, setMentions] = useState<Map<number, string>>(new Map());
@@ -115,6 +118,8 @@ export function OrbitWorkItemDetailModal({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [sprintError, setSprintError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [blockPromptOpen, setBlockPromptOpen] = useState(false);
+  const [blockReason, setBlockReason] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [titleDraft, setTitleDraft] = useState('');
@@ -231,6 +236,28 @@ export function OrbitWorkItemDetailModal({
       else await watchItem.mutateAsync();
     } catch (err) {
       setFieldError(err instanceof ApiError ? err.message : 'Could not update watch status.');
+    }
+  }
+
+  async function handleBlock() {
+    if (!item) return;
+    setFieldError(null);
+    try {
+      await setBlocked.mutateAsync({ key: item.key, is_blocked: true, blocked_reason: blockReason || null });
+      setBlockPromptOpen(false);
+      setBlockReason('');
+    } catch (err) {
+      setFieldError(err instanceof ApiError ? err.message : 'Could not block this item.');
+    }
+  }
+
+  async function handleUnblock() {
+    if (!item) return;
+    setFieldError(null);
+    try {
+      await setBlocked.mutateAsync({ key: item.key, is_blocked: false });
+    } catch (err) {
+      setFieldError(err instanceof ApiError ? err.message : 'Could not unblock this item.');
     }
   }
 
@@ -370,16 +397,49 @@ export function OrbitWorkItemDetailModal({
                 <span className="text-xs text-muted">· {item.watchers!.length} watching</span>
               )}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={isWatching ? 'Stop watching this item' : 'Watch this item'}
-              onClick={() => void handleToggleWatch()}
-              isLoading={watchItem.isPending || unwatchItem.isPending}
-            >
-              {isWatching ? <Eye className="h-3.5 w-3.5 text-pine" /> : <EyeOff className="h-3.5 w-3.5" />}
-            </Button>
+            <div className="flex items-center gap-1">
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={item.is_blocked ? 'Unblock this item' : 'Block this item'}
+                  title={item.is_blocked ? 'Unblock' : 'Block'}
+                  onClick={() => (item.is_blocked ? void handleUnblock() : setBlockPromptOpen(true))}
+                  isLoading={setBlocked.isPending}
+                >
+                  <Ban className={cn('h-3.5 w-3.5', item.is_blocked && 'text-danger')} />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={isWatching ? 'Stop watching this item' : 'Watch this item'}
+                onClick={() => void handleToggleWatch()}
+                isLoading={watchItem.isPending || unwatchItem.isPending}
+              >
+                {isWatching ? <Eye className="h-3.5 w-3.5 text-pine" /> : <EyeOff className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
           </div>
+
+          {blockPromptOpen && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-soft p-3">
+              <Field label="Block reason" hint="Optional">
+                <Textarea value={blockReason} onChange={(event) => setBlockReason(event.target.value)} rows={2} />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <ModalCancelAction onClick={() => setBlockPromptOpen(false)} />
+                <ModalConfirmAction title="Mark blocked" onClick={() => void handleBlock()} isLoading={setBlocked.isPending} />
+              </div>
+            </div>
+          )}
+
+          {item.is_blocked && (
+            <div className="rounded-lg border border-border bg-surface-soft px-3 py-2 text-xs text-muted">
+              <p className="font-medium text-danger">Blocked</p>
+              {item.blocked_reason && <p className="mt-1 whitespace-pre-wrap text-strong">{item.blocked_reason}</p>}
+            </div>
+          )}
 
           {fieldError && <p className="text-sm text-danger">{fieldError}</p>}
 

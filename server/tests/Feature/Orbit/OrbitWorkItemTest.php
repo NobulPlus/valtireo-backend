@@ -411,6 +411,150 @@ class OrbitWorkItemTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_moving_a_work_item_to_a_different_status_updates_status_changed_at(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $todo = $project->statuses()->where('category', 'todo')->first();
+        $done = $project->statuses()->where('category', 'done')->first();
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Ship it', 'status_id' => $todo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+        $this->assertNull($item->status_changed_at);
+
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $done->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertOk();
+
+        $this->assertNotNull($item->fresh()->status_changed_at);
+    }
+
+    public function test_reordering_within_the_same_column_does_not_update_status_changed_at(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $todo = $project->statuses()->where('category', 'todo')->first();
+        $done = $project->statuses()->where('category', 'done')->first();
+
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Ship it', 'status_id' => $todo->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $done->id, 'position' => '2.0000000000', 'version' => 1,
+        ])->assertOk();
+        $afterFirstMove = $item->fresh()->status_changed_at;
+
+        $this->postJson("/api/orbit/work-items/{$item->key}/move", [
+            'status_id' => $done->id, 'position' => '3.0000000000', 'version' => 2,
+        ])->assertOk();
+
+        $this->assertTrue($afterFirstMove->equalTo($item->fresh()->status_changed_at));
+    }
+
+    public function test_a_user_can_mark_a_work_item_blocked_with_a_reason(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Stuck', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $this->patchJson("/api/orbit/work-items/{$item->key}/blocked", ['is_blocked' => true, 'blocked_reason' => 'Waiting on design'])
+            ->assertOk()
+            ->assertJsonPath('work_item.is_blocked', true)
+            ->assertJsonPath('work_item.blocked_reason', 'Waiting on design');
+
+        $this->assertDatabaseHas('orbit_work_item_activities', ['work_item_id' => $item->id, 'event' => 'blocked']);
+    }
+
+    public function test_unblocking_a_work_item_clears_the_reason(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Stuck', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+            'is_blocked' => true, 'blocked_reason' => 'Waiting on design',
+        ]);
+
+        $this->patchJson("/api/orbit/work-items/{$item->key}/blocked", ['is_blocked' => false])
+            ->assertOk()
+            ->assertJsonPath('work_item.is_blocked', false)
+            ->assertJsonPath('work_item.blocked_reason', null);
+
+        $this->assertDatabaseHas('orbit_work_item_activities', ['work_item_id' => $item->id, 'event' => 'unblocked']);
+    }
+
+    public function test_setting_the_same_blocked_state_does_not_duplicate_an_activity_entry(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Stuck', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $this->patchJson("/api/orbit/work-items/{$item->key}/blocked", ['is_blocked' => true])->assertOk();
+        $this->patchJson("/api/orbit/work-items/{$item->key}/blocked", ['is_blocked' => true])->assertOk();
+
+        $this->assertSame(1, \App\Models\OrbitWorkItemActivity::where('work_item_id', $item->id)->where('event', 'blocked')->count());
+    }
+
+    public function test_a_viewer_cannot_set_the_blocked_flag(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+
+        $viewer = \App\Models\User::create(['organization_id' => $fixture['organization']->id, 'name' => 'Viewer', 'email' => 'viewer-blocked@test.local', 'password' => 'Password1!']);
+        $viewer->syncRoles([$fixture['roles']->get('employee')]);
+        $fixture['roles']->get('employee')->givePermissionTo('orbit.access');
+        OrbitProjectMember::create(['organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'user_id' => $viewer->id, 'role' => 'viewer']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Immutable to viewer', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        Sanctum::actingAs($viewer);
+        $this->patchJson("/api/orbit/work-items/{$item->key}/blocked", ['is_blocked' => true])->assertForbidden();
+    }
+
+    public function test_blocked_reason_is_rejected_past_500_characters(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        $project = $this->projectFor($fixture);
+        Sanctum::actingAs($fixture['admin']);
+
+        $status = $project->statuses()->first();
+        $item = OrbitWorkItem::create([
+            'organization_id' => $fixture['organization']->id, 'project_id' => $project->id, 'key' => "{$project->key_prefix}-1",
+            'type' => 'task', 'title' => 'Stuck', 'status_id' => $status->id, 'reporter_id' => $fixture['admin']->id, 'position' => 1,
+        ]);
+
+        $this->patchJson("/api/orbit/work-items/{$item->key}/blocked", [
+            'is_blocked' => true, 'blocked_reason' => str_repeat('x', 501),
+        ])->assertStatus(422);
+    }
+
     public function test_a_viewer_cannot_move_or_edit_work_items(): void
     {
         $fixture = $this->createOrbitOrganization();

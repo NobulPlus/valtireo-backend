@@ -274,6 +274,7 @@ class OrbitWorkItemController extends Controller
             'completed_at' => $newStatus->category === 'done' ? ($workItem->completed_at ?? now()) : null,
             'completed_by_id' => $newStatus->category === 'done' ? ($workItem->completed_by_id ?? $user->id) : null,
             'completion_note' => $newStatus->category === 'done' ? ($data['completion_note'] ?? $workItem->completion_note) : null,
+            'status_changed_at' => $previousStatusId !== $newStatus->id ? now() : $workItem->status_changed_at,
         ]);
 
         if ($previousStatusId !== $newStatus->id) {
@@ -343,6 +344,39 @@ class OrbitWorkItemController extends Controller
         $this->activity->record($workItem, $user, 'archived', "{$user->name} archived this item.");
 
         return response()->json(['work_item' => $workItem]);
+    }
+
+    public function setBlocked(Request $request, OrbitWorkItem $workItem): JsonResponse
+    {
+        $user = $request->user();
+        $project = $workItem->project;
+        abort_unless($this->auth->canViewProject($user, $project), 404);
+        abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+
+        $data = $request->validate([
+            'is_blocked' => ['required', 'boolean'],
+            'blocked_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $previouslyBlocked = $workItem->is_blocked;
+
+        $workItem->update([
+            'is_blocked' => $data['is_blocked'],
+            'blocked_reason' => $data['is_blocked'] ? ($data['blocked_reason'] ?? null) : null,
+        ]);
+
+        if ($data['is_blocked'] !== $previouslyBlocked) {
+            $this->activity->record(
+                $workItem,
+                $user,
+                $data['is_blocked'] ? 'blocked' : 'unblocked',
+                $data['is_blocked'] ? "{$user->name} flagged this item as blocked." : "{$user->name} unblocked this item.",
+                ['is_blocked' => $previouslyBlocked],
+                ['is_blocked' => $data['is_blocked'], 'blocked_reason' => $data['blocked_reason'] ?? null],
+            );
+        }
+
+        return response()->json(['work_item' => $workItem->fresh(['status', 'assignee:id,name'])]);
     }
 
     public function watch(Request $request, OrbitWorkItem $workItem): JsonResponse

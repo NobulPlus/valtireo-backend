@@ -244,6 +244,7 @@ class OrbitProjectController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', Rule::in(['todo', 'in_progress', 'done'])],
             'position' => ['sometimes', 'integer', 'min:0'],
+            'wip_limit' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $status = OrbitStatus::create([
@@ -251,6 +252,7 @@ class OrbitProjectController extends Controller
             'name' => $data['name'],
             'category' => $data['category'],
             'position' => $data['position'] ?? ($project->statuses()->max('position') + 1),
+            'wip_limit' => $data['wip_limit'] ?? null,
         ]);
 
         return response()->json(['status' => $status], 201);
@@ -268,6 +270,7 @@ class OrbitProjectController extends Controller
             'category' => ['sometimes', Rule::in(['todo', 'in_progress', 'done'])],
             'position' => ['sometimes', 'integer', 'min:0'],
             'is_default' => ['sometimes', 'boolean'],
+            'wip_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ]);
 
         $status->update($data);

@@ -21,6 +21,7 @@ export interface OrbitStatus {
   category: 'todo' | 'in_progress' | 'done';
   position: number;
   is_default: boolean;
+  wip_limit: number | null;
 }
 
 export interface OrbitProject {
@@ -95,6 +96,9 @@ export interface OrbitWorkItem {
   completed_at: string | null;
   completed_by: { id: number; name: string } | null;
   completion_note: string | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
+  status_changed_at: string | null;
   attachments?: OrbitAttachment[];
   watchers?: { id: number; name: string }[];
   activities?: OrbitWorkItemActivity[];
@@ -341,6 +345,18 @@ export function useMoveOrbitWorkItem(projectId: number | undefined) {
   });
 }
 
+export function useSetWorkItemBlocked(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, is_blocked, blocked_reason }: { key: string; is_blocked: boolean; blocked_reason?: string | null }) =>
+      api.patch<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/blocked`, { is_blocked, blocked_reason }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', variables.key] });
+    },
+  });
+}
+
 export function useReorderOrbitBacklogItem(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -540,7 +556,7 @@ export function useOrbitStatuses(projectId: number | undefined) {
 export function useCreateOrbitStatus(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { name: string; category: 'todo' | 'in_progress' | 'done'; position?: number }) =>
+    mutationFn: (payload: { name: string; category: 'todo' | 'in_progress' | 'done'; position?: number; wip_limit?: number | null }) =>
       api.post<{ status: OrbitStatus }>(`/orbit/projects/${projectId}/statuses`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'statuses'] });
@@ -552,7 +568,7 @@ export function useCreateOrbitStatus(projectId: number | undefined) {
 export function useUpdateOrbitStatus(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ statusId, ...payload }: { statusId: number } & Partial<Pick<OrbitStatus, 'name' | 'category' | 'position'>>) =>
+    mutationFn: ({ statusId, ...payload }: { statusId: number } & Partial<Pick<OrbitStatus, 'name' | 'category' | 'position' | 'wip_limit'>>) =>
       api.patch<{ status: OrbitStatus }>(`/orbit/projects/${projectId}/statuses/${statusId}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'statuses'] });

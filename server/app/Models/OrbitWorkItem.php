@@ -17,6 +17,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'status_id', 'priority', 'reporter_id', 'assignee_id', 'parent_id', 'epic_id', 'iteration_id',
     'estimate', 'remaining_estimate', 'due_at', 'start_at', 'position', 'backlog_rank', 'version',
     'started_at', 'completed_at', 'completed_by_id', 'completion_note', 'archived_at',
+    'is_blocked', 'blocked_reason', 'status_changed_at',
 ])]
 class OrbitWorkItem extends Model implements AuditableContract
 {
@@ -123,6 +124,8 @@ class OrbitWorkItem extends Model implements AuditableContract
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'archived_at' => 'datetime',
+            'is_blocked' => 'boolean',
+            'status_changed_at' => 'datetime',
         ];
     }
 }
