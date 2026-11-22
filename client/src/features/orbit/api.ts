@@ -99,6 +99,8 @@ export interface OrbitWorkItem {
   is_blocked: boolean;
   blocked_reason: string | null;
   status_changed_at: string | null;
+  comments_count?: number;
+  attachments_count?: number;
   attachments?: OrbitAttachment[];
   watchers?: { id: number; name: string }[];
   activities?: OrbitWorkItemActivity[];

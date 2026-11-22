@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, MessageSquare, Paperclip } from 'lucide-react';
 import {
   DndContext,
   DragOverlay,
@@ -17,6 +17,7 @@ import { PriorityBadge } from '@/components/ui/PriorityBadge';
 import { EpicChip } from '@/components/ui/EpicChip';
 import { LabelDots } from '@/components/ui/LabelDots';
 import { cn } from '@/lib/cn';
+import { useDateFormatter } from '@/lib/dateFormat';
 import { computeDropPosition } from '@/features/orbit/positionMath';
 import type { OrbitStatus, OrbitWorkItem } from '@/features/orbit/api';
 
@@ -27,12 +28,25 @@ function agingClassName(statusChangedAt: string | null): { label: string; classN
   return { label: `${ageDays}d in column`, className };
 }
 
+function dueDateClassName(dueAt: string | null, isDone: boolean): string {
+  if (!dueAt || isDone) return 'text-muted';
+  const today = new Date().toISOString().slice(0, 10);
+  const due = dueAt.slice(0, 10);
+  if (due < today) return 'bg-danger-bg text-danger';
+  if (due === today) return 'bg-warning-bg text-warning';
+  return 'text-muted';
+}
+
 function KanbanWorkItemCard({ item, onOpen }: { item: OrbitWorkItem; onOpen: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
     data: { type: 'item', statusId: item.status_id },
   });
+  const { formatDate } = useDateFormatter();
   const aging = agingClassName(item.status_changed_at);
+  const isDone = item.status?.category === 'done';
+  const commentsCount = item.comments_count ?? 0;
+  const attachmentsCount = item.attachments_count ?? 0;
 
   return (
     <div
@@ -67,6 +81,25 @@ function KanbanWorkItemCard({ item, onOpen }: { item: OrbitWorkItem; onOpen: () 
           {item.assignee && <span className="text-muted">{item.assignee.name}</span>}
         </div>
       </div>
+      {(item.due_at || commentsCount > 0 || attachmentsCount > 0) && (
+        <div className="mt-2 flex items-center gap-2.5 border-t border-border pt-2 text-xs text-muted">
+          {item.due_at && (
+            <span className={cn('rounded px-1.5 py-0.5', dueDateClassName(item.due_at, isDone))}>{formatDate(item.due_at)}</span>
+          )}
+          {commentsCount > 0 && (
+            <span className="flex items-center gap-1">
+              <MessageSquare className="h-3 w-3" />
+              {commentsCount}
+            </span>
+          )}
+          {attachmentsCount > 0 && (
+            <span className="flex items-center gap-1">
+              <Paperclip className="h-3 w-3" />
+              {attachmentsCount}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

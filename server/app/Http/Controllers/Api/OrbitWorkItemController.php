@@ -44,6 +44,10 @@ class OrbitWorkItemController extends Controller
 
         $items = $project->workItems()
             ->with(['status', 'assignee:id,name', 'reporter:id,name', 'labels', 'epic:id,key,title'])
+            ->withCount([
+                'comments' => fn ($q) => $q->whereNull('deleted_at'),
+                'attachments' => fn ($q) => $q->whereNull('deleted_at'),
+            ])
             ->whereNull('archived_at')
             ->when($request->integer('status_id'), fn ($q, $value) => $q->where('status_id', $value))
             ->when($request->integer('assignee_id'), fn ($q, $value) => $q->where('assignee_id', $value))
