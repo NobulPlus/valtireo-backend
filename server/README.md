@@ -171,6 +171,46 @@ ALLOW_DATABASE_SEEDING=true
 Once the deployment succeeds, set both back to `false` and redeploy. Never
 enable these variables for a customer-facing production database.
 
+### Render Free with Neon PostgreSQL
+
+The Docker image includes `pdo_pgsql` and its PostgreSQL client library.
+Laravel already defines a `pgsql` connection in `config/database.php`.
+Keep the API on Render and store the database in Neon so replacing the API
+container does not replace the database.
+
+Deploy the updated Docker image and configure these Render environment variables
+using the values from Neon's Connect dialog (use a direct, non-pooled connection
+for this single-service setup, which also runs migrations on startup):
+
+```text
+DB_CONNECTION=pgsql
+DB_HOST=<Neon direct hostname>
+DB_PORT=5432
+DB_DATABASE=<Neon database name>
+DB_USERNAME=<Neon role name>
+DB_PASSWORD=<Neon password>
+DB_SSLMODE=require
+RUN_MIGRATIONS=true
+RESET_DB_ON_BOOT=false
+ALLOW_DESTRUCTIVE_DB_RESET=false
+RUN_SEEDERS=false
+ALLOW_DATABASE_SEEDING=false
+```
+
+If `DB_URL` is already set, remove it when using these individual fields: it
+overrides them. Keep the existing `APP_KEY`. Enter secrets directly in Render,
+never in a committed environment file.
+
+The startup script runs `php artisan migrate --force` to create missing tables.
+Check deployment logs for successful migrations before using the app. Connecting
+to a new database does not copy existing SQLite records or create an initial
+platform administrator. Preserve and migrate any recoverable data separately;
+plan initial administrator setup before switching traffic. Do not enable demo
+seeders against a database containing customer data.
+
+Uploaded files still require separate persistent storage; moving the database
+does not preserve files saved inside the Render container.
+
 ## Related Docs
 
 - `../docs/project-context.md`
