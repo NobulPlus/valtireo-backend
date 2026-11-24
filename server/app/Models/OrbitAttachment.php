@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['organization_id', 'work_item_id', 'comment_id', 'uploaded_by_id', 'file_name', 'file_path', 'mime_type', 'file_size', 'deleted_at'])]
+#[Fillable(['organization_id', 'work_item_id', 'comment_id', 'uploaded_by_id', 'file_name', 'file_path', 'mime_type', 'file_size', 'is_deliverable', 'deleted_at'])]
 class OrbitAttachment extends Model
 {
     use BelongsToOrganization;
@@ -36,6 +36,6 @@ class OrbitAttachment extends Model
 
     protected function casts(): array
     {
-        return ['file_size' => 'integer', 'deleted_at' => 'datetime'];
+        return ['file_size' => 'integer', 'is_deliverable' => 'boolean', 'deleted_at' => 'datetime'];
     }
 }

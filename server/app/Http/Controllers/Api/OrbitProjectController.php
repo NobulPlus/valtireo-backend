@@ -9,6 +9,7 @@ use App\Models\OrbitStatus;
 use App\Models\OrbitWorkspace;
 use App\Models\User;
 use App\Services\OrbitAuthorizationService;
+use App\Services\OrbitReportingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -67,11 +68,18 @@ class OrbitProjectController extends Controller
             'visibility' => $data['visibility'] ?? 'organization',
         ]);
 
-        foreach ([
-            ['name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true],
-            ['name' => 'In Progress', 'category' => 'in_progress', 'position' => 2, 'is_default' => false],
-            ['name' => 'Done', 'category' => 'done', 'position' => 3, 'is_default' => false],
-        ] as $status) {
+        $defaultStatuses = $data['mode'] === 'simple'
+            ? [
+                ['name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true],
+                ['name' => 'Done', 'category' => 'done', 'position' => 2, 'is_default' => false],
+            ]
+            : [
+                ['name' => 'To Do', 'category' => 'todo', 'position' => 1, 'is_default' => true],
+                ['name' => 'In Progress', 'category' => 'in_progress', 'position' => 2, 'is_default' => false],
+                ['name' => 'Done', 'category' => 'done', 'position' => 3, 'is_default' => false],
+            ];
+
+        foreach ($defaultStatuses as $status) {
             OrbitStatus::create([...$status, 'project_id' => $project->id]);
         }
 
@@ -103,6 +111,13 @@ class OrbitProjectController extends Controller
         $project->can_edit_work_items = $this->auth->canEditWorkItems($user, $project);
 
         return response()->json(['project' => $project]);
+    }
+
+    public function reporting(Request $request, OrbitProject $project, OrbitReportingService $reporting): JsonResponse
+    {
+        abort_unless($this->auth->canViewProject($request->user(), $project), 404);
+
+        return response()->json(['data' => $reporting->forProject($project)]);
     }
 
     public function update(Request $request, OrbitProject $project): JsonResponse
@@ -229,6 +244,7 @@ class OrbitProjectController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', Rule::in(['todo', 'in_progress', 'done'])],
             'position' => ['sometimes', 'integer', 'min:0'],
+            'wip_limit' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $status = OrbitStatus::create([
@@ -236,6 +252,7 @@ class OrbitProjectController extends Controller
             'name' => $data['name'],
             'category' => $data['category'],
             'position' => $data['position'] ?? ($project->statuses()->max('position') + 1),
+            'wip_limit' => $data['wip_limit'] ?? null,
         ]);
 
         return response()->json(['status' => $status], 201);
@@ -253,6 +270,7 @@ class OrbitProjectController extends Controller
             'category' => ['sometimes', Rule::in(['todo', 'in_progress', 'done'])],
             'position' => ['sometimes', 'integer', 'min:0'],
             'is_default' => ['sometimes', 'boolean'],
+            'wip_limit' => ['sometimes', 'nullable', 'integer', 'min:0'],
         ]);
 
         $status->update($data);

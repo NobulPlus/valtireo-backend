@@ -51,15 +51,17 @@ export function OrbitProjectSettingsModal({ project, onClose }: { project: Orbit
   const [tab, setTab] = useState<Tab>('members');
   const canAdminister = Boolean(project.can_administer);
 
+  const tabs = ([
+    ['members', 'Members'],
+    ['statuses', 'Workflow'],
+    ['labels', 'Labels'],
+  ] as const).filter(([value]) => value !== 'statuses' || project.mode !== 'simple');
+
   return (
     <Modal open onClose={onClose} title={`${project.name} settings`} size="lg">
       <div className="flex flex-col gap-4">
         <div className="flex gap-1 rounded-md bg-surface-soft p-1">
-          {([
-            ['members', 'Members'],
-            ['statuses', 'Workflow'],
-            ['labels', 'Labels'],
-          ] as const).map(([value, label]) => (
+          {tabs.map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -164,6 +166,7 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('todo');
+  const [wipLimit, setWipLimit] = useState('');
   const [error, setError] = useState<string | null>(null);
   // Renaming a column must not fire a mutation on every keystroke — the input's
   // value would otherwise be bound to status.name, which only updates once the
@@ -177,8 +180,13 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
     event.preventDefault();
     setError(null);
     try {
-      await createStatus.mutateAsync({ name, category: category as 'todo' | 'in_progress' | 'done' });
+      await createStatus.mutateAsync({
+        name,
+        category: category as 'todo' | 'in_progress' | 'done',
+        wip_limit: wipLimit === '' ? undefined : Number(wipLimit),
+      });
       setName('');
+      setWipLimit('');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create that column.');
     }
@@ -230,6 +238,20 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
                     options={STATUS_CATEGORIES}
                     className="w-36"
                   />
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="No limit"
+                    aria-label={`WIP limit for ${status.name}`}
+                    value={status.wip_limit ?? ''}
+                    onChange={(event) =>
+                      void updateStatus.mutateAsync({
+                        statusId: status.id,
+                        wip_limit: event.target.value === '' ? null : Number(event.target.value),
+                      })
+                    }
+                    className="w-24"
+                  />
                   <Button variant="ghost" size="icon" aria-label={`Remove ${status.name} column`} onClick={() => void handleDelete(status.id)}>
                     <Trash2 className="h-3.5 w-3.5 text-danger" />
                   </Button>
@@ -238,7 +260,10 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
             ) : (
               <>
                 <span className="text-sm font-medium text-strong">{status.name}</span>
-                <span className="text-xs capitalize text-muted">{status.category.replace('_', ' ')}</span>
+                <span className="text-xs capitalize text-muted">
+                  {status.category.replace('_', ' ')}
+                  {status.wip_limit != null && ` · WIP ${status.wip_limit}`}
+                </span>
               </>
             )}
           </li>
@@ -249,6 +274,15 @@ function StatusesTab({ projectId, canAdminister }: { projectId: number; canAdmin
         <form onSubmit={handleCreate} className="flex items-center gap-2 border-t border-border pt-4">
           <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="New column name" className="flex-1" />
           <SelectMenu value={category} onChange={setCategory} options={STATUS_CATEGORIES} className="w-36" />
+          <Input
+            type="number"
+            min="0"
+            placeholder="No limit"
+            aria-label="WIP limit for new column"
+            value={wipLimit}
+            onChange={(event) => setWipLimit(event.target.value)}
+            className="w-24"
+          />
           <Button type="submit" variant="secondary" size="icon" aria-label="Add column" disabled={!name.trim()} isLoading={createStatus.isPending}>
             <Plus className="h-3.5 w-3.5" />
           </Button>

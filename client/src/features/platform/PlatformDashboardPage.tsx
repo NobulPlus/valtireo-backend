@@ -40,7 +40,7 @@ const ATTENTION_COPY: Record<AttentionKey, { label: string; description: string 
   },
   pending_verification: {
     label: 'Verification review',
-    description: 'Organizations waiting for Valtireo to review submitted verification documents.',
+    description: 'Organizations waiting for OrgaviaHR to review submitted verification documents.',
   },
   without_modules: {
     label: 'No active modules',
@@ -70,7 +70,7 @@ function statusLabel(status: string): string {
     .join(' ');
 }
 
-const DASHBOARD_HEADER_TITLE = 'Valtireo console';
+const DASHBOARD_HEADER_TITLE = 'OrgaviaHR console';
 const DASHBOARD_HEADER_SUBTITLE = 'Monitor every customer workspace, subscription footprint, and setup risk from one place.';
 
 function PlatformDashboardContent({
@@ -527,7 +527,7 @@ export function PlatformDashboardPage() {
     return (
       <div>
         <PageHeader title={DASHBOARD_HEADER_TITLE} subtitle={DASHBOARD_HEADER_SUBTITLE} />
-        <LoadingState label="Loading Valtireo console..." fill />
+        <LoadingState label="Loading OrgaviaHR console..." fill />
       </div>
     );
   }

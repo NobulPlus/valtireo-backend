@@ -79,7 +79,7 @@ function normalizeSessionPayload<T extends Partial<SessionPayload>>(payload: T):
 /** Device-named token, matching the backend's confirmed mobile contract (see MobileSessionContractTest). */
 function deviceName(): string {
   const model = Device.modelName ?? Platform.OS;
-  return `${model} — Valtireo`;
+  return `${model} — OrgaviaHR`;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

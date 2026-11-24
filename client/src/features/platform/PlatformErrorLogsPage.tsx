@@ -218,7 +218,7 @@ export function PlatformErrorLogsPage() {
     <div>
       <PageHeader
         title="Error logs"
-        subtitle="Platform-only visibility into backend failures across Valtireo workspaces."
+        subtitle="Platform-only visibility into backend failures across OrgaviaHR workspaces."
         breadcrumbs={[{ label: 'Platform console', to: '/platform' }, { label: 'Error logs' }]}
       />
 

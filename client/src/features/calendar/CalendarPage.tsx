@@ -147,11 +147,13 @@ function EventFormModal({
   event,
   canManageOrgWide,
   departmentOptions,
+  defaultDate,
   onClose,
 }: {
   event: CompanyEvent | 'new' | null;
   canManageOrgWide: boolean;
   departmentOptions: Array<{ value: string; label: string }>;
+  defaultDate: string;
   onClose: () => void;
 }) {
   const toast = useToast();
@@ -162,8 +164,8 @@ function EventFormModal({
 
   const [title, setTitle] = useState(event && event !== 'new' ? event.title : '');
   const [description, setDescription] = useState(event && event !== 'new' ? (event.description ?? '') : '');
-  const [startsOn, setStartsOn] = useState(event && event !== 'new' ? event.starts_on.slice(0, 10) : '');
-  const [endsOn, setEndsOn] = useState(event && event !== 'new' ? event.ends_on.slice(0, 10) : '');
+  const [startsOn, setStartsOn] = useState(event && event !== 'new' ? event.starts_on.slice(0, 10) : defaultDate);
+  const [endsOn, setEndsOn] = useState(event && event !== 'new' ? event.ends_on.slice(0, 10) : defaultDate);
   const [scope, setScope] = useState(event && event !== 'new' && event.department_id ? String(event.department_id) : '');
 
   const scopeOptions = [
@@ -283,7 +285,13 @@ function CalendarContent() {
   const [selectedDate, setSelectedDate] = useState(() => toDateOnly(new Date()));
   const [search, setSearch] = useState('');
   const [editingEvent, setEditingEvent] = useState<CompanyEvent | 'new' | null>(null);
+  const [formNonce, setFormNonce] = useState(0);
   const [deletingEvent, setDeletingEvent] = useState<CompanyEvent | null>(null);
+
+  function openEventForm(event: CompanyEvent | 'new') {
+    setFormNonce((nonce) => nonce + 1);
+    setEditingEvent(event);
+  }
 
   const today = toDateOnly(new Date());
   const gridStart = useMemo(() => startOfWeek(visibleMonth), [visibleMonth]);
@@ -404,7 +412,7 @@ function CalendarContent() {
               <Clock3 className="h-3.5 w-3.5" /> Today
             </Button>
             {canCreateAnything && (
-              <Button type="button" variant="primary" onClick={() => setEditingEvent('new')}>
+              <Button type="button" variant="primary" onClick={() => openEventForm('new')}>
                 <Plus className="h-3.5 w-3.5" /> Create event
               </Button>
             )}
@@ -583,7 +591,7 @@ function CalendarContent() {
                             </div>
                             {item.kind === 'event' && item.event.can_manage && (
                               <div className="mt-3 flex justify-end gap-2">
-                                <Button type="button" size="icon" title="Edit" aria-label="Edit" onClick={() => setEditingEvent(item.event)}>
+                                <Button type="button" size="icon" title="Edit" aria-label="Edit" onClick={() => openEventForm(item.event)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button type="button" size="icon" title="Remove" aria-label="Remove" onClick={() => setDeletingEvent(item.event)}>
@@ -633,9 +641,11 @@ function CalendarContent() {
       </Card>
 
       <EventFormModal
+        key={`${formNonce}-${editingEvent && editingEvent !== 'new' ? editingEvent.id : 'new'}`}
         event={editingEvent}
         canManageOrgWide={canManageOrgWide}
         departmentOptions={departmentOptions}
+        defaultDate={selectedDate}
         onClose={() => setEditingEvent(null)}
       />
       <DeleteEventModal event={deletingEvent} onClose={() => setDeletingEvent(null)} />

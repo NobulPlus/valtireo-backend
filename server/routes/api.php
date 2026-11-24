@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\OrganizationVerificationController;
 use App\Http\Controllers\Api\OperationsCenterController;
 use App\Http\Controllers\Api\OrbitAttachmentController;
 use App\Http\Controllers\Api\OrbitCommentController;
+use App\Http\Controllers\Api\OrbitIterationController;
 use App\Http\Controllers\Api\OrbitLabelController;
 use App\Http\Controllers\Api\OrbitMyWorkController;
 use App\Http\Controllers\Api\OrbitProjectController;
@@ -172,13 +173,24 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/projects/{project}/labels', [OrbitLabelController::class, 'store']);
         Route::patch('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'update']);
         Route::delete('/projects/{project}/labels/{label}', [OrbitLabelController::class, 'destroy']);
+        Route::get('/projects/{project}/reporting', [OrbitProjectController::class, 'reporting']);
+
+        Route::get('/projects/{project}/iterations', [OrbitIterationController::class, 'index']);
+        Route::post('/projects/{project}/iterations', [OrbitIterationController::class, 'store']);
+        Route::get('/iterations/{iteration}', [OrbitIterationController::class, 'show']);
+        Route::patch('/iterations/{iteration}', [OrbitIterationController::class, 'update']);
+        Route::post('/iterations/{iteration}/start', [OrbitIterationController::class, 'start']);
+        Route::post('/iterations/{iteration}/complete', [OrbitIterationController::class, 'complete']);
+        Route::delete('/iterations/{iteration}', [OrbitIterationController::class, 'destroy']);
 
         Route::get('/projects/{project}/work-items', [OrbitWorkItemController::class, 'index']);
         Route::post('/projects/{project}/work-items', [OrbitWorkItemController::class, 'store']);
         Route::get('/work-items/{workItem:key}', [OrbitWorkItemController::class, 'show']);
         Route::patch('/work-items/{workItem:key}', [OrbitWorkItemController::class, 'update']);
         Route::post('/work-items/{workItem:key}/move', [OrbitWorkItemController::class, 'move']);
+        Route::post('/work-items/{workItem:key}/reorder-backlog', [OrbitWorkItemController::class, 'reorderBacklog']);
         Route::post('/work-items/{workItem:key}/archive', [OrbitWorkItemController::class, 'archive']);
+        Route::patch('/work-items/{workItem:key}/blocked', [OrbitWorkItemController::class, 'setBlocked']);
         Route::post('/work-items/{workItem:key}/watch', [OrbitWorkItemController::class, 'watch']);
         Route::delete('/work-items/{workItem:key}/watch', [OrbitWorkItemController::class, 'unwatch']);
 
@@ -190,6 +202,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::post('/work-items/{workItem:key}/attachments', [OrbitAttachmentController::class, 'storeForWorkItem']);
         Route::post('/comments/{comment}/attachments', [OrbitAttachmentController::class, 'storeForComment']);
         Route::get('/attachments/{attachment}/file', [OrbitAttachmentController::class, 'file']);
+        Route::patch('/attachments/{attachment}/deliverable', [OrbitAttachmentController::class, 'setDeliverable']);
         Route::delete('/attachments/{attachment}', [OrbitAttachmentController::class, 'destroy']);
 
         Route::get('/work-items/{workItem:key}/links', [OrbitWorkItemLinkController::class, 'index']);

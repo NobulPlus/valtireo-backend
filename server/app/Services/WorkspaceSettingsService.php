@@ -59,7 +59,7 @@ class WorkspaceSettingsService
                 'favicon_url' => null,
                 'login_background_url' => null,
                 'short_name' => null,
-                'welcome_message' => 'Welcome to your Valtireo workspace.',
+                'welcome_message' => 'Welcome to your OrgaviaHR workspace.',
                 'support_email' => null,
             ],
             'theme' => [

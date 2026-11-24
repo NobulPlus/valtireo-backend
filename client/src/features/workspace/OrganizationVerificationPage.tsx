@@ -44,7 +44,7 @@ export function OrganizationVerificationPage() {
   if (verificationQuery.isLoading) {
     return (
       <div>
-        <PageHeader title="Organization verification" subtitle="Upload the documents Valtireo needs before activation." />
+        <PageHeader title="Organization verification" subtitle="Upload the documents OrgaviaHR needs before activation." />
         <LoadingState label="Loading verification checklist..." fill />
       </div>
     );
@@ -53,7 +53,7 @@ export function OrganizationVerificationPage() {
   if (verificationQuery.isError) {
     return (
       <div>
-        <PageHeader title="Organization verification" subtitle="Upload the documents Valtireo needs before activation." />
+        <PageHeader title="Organization verification" subtitle="Upload the documents OrgaviaHR needs before activation." />
         <ErrorState error={verificationQuery.error} onRetry={() => verificationQuery.refetch()} />
       </div>
     );
@@ -62,7 +62,7 @@ export function OrganizationVerificationPage() {
   if (!verificationQuery.data) {
     return (
       <div>
-        <PageHeader title="Organization verification" subtitle="Upload the documents Valtireo needs before activation." />
+        <PageHeader title="Organization verification" subtitle="Upload the documents OrgaviaHR needs before activation." />
         <EmptyState title="Verification data is not available" />
       </div>
     );
@@ -110,7 +110,7 @@ export function OrganizationVerificationPage() {
     <div>
       <PageHeader
         title="Organization verification"
-        subtitle="Upload company evidence, submit for Valtireo review, and track approval readiness."
+        subtitle="Upload company evidence, submit for OrgaviaHR review, and track approval readiness."
         status={<StatusBadge status={verification.is_verified ? 'verified' : verification.status} />}
         actions={
           <Button type="button" variant="primary" disabled={!canSubmit} isLoading={submitMutation.isPending} onClick={submitForReview}>
@@ -122,7 +122,7 @@ export function OrganizationVerificationPage() {
 
       {!canSubmit && verification.status === 'pending_approval' && (
         <div className="mb-5">
-          <Alert tone="info">Your documents have been submitted. Valtireo will review them and activate the organization when approved.</Alert>
+          <Alert tone="info">Your documents have been submitted. OrgaviaHR will review them and activate the organization when approved.</Alert>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Valtireo",
+    "name": "OrgaviaHR",
     "slug": "valtireo-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,8 +10,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.valtireo.mobile",
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Valtireo uses Face ID to sign you back in quickly and securely.",
-        "NSMicrophoneUsageDescription": "Valtireo needs your microphone to make and receive Connect voice calls.",
+        "NSFaceIDUsageDescription": "OrgaviaHR uses Face ID to sign you back in quickly and securely.",
+        "NSMicrophoneUsageDescription": "OrgaviaHR needs your microphone to make and receive Connect voice calls.",
         "UIBackgroundModes": ["audio", "voip"]
       },
       "bitcode": false
@@ -50,7 +50,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Valtireo needs access to your photos to set a profile picture or attach a document."
+          "photosPermission": "OrgaviaHR needs access to your photos to set a profile picture or attach a document."
         }
       ],
       "expo-document-picker",

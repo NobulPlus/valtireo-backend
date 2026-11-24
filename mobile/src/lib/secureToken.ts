@@ -4,7 +4,7 @@ import { notifySessionChange } from './sessionEvents';
 const TOKEN_KEY = 'valtireo.auth_token';
 const BIOMETRIC_KEY = 'valtireo.biometric_credential_v2';
 const BIOMETRIC_IDENTITY_KEY = 'valtireo.biometric_identity_v2';
-const BIOMETRIC_OPTIONS = { requireAuthentication: true, authenticationPrompt: 'Unlock your Valtireo sign-in', keychainService: 'valtireo.biometric.v2' };
+const BIOMETRIC_OPTIONS = { requireAuthentication: true, authenticationPrompt: 'Unlock your OrgaviaHR sign-in', keychainService: 'valtireo.biometric.v2' };
 
 export interface BiometricCredential {
   email: string;

@@ -30,7 +30,7 @@ export function SidebarBrand({ collapsed = false }: { collapsed?: boolean }) {
       )}
       {!collapsed && (
         <span className="truncate font-display text-[15px] font-semibold tracking-tight">
-          {session?.workspace?.identity.short_name || session?.organization?.name || 'Valtireo'}
+          {session?.workspace?.identity.short_name || session?.organization?.name || 'OrgaviaHR'}
         </span>
       )}
     </div>

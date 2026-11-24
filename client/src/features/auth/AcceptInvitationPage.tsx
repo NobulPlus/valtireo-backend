@@ -63,7 +63,7 @@ export function AcceptInvitationPage({ mode = 'employee' }: { mode?: 'employee' 
 
       setStoredToken(result.token);
       await refresh();
-      toast.success('Welcome to Valtireo', 'Your password is set and you are signed in.');
+      toast.success('Welcome to OrgaviaHR', 'Your password is set and you are signed in.');
       navigate(defaultRoute, { replace: true });
     } catch (error) {
       if (error instanceof ApiError && error.errors) {
@@ -88,10 +88,7 @@ export function AcceptInvitationPage({ mode = 'employee' }: { mode?: 'employee' 
       <div className="w-full max-w-[390px]">
         <div className="mb-9 flex items-center justify-center gap-3">
           <Logomark size={21} />
-          <div>
-            <p className="font-display text-base font-semibold text-strong">Valtireo</p>
-            <p className="text-xs text-muted">Organizational OS</p>
-          </div>
+          <p className="font-display text-base font-semibold text-strong">OrgaviaHR</p>
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-6 shadow-[0_18px_60px_rgba(18,63,58,0.10)] sm:p-8">
@@ -104,7 +101,7 @@ export function AcceptInvitationPage({ mode = 'employee' }: { mode?: 'employee' 
               <p className="mt-2 text-sm leading-6 text-muted">{invalidTokenMessage}</p>
               <p className="mt-4 text-sm leading-6 text-muted">
                 {mode === 'organization-admin'
-                  ? 'Ask Valtireo to send a new organization admin invitation, or sign in if you already have a password.'
+                  ? 'Ask OrgaviaHR to send a new organization admin invitation, or sign in if you already have a password.'
                   : 'Ask your organization admin to send a new invitation, or sign in if you already have a password.'}
               </p>
               <Button type="button" variant="secondary" className="mt-5 w-full" onClick={() => navigate('/login')}>
@@ -121,7 +118,7 @@ export function AcceptInvitationPage({ mode = 'employee' }: { mode?: 'employee' 
                 <p className="mt-2 text-sm leading-6 text-muted">
                   {mode === 'organization-admin'
                     ? 'Choose a password to activate your organization workspace and sign in.'
-                    : 'Choose a password to activate your Valtireo account and sign in.'}
+                    : 'Choose a password to activate your OrgaviaHR account and sign in.'}
                 </p>
               </div>
 

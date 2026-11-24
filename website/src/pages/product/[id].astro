@@ -11,7 +11,7 @@ export function getStaticPaths() {
 
 const { module } = Astro.props;
 ---
-<SiteLayout title={`${module.title} — Valtireo`} description={module.description}>
+<SiteLayout title={`${module.title} — OrgaviaHR`} description={module.description}>
   <section class="page-hero container">
     <span class="eyebrow">{module.number} / THE PLATFORM</span>
     <h1>{module.title}{module.status !== 'available' && <span class={`status-badge status-badge--${module.status}`}>{moduleStatusLabel[module.status]}</span>}</h1>

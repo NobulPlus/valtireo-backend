@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Plus, Search, PhoneCall, Paperclip, Mic, Send, ChevronLeft, ChevronRight,
   Users, BellOff, Bell, MailWarning, Pin, Reply, ThumbsUp, Heart, PartyPopper, HandHeart, Laugh,
   Pencil, Trash2, Flag, X, Crown, UserMinus, UserPlus, Archive, ArchiveRestore, LogOut, LogIn, ArrowRight,
-  Ban, Check, MessageCircle, UsersRound, Megaphone,
+  Ban, Check, MessageCircle, UsersRound, Megaphone, SlidersHorizontal,
 } from 'lucide-react';
 import { api } from '@/lib/apiClient';
 import { useAuth } from '@/context/AuthContext';
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SelectMenu } from '@/components/ui/SelectMenu';
 import { useDepartmentOptions } from '@/features/employees/api';
+import { cn } from '@/lib/cn';
 import { ConnectAttachment, ConnectAvatar } from './ConnectMedia';
 import type { Conversation, Message, Page, Person, VoiceCall } from './chatTypes';
 
@@ -703,6 +704,41 @@ function CallHistory() {
   );
 }
 
+const AVAILABILITY_OPTIONS = [
+  { value: 'available', label: 'Available', dotClass: 'bg-success', activeClass: 'bg-success' },
+  { value: 'away', label: 'Away', dotClass: 'bg-warning', activeClass: 'bg-warning' },
+  { value: 'busy', label: 'Busy', dotClass: 'bg-danger', activeClass: 'bg-danger' },
+  { value: 'offline', label: 'Offline', dotClass: 'bg-draft', activeClass: 'bg-draft' },
+] as const;
+
+function Switch({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn('relative h-[22px] w-[38px] flex-shrink-0 rounded-full transition-colors', checked ? 'bg-teal' : 'bg-border-strong')}
+    >
+      <span className={cn('absolute left-0.5 top-0.5 h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform', checked && 'translate-x-4')} />
+    </button>
+  );
+}
+
+function PreferenceRow({ icon, title, description, checked, onChange }: { icon: ReactNode; title: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border p-3">
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-surface-soft text-muted">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-strong">{title}</p>
+        <p className="mt-0.5 text-xs text-muted">{description}</p>
+      </div>
+      <Switch checked={checked} onChange={onChange} label={title} />
+    </div>
+  );
+}
+
 function Preferences() {
   const { hasPermission } = useAuth();
   const cache = useQueryClient();
@@ -710,18 +746,56 @@ function Preferences() {
   const save = useMutation({ mutationFn: (data: object) => api.patch('/connect/preferences', data), onSuccess: () => cache.invalidateQueries({ queryKey: ['connect', 'preferences'] }) });
   return (
     <div className="space-y-4">
-      <section className={`${panel} max-w-md space-y-4 p-5`}>
-        <h2 className="font-display font-bold text-strong">Your Connect preferences</h2>
+      <section className={`${panel} max-w-lg space-y-5 p-5`}>
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-pine text-white">
+            <SlidersHorizontal className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="font-display font-bold text-strong">Your Connect preferences</h2>
+            <p className="text-xs text-muted">Control how colleagues reach you across OrgaviaHR.</p>
+          </div>
+        </div>
         {query.data ? (
           <>
-            <label className="block space-y-1.5 text-sm font-medium text-muted">
-              Availability
-              <select value={query.data.availability} onChange={(e) => save.mutate({ availability: e.target.value })} className="block w-full rounded-lg border border-border bg-surface p-2.5 text-sm text-strong">
-                {['available', 'away', 'busy', 'offline'].map((s) => <option key={s}>{s}</option>)}
-              </select>
-            </label>
-            <label className="flex items-center gap-2.5 text-sm text-strong"><input type="checkbox" checked={query.data.notifications} onChange={(e) => save.mutate({ notifications: e.target.checked })} /> Activity notifications</label>
-            <label className="flex items-center gap-2.5 text-sm text-strong"><input type="checkbox" checked={query.data.allow_calls} onChange={(e) => save.mutate({ allow_calls: e.target.checked })} /> Allow incoming voice calls</label>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted">Availability</p>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABILITY_OPTIONS.map((option) => {
+                  const active = query.data.availability === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => save.mutate({ availability: option.value })}
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-semibold transition-colors',
+                        active ? `${option.activeClass} border-transparent text-white` : 'border-border text-muted hover:border-border-strong',
+                      )}
+                    >
+                      <span className={cn('h-2 w-2 rounded-full', active ? 'bg-white' : option.dotClass)} />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              <PreferenceRow
+                icon={<Bell className="h-4 w-4" />}
+                title="Activity notifications"
+                description="Get notified about new messages and mentions."
+                checked={query.data.notifications}
+                onChange={(checked) => save.mutate({ notifications: checked })}
+              />
+              <PreferenceRow
+                icon={<PhoneCall className="h-4 w-4" />}
+                title="Allow incoming voice calls"
+                description="Let colleagues reach you directly with a voice call."
+                checked={query.data.allow_calls}
+                onChange={(checked) => save.mutate({ allow_calls: checked })}
+              />
+            </div>
           </>
         ) : null}
         {save.error || query.error ? <p role="alert" className="text-sm text-danger">{save.error?.message || query.error?.message}</p> : null}

@@ -32,8 +32,8 @@ const WORKSPACE_ROLE_OPTIONS = [
 
 const MODES = [
   { value: 'kanban', label: 'Kanban', description: 'Continuous flow with configurable board columns' },
-  { value: 'simple', label: 'Simple tasks', description: 'A lightweight list or board, no agile fields' },
-  { value: 'scrum', label: 'Scrum (coming soon)', description: 'Backlog and sprints — arriving in a later phase', disabled: true },
+  { value: 'simple', label: 'Simple tasks', description: 'A flat task list — no board, no workflow columns' },
+  { value: 'scrum', label: 'Scrum', description: 'Backlog and sprints, with a dedicated Sprints tab on the board' },
 ];
 
 export function OrbitWorkspaceOverviewPage() {

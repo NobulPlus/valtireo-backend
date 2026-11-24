@@ -53,6 +53,20 @@ class OrbitAttachmentController extends Controller
         ]);
     }
 
+    public function setDeliverable(Request $request, OrbitAttachment $attachment): JsonResponse
+    {
+        $user = $request->user();
+        $project = $attachment->workItem?->project ?? $attachment->comment?->workItem->project;
+        abort_unless($this->auth->canViewProject($user, $project), 404);
+        abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+
+        $data = $request->validate(['is_deliverable' => ['required', 'boolean']]);
+
+        $attachment->update(['is_deliverable' => $data['is_deliverable']]);
+
+        return response()->json(['attachment' => $attachment]);
+    }
+
     public function destroy(Request $request, OrbitAttachment $attachment): JsonResponse
     {
         $user = $request->user();

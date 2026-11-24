@@ -25,7 +25,7 @@ export function ReconnectScreen() {
     <View style={styles.flex}>
       <ProductIconField />
       <Ionicons name="cloud-offline-outline" size={48} color={colors.pine} />
-      <Text style={[typography.title, { marginTop: spacing.lg, textAlign: 'center' }]}>Can&apos;t reach Valtireo</Text>
+      <Text style={[typography.title, { marginTop: spacing.lg, textAlign: 'center' }]}>Can&apos;t reach OrgaviaHR</Text>
       <Text style={[typography.caption, styles.message]}>{reconnectError ?? 'Check your connection and try again.'}</Text>
       <Pressable style={[styles.button, retrying && styles.buttonDisabled]} onPress={handleRetry} disabled={retrying}>
         {retrying ? <ActivityIndicator color={colors.white} /> : <Text style={styles.buttonText}>Reconnect</Text>}

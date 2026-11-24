@@ -31,17 +31,35 @@ class OrbitWorkItemController extends Controller
     {
         abort_unless($this->auth->canViewProject($request->user(), $project), 404);
 
+        $iterationId = $request->query('iteration_id');
+        $parentId = $request->query('parent_id');
+
+        if ($iterationId !== null && $iterationId !== 'none') {
+            $request->validate(['iteration_id' => ['integer', 'min:1']]);
+        }
+
+        if ($parentId !== null && $parentId !== 'none') {
+            $request->validate(['parent_id' => ['integer', 'min:1']]);
+        }
+
         $items = $project->workItems()
             ->with(['status', 'assignee:id,name', 'reporter:id,name', 'labels', 'epic:id,key,title'])
+            ->withCount([
+                'comments' => fn ($q) => $q->whereNull('deleted_at'),
+                'attachments' => fn ($q) => $q->whereNull('deleted_at'),
+            ])
             ->whereNull('archived_at')
             ->when($request->integer('status_id'), fn ($q, $value) => $q->where('status_id', $value))
             ->when($request->integer('assignee_id'), fn ($q, $value) => $q->where('assignee_id', $value))
             ->when($request->string('type')->toString(), fn ($q, $value) => $q->where('type', $value))
             ->when($request->integer('label_id'), fn ($q, $value) => $q->whereHas('labels', fn ($lq) => $lq->where('orbit_labels.id', $value)))
             ->when($request->integer('epic_id'), fn ($q, $value) => $q->where('epic_id', $value))
-            ->when($request->integer('iteration_id'), fn ($q, $value) => $q->where('iteration_id', $value))
+            ->when($iterationId === 'none', fn ($q) => $q->whereNull('iteration_id'))
+            ->when($iterationId !== null && $iterationId !== 'none', fn ($q) => $q->where('iteration_id', $iterationId))
+            ->when($parentId === 'none', fn ($q) => $q->whereNull('parent_id'))
+            ->when($parentId !== null && $parentId !== 'none', fn ($q) => $q->where('parent_id', $parentId))
             ->when($request->string('due_before')->toString(), fn ($q, $value) => $q->whereNotNull('due_at')->where('due_at', '<=', $value))
-            ->orderBy('position')
+            ->orderBy($iterationId === 'none' && $parentId === 'none' ? 'backlog_rank' : 'position')
             ->get();
 
         return response()->json(['data' => $items]);
@@ -64,12 +82,16 @@ class OrbitWorkItemController extends Controller
             'epic_id' => ['nullable', 'integer'],
             'story_template' => ['nullable', 'array'],
             'acceptance_criteria' => ['nullable', 'string'],
+            'definition_of_done' => ['nullable', 'string'],
             'estimate' => ['nullable', 'numeric', 'min:0'],
             'due_at' => ['nullable', 'date'],
             'start_at' => ['nullable', 'date'],
+            'iteration_id' => ['nullable', 'integer'],
             'label_ids' => ['sometimes', 'array'],
             'label_ids.*' => ['integer'],
         ]);
+
+        $this->assertScrumFieldsAllowed($project, $data);
 
         $status = isset($data['status_id'])
             ? $project->statuses()->findOrFail($data['status_id'])
@@ -89,6 +111,11 @@ class OrbitWorkItemController extends Controller
             $project->workItems()->where('type', 'epic')->findOrFail($data['epic_id']);
         }
 
+        if (! empty($data['iteration_id'])) {
+            $iteration = $project->iterations()->findOrFail($data['iteration_id']);
+            abort_if($iteration->status === 'completed', 422, 'This sprint is completed. Choose the backlog or an upcoming sprint instead.');
+        }
+
         $key = $this->keys->next($project);
 
         $item = OrbitWorkItem::create([
@@ -106,11 +133,14 @@ class OrbitWorkItemController extends Controller
             'epic_id' => $data['epic_id'] ?? null,
             'story_template' => $data['story_template'] ?? null,
             'acceptance_criteria' => $data['acceptance_criteria'] ?? null,
+            'definition_of_done' => $data['definition_of_done'] ?? null,
             'estimate' => $data['estimate'] ?? null,
             'remaining_estimate' => $data['estimate'] ?? null,
             'due_at' => $data['due_at'] ?? null,
             'start_at' => $data['start_at'] ?? null,
+            'iteration_id' => $data['iteration_id'] ?? null,
             'position' => $this->ordering->nextPosition($status->id),
+            'backlog_rank' => $this->ordering->nextBacklogRank($project->id),
         ]);
 
         if (! empty($data['label_ids'])) {
@@ -132,9 +162,11 @@ class OrbitWorkItemController extends Controller
         abort_unless($this->auth->canViewProject($request->user(), $workItem->project), 404);
 
         $workItem->load([
-            'status', 'assignee:id,name', 'reporter:id,name', 'labels',
+            'status', 'assignee:id,name', 'reporter:id,name', 'completedBy:id,name', 'labels',
             'parent:id,key,title', 'epic:id,key,title', 'project:id,name,key_prefix,mode',
             'attachments' => fn ($query) => $query->whereNull('deleted_at')->with('uploadedBy:id,name'),
+            'watchers:id,name',
+            'activities' => fn ($query) => $query->with('actor:id,name')->latest(),
         ]);
 
         return response()->json(['work_item' => $workItem]);
@@ -154,6 +186,7 @@ class OrbitWorkItemController extends Controller
             'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
             'assignee_id' => ['nullable', 'integer'],
             'epic_id' => ['nullable', 'integer'],
+            'iteration_id' => ['nullable', 'integer'],
             'acceptance_criteria' => ['nullable', 'string'],
             'definition_of_done' => ['nullable', 'string'],
             'estimate' => ['nullable', 'numeric', 'min:0'],
@@ -164,13 +197,20 @@ class OrbitWorkItemController extends Controller
             'label_ids.*' => ['integer'],
         ]);
 
+        $this->assertScrumFieldsAllowed($project, $data);
         $this->assertVersion($workItem, $data['version']);
 
         $previousAssignee = $workItem->assignee_id;
         $previousPriority = $workItem->priority;
+        $previousIteration = $workItem->iteration_id;
 
         if (! empty($data['assignee_id'])) {
             User::query()->where('organization_id', $user->organization_id)->findOrFail($data['assignee_id']);
+        }
+
+        if (! empty($data['iteration_id'])) {
+            $targetIteration = $project->iterations()->findOrFail($data['iteration_id']);
+            abort_if($targetIteration->status === 'completed', 422, 'This sprint is completed. Choose the backlog or an upcoming sprint instead.');
         }
 
         $update = array_diff_key($data, ['version' => null, 'label_ids' => null]);
@@ -194,6 +234,10 @@ class OrbitWorkItemController extends Controller
             $this->activity->record($workItem, $user, 'priority_changed', "{$user->name} changed the priority.", ['priority' => $previousPriority], ['priority' => $workItem->priority]);
         }
 
+        if (array_key_exists('iteration_id', $data) && $data['iteration_id'] !== $previousIteration) {
+            $this->activity->record($workItem, $user, 'iteration_changed', "{$user->name} changed the sprint.", ['iteration_id' => $previousIteration], ['iteration_id' => $workItem->iteration_id]);
+        }
+
         return response()->json(['work_item' => $workItem->fresh(['status', 'assignee:id,name', 'labels'])]);
     }
 
@@ -208,12 +252,23 @@ class OrbitWorkItemController extends Controller
             'status_id' => ['required', 'integer'],
             'position' => ['required', 'numeric'],
             'version' => ['required', 'integer'],
+            'completion_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $this->assertVersion($workItem, $data['version']);
 
         $newStatus = $project->statuses()->findOrFail($data['status_id']);
         $previousStatusId = $workItem->status_id;
+        $wasDone = OrbitStatus::where('id', $previousStatusId)->value('category') === 'done';
+        $completingNow = $newStatus->category === 'done' && ! $wasDone;
+
+        if ($completingNow && $project->mode === 'scrum' && in_array($workItem->type, ['story', 'task'], true)) {
+            abort_unless(
+                $workItem->attachments()->whereNull('deleted_at')->where('is_deliverable', true)->exists(),
+                422,
+                'Attach a deliverable before marking this item complete.'
+            );
+        }
 
         $workItem->update([
             'status_id' => $newStatus->id,
@@ -221,17 +276,31 @@ class OrbitWorkItemController extends Controller
             'version' => $workItem->version + 1,
             'started_at' => $workItem->started_at ?? ($newStatus->category === 'in_progress' ? now() : null),
             'completed_at' => $newStatus->category === 'done' ? ($workItem->completed_at ?? now()) : null,
+            'completed_by_id' => $newStatus->category === 'done' ? ($workItem->completed_by_id ?? $user->id) : null,
+            'completion_note' => $newStatus->category === 'done' ? ($data['completion_note'] ?? $workItem->completion_note) : null,
+            'status_changed_at' => $previousStatusId !== $newStatus->id ? now() : $workItem->status_changed_at,
         ]);
 
         if ($previousStatusId !== $newStatus->id) {
-            $this->activity->record(
-                $workItem,
-                $user,
-                'moved',
-                "{$user->name} moved this item to {$newStatus->name}.",
-                ['status_id' => $previousStatusId],
-                ['status_id' => $newStatus->id]
-            );
+            if ($completingNow) {
+                $this->activity->record(
+                    $workItem,
+                    $user,
+                    'completed',
+                    "{$user->name} marked this item complete.",
+                    ['status_id' => $previousStatusId],
+                    ['status_id' => $newStatus->id, 'completion_note' => $data['completion_note'] ?? null]
+                );
+            } else {
+                $this->activity->record(
+                    $workItem,
+                    $user,
+                    'moved',
+                    "{$user->name} moved this item to {$newStatus->name}.",
+                    ['status_id' => $previousStatusId],
+                    ['status_id' => $newStatus->id]
+                );
+            }
 
             $this->notifications->orbitWorkItemStatusChanged($workItem, $user);
         } else {
@@ -243,7 +312,29 @@ class OrbitWorkItemController extends Controller
             );
         }
 
-        return response()->json(['work_item' => $workItem->fresh('status')]);
+        return response()->json(['work_item' => $workItem->fresh(['status', 'completedBy:id,name'])]);
+    }
+
+    public function reorderBacklog(Request $request, OrbitWorkItem $workItem): JsonResponse
+    {
+        $user = $request->user();
+        $project = $workItem->project;
+        abort_unless($this->auth->canViewProject($user, $project), 404);
+        abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+
+        $data = $request->validate([
+            'backlog_rank' => ['required', 'numeric'],
+            'version' => ['required', 'integer'],
+        ]);
+
+        $this->assertVersion($workItem, $data['version']);
+
+        $workItem->update([
+            'backlog_rank' => $data['backlog_rank'],
+            'version' => $workItem->version + 1,
+        ]);
+
+        return response()->json(['work_item' => $workItem->fresh()]);
     }
 
     public function archive(Request $request, OrbitWorkItem $workItem): JsonResponse
@@ -257,6 +348,39 @@ class OrbitWorkItemController extends Controller
         $this->activity->record($workItem, $user, 'archived', "{$user->name} archived this item.");
 
         return response()->json(['work_item' => $workItem]);
+    }
+
+    public function setBlocked(Request $request, OrbitWorkItem $workItem): JsonResponse
+    {
+        $user = $request->user();
+        $project = $workItem->project;
+        abort_unless($this->auth->canViewProject($user, $project), 404);
+        abort_unless($this->auth->canEditWorkItems($user, $project), 403);
+
+        $data = $request->validate([
+            'is_blocked' => ['required', 'boolean'],
+            'blocked_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $previouslyBlocked = $workItem->is_blocked;
+
+        $workItem->update([
+            'is_blocked' => $data['is_blocked'],
+            'blocked_reason' => $data['is_blocked'] ? ($data['blocked_reason'] ?? null) : null,
+        ]);
+
+        if ($data['is_blocked'] !== $previouslyBlocked) {
+            $this->activity->record(
+                $workItem,
+                $user,
+                $data['is_blocked'] ? 'blocked' : 'unblocked',
+                $data['is_blocked'] ? "{$user->name} flagged this item as blocked." : "{$user->name} unblocked this item.",
+                ['is_blocked' => $previouslyBlocked],
+                ['is_blocked' => $data['is_blocked'], 'blocked_reason' => $data['blocked_reason'] ?? null],
+            );
+        }
+
+        return response()->json(['work_item' => $workItem->fresh(['status', 'assignee:id,name'])]);
     }
 
     public function watch(Request $request, OrbitWorkItem $workItem): JsonResponse
@@ -284,5 +408,22 @@ class OrbitWorkItemController extends Controller
         if ($workItem->version !== $version) {
             abort(409, 'This work item was changed by someone else. Refresh and try again.');
         }
+    }
+
+    private function assertScrumFieldsAllowed(OrbitProject $project, array $data): void
+    {
+        if ($project->mode === 'scrum') {
+            return;
+        }
+
+        $scrumOnlyFields = ['estimate', 'remaining_estimate', 'epic_id', 'story_template', 'acceptance_criteria', 'definition_of_done', 'iteration_id'];
+
+        $hasScrumValue = collect($scrumOnlyFields)->contains(fn (string $field) => array_key_exists($field, $data) && $data[$field] !== null);
+
+        abort_if(
+            $hasScrumValue,
+            422,
+            'Epics, estimates, story templates, acceptance criteria, and definition of done are only available on Scrum projects.'
+        );
     }
 }

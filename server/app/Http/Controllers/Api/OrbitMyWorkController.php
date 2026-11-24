@@ -15,7 +15,7 @@ class OrbitMyWorkController extends Controller
         $filter = $request->string('filter')->toString() ?: 'assigned';
 
         $base = fn () => OrbitWorkItem::query()
-            ->with(['project:id,name,workspace_id', 'project.workspace:id,name', 'status']);
+            ->with(['project:id,name,workspace_id', 'project.workspace:id,name', 'status', 'labels', 'epic:id,key,title']);
 
         $items = match ($filter) {
             'mentioned' => $base()->whereNull('archived_at')->whereHas(
@@ -41,6 +41,8 @@ class OrbitMyWorkController extends Controller
             'priority' => $item->priority,
             'status' => $item->status,
             'due_at' => $item->due_at,
+            'labels' => $item->labels,
+            'epic' => $item->epic,
             'project' => $item->project,
             'reason' => $filter,
         ]);

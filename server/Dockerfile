@@ -22,6 +22,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         gettext-base \
         libicu-dev \
         libonig-dev \
+        libpq-dev \
         libsqlite3-dev \
         libzip-dev \
         nginx \
@@ -34,6 +35,7 @@ RUN apt-get -o Acquire::Retries=5 update \
         opcache \
         pcntl \
         pdo_mysql \
+        pdo_pgsql \
         pdo_sqlite \
         zip \
     && apt-get clean \

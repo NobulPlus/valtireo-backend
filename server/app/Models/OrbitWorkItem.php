@@ -15,8 +15,9 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
     'organization_id', 'project_id', 'key', 'type', 'title', 'description',
     'story_template', 'acceptance_criteria', 'definition_of_done',
     'status_id', 'priority', 'reporter_id', 'assignee_id', 'parent_id', 'epic_id', 'iteration_id',
-    'estimate', 'remaining_estimate', 'due_at', 'start_at', 'position', 'version',
-    'started_at', 'completed_at', 'archived_at',
+    'estimate', 'remaining_estimate', 'due_at', 'start_at', 'position', 'backlog_rank', 'version',
+    'started_at', 'completed_at', 'completed_by_id', 'completion_note', 'archived_at',
+    'is_blocked', 'blocked_reason', 'status_changed_at',
 ])]
 class OrbitWorkItem extends Model implements AuditableContract
 {
@@ -45,6 +46,11 @@ class OrbitWorkItem extends Model implements AuditableContract
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function completedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'completed_by_id');
     }
 
     public function parent(): BelongsTo
@@ -113,10 +119,13 @@ class OrbitWorkItem extends Model implements AuditableContract
             'due_at' => 'date',
             'start_at' => 'date',
             'position' => 'decimal:10',
+            'backlog_rank' => 'decimal:10',
             'version' => 'integer',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'archived_at' => 'datetime',
+            'is_blocked' => 'boolean',
+            'status_changed_at' => 'datetime',
         ];
     }
 }

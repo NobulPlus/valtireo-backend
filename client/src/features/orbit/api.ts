@@ -21,6 +21,7 @@ export interface OrbitStatus {
   category: 'todo' | 'in_progress' | 'done';
   position: number;
   is_default: boolean;
+  wip_limit: number | null;
 }
 
 export interface OrbitProject {
@@ -72,17 +73,61 @@ export interface OrbitWorkItem {
   status?: OrbitStatus;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   reporter_id: number;
+  reporter?: { id: number; name: string } | null;
   assignee_id: number | null;
   assignee?: { id: number; name: string } | null;
+  parent_id: number | null;
+  parent?: { id: number; key: string; title: string } | null;
   epic_id: number | null;
   epic?: { id: number; key: string; title: string } | null;
+  iteration_id: number | null;
+  iteration?: { id: number; name: string } | null;
   labels?: OrbitLabel[];
   acceptance_criteria: string | null;
+  definition_of_done: string | null;
+  estimate: number | null;
+  remaining_estimate: number | null;
   due_at: string | null;
+  start_at: string | null;
   position: string;
+  backlog_rank: string;
   version: number;
   archived_at: string | null;
+  completed_at: string | null;
+  completed_by: { id: number; name: string } | null;
+  completion_note: string | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
+  status_changed_at: string | null;
+  comments_count?: number;
+  attachments_count?: number;
   attachments?: OrbitAttachment[];
+  watchers?: { id: number; name: string }[];
+  activities?: OrbitWorkItemActivity[];
+}
+
+export interface OrbitWorkItemActivity {
+  id: number;
+  event: string;
+  title: string;
+  actor?: { id: number; name: string } | null;
+  created_at: string;
+}
+
+export interface OrbitIteration {
+  id: number;
+  project_id: number;
+  name: string;
+  goal: string | null;
+  starts_at: string;
+  ends_at: string;
+  capacity_note: string | null;
+  capacity_points: number | null;
+  status: 'planned' | 'active' | 'completed';
+  started_at: string | null;
+  completed_at: string | null;
+  work_items_count?: number;
+  work_items?: OrbitWorkItem[];
 }
 
 export interface OrbitComment {
@@ -92,6 +137,8 @@ export interface OrbitComment {
   author?: { id: number; name: string };
   body: string;
   mentions: number[];
+  reply_to_id: number | null;
+  reply_to?: { id: number; body: string; author_id: number } | null;
   created_at: string;
   edited_at: string | null;
 }
@@ -121,6 +168,7 @@ export interface OrbitAttachment {
   file_name: string;
   mime_type: string;
   file_size: number;
+  is_deliverable: boolean;
 }
 
 export function useOrbitWorkspaces() {
@@ -172,18 +220,111 @@ export function useOrbitProject(projectId: number | undefined) {
   });
 }
 
-export function useOrbitWorkItems(projectId: number | undefined) {
+export interface OrbitVelocityEntry {
+  id: number;
+  label: string;
+  value: number;
+  completed_at: string | null;
+}
+
+export interface OrbitSprintSummaryEntry {
+  iteration_id: number;
+  name: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  completed_at: string | null;
+  committed_count: number;
+  committed_points: number;
+  done_count: number;
+  done_points: number;
+  carried_over_count: number;
+  carried_over_points: number;
+}
+
+export interface OrbitCycleTimeByType {
+  type: string;
+  average_hours: number;
+  sample_size: number;
+}
+
+export interface OrbitBurndownSeriesEntry {
+  label: string;
+  values: { ideal: number; actual: number };
+}
+
+export interface OrbitProjectReporting {
+  generated_at: string;
+  velocity: {
+    entries: OrbitVelocityEntry[];
+    average_points: number | null;
+    median_points: number | null;
+  };
+  sprint_summary: OrbitSprintSummaryEntry[];
+  cycle_time: {
+    average_hours: number | null;
+    median_hours: number | null;
+    sample_size: number;
+    by_type: OrbitCycleTimeByType[];
+  };
+  active_sprint_burndown: {
+    iteration_id: number;
+    name: string;
+    starts_at: string | null;
+    ends_at: string | null;
+    total_points: number;
+    series: OrbitBurndownSeriesEntry[];
+    approximation_note: string;
+  } | null;
+}
+
+export function useOrbitProjectReporting(projectId: number | undefined) {
   return useQuery({
-    queryKey: ['orbit', 'projects', projectId, 'work-items'],
-    queryFn: () => api.get<{ data: OrbitWorkItem[] }>(`/orbit/projects/${projectId}/work-items`),
+    queryKey: ['orbit', 'projects', projectId, 'reporting'],
+    queryFn: () => api.get<{ data: OrbitProjectReporting }>(`/orbit/projects/${projectId}/reporting`),
     enabled: Boolean(projectId),
+    select: (response) => response.data,
+  });
+}
+
+export interface OrbitWorkItemFilters {
+  status_id?: number;
+  assignee_id?: number;
+  type?: string;
+  label_id?: number;
+  epic_id?: number;
+  iteration_id?: number | 'none';
+  parent_id?: number | 'none';
+  due_before?: string;
+}
+
+export function useOrbitWorkItems(projectId: number | undefined, filters: OrbitWorkItemFilters = {}, enabled = true) {
+  return useQuery({
+    queryKey: ['orbit', 'projects', projectId, 'work-items', filters],
+    queryFn: () => api.get<{ data: OrbitWorkItem[] }>(`/orbit/projects/${projectId}/work-items`, { params: filters }),
+    enabled: Boolean(projectId) && enabled,
   });
 }
 
 export function useCreateOrbitWorkItem(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { type: string; title: string; description?: string; priority?: string; assignee_id?: number | null; status_id?: number }) =>
+    mutationFn: (payload: {
+      type: OrbitWorkItem['type'];
+      title: string;
+      description?: string;
+      priority?: OrbitWorkItem['priority'];
+      assignee_id?: number | null;
+      status_id?: number;
+      parent_id?: number | null;
+      epic_id?: number | null;
+      acceptance_criteria?: string;
+      definition_of_done?: string;
+      estimate?: number;
+      due_at?: string;
+      start_at?: string;
+      label_ids?: number[];
+      iteration_id?: number | null;
+    }) =>
       api.post<{ work_item: OrbitWorkItem }>(`/orbit/projects/${projectId}/work-items`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
   });
@@ -200,8 +341,29 @@ export function useOrbitWorkItem(key: string | undefined) {
 export function useMoveOrbitWorkItem(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, status_id, position, version }: { key: string; status_id: number; position: string; version: number }) =>
-      api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/move`, { status_id, position, version }),
+    mutationFn: ({ key, status_id, position, version, completion_note }: { key: string; status_id: number; position: string; version: number; completion_note?: string }) =>
+      api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/move`, { status_id, position, version, completion_note }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
+  });
+}
+
+export function useSetWorkItemBlocked(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, is_blocked, blocked_reason }: { key: string; is_blocked: boolean; blocked_reason?: string | null }) =>
+      api.patch<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/blocked`, { is_blocked, blocked_reason }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', variables.key] });
+    },
+  });
+}
+
+export function useReorderOrbitBacklogItem(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, backlog_rank, version }: { key: string; backlog_rank: string; version: number }) =>
+      api.post<{ work_item: OrbitWorkItem }>(`/orbit/work-items/${key}/reorder-backlog`, { backlog_rank, version }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] }),
   });
 }
@@ -229,9 +391,25 @@ export function useOrbitComments(key: string | undefined) {
 export function useCreateOrbitComment(key: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { body: string; mentions?: number[] }) =>
+    mutationFn: (payload: { body: string; mentions?: number[]; reply_to_id?: number | null }) =>
       api.post<{ comment: OrbitComment }>(`/orbit/work-items/${key}/comments`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key, 'comments'] }),
+  });
+}
+
+export function useWatchOrbitWorkItem(key: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post(`/orbit/work-items/${key}/watch`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
+  });
+}
+
+export function useUnwatchOrbitWorkItem(key: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete(`/orbit/work-items/${key}/watch`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
   });
 }
 
@@ -380,7 +558,7 @@ export function useOrbitStatuses(projectId: number | undefined) {
 export function useCreateOrbitStatus(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { name: string; category: 'todo' | 'in_progress' | 'done'; position?: number }) =>
+    mutationFn: (payload: { name: string; category: 'todo' | 'in_progress' | 'done'; position?: number; wip_limit?: number | null }) =>
       api.post<{ status: OrbitStatus }>(`/orbit/projects/${projectId}/statuses`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'statuses'] });
@@ -392,7 +570,7 @@ export function useCreateOrbitStatus(projectId: number | undefined) {
 export function useUpdateOrbitStatus(projectId: number | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ statusId, ...payload }: { statusId: number } & Partial<Pick<OrbitStatus, 'name' | 'category' | 'position'>>) =>
+    mutationFn: ({ statusId, ...payload }: { statusId: number } & Partial<Pick<OrbitStatus, 'name' | 'category' | 'position' | 'wip_limit'>>) =>
       api.patch<{ status: OrbitStatus }>(`/orbit/projects/${projectId}/statuses/${statusId}`, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'statuses'] });
@@ -408,6 +586,76 @@ export function useDeleteOrbitStatus(projectId: number | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'statuses'] });
       queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId] });
+    },
+  });
+}
+
+// --- Sprints (iterations) ---------------------------------------------------
+
+export function useOrbitIterations(projectId: number | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['orbit', 'projects', projectId, 'iterations'],
+    queryFn: () => api.get<{ data: OrbitIteration[] }>(`/orbit/projects/${projectId}/iterations`),
+    enabled: Boolean(projectId) && enabled,
+  });
+}
+
+export function useOrbitIteration(iterationId: number | undefined) {
+  return useQuery({
+    queryKey: ['orbit', 'iterations', iterationId],
+    queryFn: () => api.get<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}`),
+    enabled: Boolean(iterationId),
+  });
+}
+
+export function useCreateOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { name: string; goal?: string; starts_at: string; ends_at: string; capacity_note?: string; capacity_points?: number }) =>
+      api.post<{ iteration: OrbitIteration }>(`/orbit/projects/${projectId}/iterations`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] }),
+  });
+}
+
+export function useUpdateOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ iterationId, ...payload }: { iterationId: number } & Partial<Pick<OrbitIteration, 'name' | 'goal' | 'starts_at' | 'ends_at' | 'capacity_note' | 'capacity_points'>>) =>
+      api.patch<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}`, payload),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'iterations', variables.iterationId] });
+    },
+  });
+}
+
+export function useStartOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (iterationId: number) => api.post<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}/start`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] }),
+  });
+}
+
+export function useCompleteOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ iterationId, carry_to_iteration_id }: { iterationId: number; carry_to_iteration_id?: number | null }) =>
+      api.post<{ iteration: OrbitIteration }>(`/orbit/iterations/${iterationId}/complete`, { carry_to_iteration_id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] });
+    },
+  });
+}
+
+export function useDeleteOrbitIteration(projectId: number | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (iterationId: number) => api.delete(`/orbit/iterations/${iterationId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'iterations'] });
+      queryClient.invalidateQueries({ queryKey: ['orbit', 'projects', projectId, 'work-items'] });
     },
   });
 }
@@ -488,6 +736,15 @@ export function useUploadOrbitWorkItemAttachment(key: string | undefined) {
       formData.append('file', file);
       return api.post<{ attachment: OrbitAttachment }>(`/orbit/work-items/${key}/attachments`, formData);
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
+  });
+}
+
+export function useSetAttachmentDeliverable(key: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ attachmentId, is_deliverable }: { attachmentId: number; is_deliverable: boolean }) =>
+      api.patch<{ attachment: OrbitAttachment }>(`/orbit/attachments/${attachmentId}/deliverable`, { is_deliverable }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['orbit', 'work-items', key] }),
   });
 }

@@ -1,5 +1,5 @@
 /**
- * States/provinces/regions for the countries where Valtireo's customers are
+ * States/provinces/regions for the countries where OrgaviaHR's customers are
  * most likely based (government, healthcare, schools, NGOs, manufacturing,
  * professional services — see docs/valtireo-brand-product-design-foundation-v1.md).
  * Keys must match `COUNTRIES` in lib/countries.ts exactly.

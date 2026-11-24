@@ -78,6 +78,40 @@ class OrbitWorkspaceAndProjectTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_a_simple_mode_project_is_seeded_with_only_a_to_do_and_done_column(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        Sanctum::actingAs($fixture['admin']);
+
+        $workspace = OrbitWorkspace::create(['organization_id' => $fixture['organization']->id, 'name' => 'Ops', 'slug' => 'ops', 'owner_id' => $fixture['admin']->id]);
+
+        $response = $this->postJson("/api/orbit/workspaces/{$workspace->id}/projects", [
+            'name' => 'Simple Tasks', 'key_prefix' => 'SMPL', 'mode' => 'simple',
+        ])->assertCreated();
+
+        $statuses = $response->json('project.statuses');
+
+        $this->assertCount(2, $statuses);
+        $this->assertEqualsCanonicalizing(['todo', 'done'], array_column($statuses, 'category'));
+    }
+
+    public function test_a_kanban_mode_project_is_still_seeded_with_three_columns(): void
+    {
+        $fixture = $this->createOrbitOrganization();
+        Sanctum::actingAs($fixture['admin']);
+
+        $workspace = OrbitWorkspace::create(['organization_id' => $fixture['organization']->id, 'name' => 'Ops', 'slug' => 'ops', 'owner_id' => $fixture['admin']->id]);
+
+        $response = $this->postJson("/api/orbit/workspaces/{$workspace->id}/projects", [
+            'name' => 'Kanban Tasks', 'key_prefix' => 'KNBN', 'mode' => 'kanban',
+        ])->assertCreated();
+
+        $statuses = $response->json('project.statuses');
+
+        $this->assertCount(3, $statuses);
+        $this->assertEqualsCanonicalizing(['todo', 'in_progress', 'done'], array_column($statuses, 'category'));
+    }
+
     public function test_private_workspace_is_invisible_to_a_non_member(): void
     {
         $fixture = $this->createOrbitOrganization();

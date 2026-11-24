@@ -147,8 +147,6 @@ class RolePermissionSeeder extends Seeder
             'orbit.workspaces.create',
             'orbit.workspaces.administer',
             'orbit.projects.create',
-            'orbit.reports.view_all',
-            'orbit.admin.manage',
         ];
     }
 }

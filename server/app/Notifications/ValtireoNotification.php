@@ -4,10 +4,21 @@ namespace App\Notifications;
 
 use App\Notifications\Channels\ExpoPushChannel;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ValtireoNotification extends Notification
+/**
+ * Runs through the queue (QUEUE_CONNECTION, worker already running via
+ * `composer dev`'s queue:listen) rather than inline on the request that
+ * triggered it. Fanning out to every recipient of e.g. an org-wide
+ * calendar event means one HTTP push call per recipient with a device
+ * token (ExpoPushChannel, up to a 10s timeout each) — synchronously,
+ * that held the triggering request open until every recipient was
+ * processed. Tests run with QUEUE_CONNECTION=sync, so this executes
+ * inline there and existing assertions are unaffected.
+ */
+class ValtireoNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -42,7 +53,7 @@ class ValtireoNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $message = (new MailMessage)->subject($this->data['title'] ?? 'Valtireo notification');
+        $message = (new MailMessage)->subject($this->data['title'] ?? 'OrgaviaHR notification');
 
         return match ($this->data['event'] ?? null) {
             'organization.admin_invited' => $this->organizationAdminInvitedMail($message, $notifiable),
@@ -57,7 +68,7 @@ class ValtireoNotification extends Notification
 
         $message
             ->greeting("Welcome, {$notifiable->name}!")
-            ->line($this->data['message'] ?? 'You have been invited to Valtireo.')
+            ->line($this->data['message'] ?? 'You have been invited to OrgaviaHR.')
             ->line('Use the setup link below to choose your password and activate your organization workspace.')
             ->line("Email: **{$notifiable->email}**");
 
@@ -71,7 +82,7 @@ class ValtireoNotification extends Notification
             $message->line("Your organization code is **{$organizationCode}**.");
         }
 
-        return $message->salutation("Welcome aboard,\nThe Valtireo Team");
+        return $message->salutation("Welcome aboard,\nThe OrgaviaHR Team");
     }
 
     private function employeeInvitedMail(MailMessage $message, object $notifiable): MailMessage
@@ -80,7 +91,7 @@ class ValtireoNotification extends Notification
 
         $message
             ->greeting("Hi {$notifiable->name},")
-            ->line($this->data['message'] ?? 'You have been invited to join Valtireo.')
+            ->line($this->data['message'] ?? 'You have been invited to join OrgaviaHR.')
             ->line('This is a one-time invitation link — use it to set your password and get started.');
 
         if (! empty($this->data['action_url']) && ! empty($this->data['action_label'])) {
@@ -92,20 +103,20 @@ class ValtireoNotification extends Notification
             $message->line("This link expires on **{$formatted}**. If it expires, ask your HR team to resend the invitation.");
         }
 
-        return $message->salutation("See you soon,\nThe Valtireo Team");
+        return $message->salutation("See you soon,\nThe OrgaviaHR Team");
     }
 
     private function genericMail(MailMessage $message, object $notifiable): MailMessage
     {
         $message
             ->greeting("Hello {$notifiable->name},")
-            ->line($this->data['message'] ?? 'You have a new Valtireo notification.');
+            ->line($this->data['message'] ?? 'You have a new OrgaviaHR notification.');
 
         if (! empty($this->data['action_url']) && ! empty($this->data['action_label'])) {
             $message->action($this->data['action_label'], $this->absoluteUrl($this->data['action_url']));
         }
 
-        return $message->line('Thank you for using Valtireo.');
+        return $message->line('Thank you for using OrgaviaHR.');
     }
 
     private function absoluteUrl(string $url): string

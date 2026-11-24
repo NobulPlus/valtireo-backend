@@ -282,7 +282,7 @@ function ControlCenterContent() {
           <div>
             <p className="text-sm font-semibold text-strong">Product expansion shelf</p>
             <p className="mt-1 text-sm text-muted">
-              These spaces are part of the Valtireo direction, but they stay outside the main navigation until their
+              These spaces are part of the OrgaviaHR direction, but they stay outside the main navigation until their
               workflows are implemented.
             </p>
           </div>
