@@ -42,6 +42,7 @@ import {
   useUpdateOrganizationModule,
   useUpdateOrganizationStatus,
   useUpdateOrganizationWorkspace,
+  useUpdateInvitedAdmin,
   viewVerificationDocument,
 } from '@/features/platform/api';
 import type { OrganizationVerificationDocument, PlatformOrganizationDetail } from '@/types/api';
@@ -77,6 +78,10 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
   const [moduleDuration, setModuleDuration] = useState<Duration>('forever');
   const [moduleExpiresAt, setModuleExpiresAt] = useState('');
   const [editingWorkspace, setEditingWorkspace] = useState(false);
+  const [companyFields, setCompanyFields] = useState({ code: '', email: '', phone: '', website: '', sector: '', country: '', state: '', city: '', address: '' });
+  const [editingAdmin, setEditingAdmin] = useState<{ adminId: number; name: string; email: string } | null>(null);
+  const adminMutation = useUpdateInvitedAdmin(id);
+  const [invitationResult, setInvitationResult] = useState<{ setup_url: string; delivery_status: string } | null>(null);
   const [reviewingDocument, setReviewingDocument] = useState<OrganizationVerificationDocument | null>(null);
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | 'request_changes'>('approve');
   const [reviewNote, setReviewNote] = useState('');
@@ -139,6 +144,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
   function openWorkspaceEditor() {
     workspaceMutation.reset();
     setWorkspaceName(data.workspace.workspace_name);
+    setCompanyFields({ code: org.code, email: org.email ?? '', phone: org.phone ?? '', website: org.website ?? '', sector: org.sector ?? '', country: org.country ?? '', state: org.state ?? '', city: org.city ?? '', address: org.address ?? '' });
     setWorkspaceSupportEmail(data.workspace.identity.support_email ?? '');
     setWorkspaceTimezone(data.workspace.localization.timezone);
     setEditingWorkspace(true);
@@ -146,6 +152,10 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
 
   async function submitWorkspaceEdit() {
     await workspaceMutation.mutateAsync({
+      ...companyFields,
+      code: companyFields.code.trim().toUpperCase(),
+      email: companyFields.email.trim() || null,
+      website: companyFields.website.trim() || null,
       name: workspaceName.trim(),
       support_email: workspaceSupportEmail.trim() || null,
       timezone: workspaceTimezone.trim(),
@@ -200,7 +210,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
                 isLoading={resendAdminInvitationMutation.isPending}
                 onClick={() => {
                   resendAdminInvitationMutation.mutate(undefined, {
-                    onSuccess: (result) => toast.success('Invitation resent', `A new setup link was sent to ${result.invitation.email}.`),
+                    onSuccess: (result) => setInvitationResult(result.invitation),
                     onError: (error) => toast.error('Could not resend invitation', error instanceof ApiError ? error.message : 'Could not resend this invitation.'),
                   });
                 }}
@@ -251,7 +261,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
         <Card>
           <CardHeader>
             <CardTitle>Workspace identity</CardTitle>
-            <Button variant="ghost" size="icon" title="Edit workspace identity" aria-label="Edit workspace identity" onClick={openWorkspaceEditor}>
+            <Button variant="ghost" size="icon" title="Edit company details" aria-label="Edit company details" onClick={openWorkspaceEditor}>
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
@@ -370,6 +380,7 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
                 <div key={admin.id} className="rounded-md bg-surface-soft px-3 py-2">
                   <p className="text-sm font-medium text-strong">{admin.name}</p>
                   <p className="text-xs text-muted">{admin.email}</p>
+                  {org.status === 'invited' && <Button variant="ghost" onClick={() => { adminMutation.reset(); setEditingAdmin({ adminId: admin.id, name: admin.name, email: admin.email }); }}>Edit invited admin</Button>}
                 </div>
               ))
             )}
@@ -520,18 +531,39 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
         </div>
       </Modal>
 
+      <Modal open={editingAdmin !== null} onClose={() => { if (!adminMutation.isPending) setEditingAdmin(null); }} title="Edit invited admin"
+        footer={<><ModalCancelAction disabled={adminMutation.isPending} onClick={() => setEditingAdmin(null)} /><ModalSaveAction isLoading={adminMutation.isPending} disabled={!editingAdmin?.name.trim() || !isValidEmail(editingAdmin?.email ?? '')} onClick={() => {
+          if (!editingAdmin) return;
+          adminMutation.mutate({ ...editingAdmin, name: editingAdmin.name.trim(), email: editingAdmin.email.trim() }, { onSuccess: () => { setEditingAdmin(null); setInvitationResult(null); toast.success('Admin updated', 'Use Resend admin invitation to send a new setup link.'); } });
+        }} /></>}
+      >
+        <div className="space-y-4">
+          <p>Changing the email invalidates the previous invitation. Save the correction, then resend the invitation.</p>
+          <Field label="Admin name" required><Input value={editingAdmin?.name ?? ''} disabled={adminMutation.isPending} onChange={(event) => setEditingAdmin((current) => current && ({ ...current, name: event.target.value }))} /></Field>
+          <Field label="Admin email" required><Input type="email" value={editingAdmin?.email ?? ''} disabled={adminMutation.isPending} onChange={(event) => setEditingAdmin((current) => current && ({ ...current, email: event.target.value }))} /></Field>
+          {adminMutation.error && <Alert>{adminMutation.error instanceof ApiError ? adminMutation.error.message : 'Could not update the admin.'}</Alert>}
+        </div>
+      </Modal>
+
+      <Modal open={invitationResult !== null} onClose={() => setInvitationResult(null)} title="Admin invitation">
+        <div className="space-y-4">
+          <p>{invitationResult?.delivery_status === 'sent' ? 'Invitation submitted for sending. Inbox delivery is not confirmed.' : invitationResult?.delivery_status === 'failed' ? 'Email sending failed. You can share the setup link below or retry sending.' : 'Email sending is disabled. You can share the setup link below.'}</p>
+          <Field label="Setup link"><Input readOnly value={invitationResult?.setup_url ?? ''} onFocus={(event) => event.target.select()} /></Field>
+        </div>
+      </Modal>
+
       <Modal
         open={editingWorkspace}
         onClose={() => {
           if (!workspaceMutation.isPending) setEditingWorkspace(false);
         }}
-        title="Edit workspace identity"
+        title="Edit company details"
         footer={
           <>
             <ModalCancelAction disabled={workspaceMutation.isPending} onClick={() => setEditingWorkspace(false)} />
             <ModalSaveAction
               isLoading={workspaceMutation.isPending}
-              disabled={!workspaceName.trim() || !workspaceTimezone.trim() || Boolean(workspaceSupportEmailError)}
+              disabled={!workspaceName.trim() || !workspaceTimezone.trim() || !companyFields.code.trim() || !companyFields.country.trim() || Boolean(workspaceSupportEmailError)}
               onClick={submitWorkspaceEdit}
             />
           </>
@@ -549,6 +581,12 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
               disabled={workspaceMutation.isPending}
             />
           </Field>
+
+          {(Object.keys(companyFields) as Array<keyof typeof companyFields>).map((key) => (
+            <Field key={key} label={key === 'email' ? 'Company contact email' : key.charAt(0).toUpperCase() + key.slice(1)} required={key === 'code' || key === 'country'} error={workspaceMutation.error instanceof ApiError ? workspaceMutation.error.fieldError(key) : undefined}>
+              <Input type={key === 'email' ? 'email' : key === 'website' ? 'url' : 'text'} value={companyFields[key]} disabled={workspaceMutation.isPending} onChange={(event) => setCompanyFields((current) => ({ ...current, [key]: event.target.value }))} />
+            </Field>
+          ))}
 
           <Field
             label="Support email"
