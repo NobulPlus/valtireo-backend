@@ -380,7 +380,20 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
                 <div key={admin.id} className="rounded-md bg-surface-soft px-3 py-2">
                   <p className="text-sm font-medium text-strong">{admin.name}</p>
                   <p className="text-xs text-muted">{admin.email}</p>
-                  {org.status === 'invited' && <Button variant="ghost" onClick={() => { adminMutation.reset(); setEditingAdmin({ adminId: admin.id, name: admin.name, email: admin.email }); }}>Edit invited admin</Button>}
+                  {org.status === 'invited' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Edit invited admin"
+                      aria-label="Edit invited admin"
+                      onClick={() => {
+                        adminMutation.reset();
+                        setEditingAdmin({ adminId: admin.id, name: admin.name, email: admin.email });
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  )}
                 </div>
               ))
             )}
