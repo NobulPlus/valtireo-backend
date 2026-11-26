@@ -215,6 +215,15 @@ export function useUpdateOrganizationModule(organizationId: string | undefined) 
 }
 
 export interface UpdateOrganizationWorkspacePayload {
+  code?: string;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  sector?: string | null;
+  country?: string;
+  state?: string | null;
+  city?: string | null;
+  address?: string | null;
   name?: string;
   support_email?: string | null;
   timezone?: string;
@@ -234,6 +243,15 @@ export function useUpdateOrganizationWorkspace(organizationId: string | undefine
       queryClient.invalidateQueries({ queryKey: ['platform', 'organizations'] });
       queryClient.invalidateQueries({ queryKey: ['platform', 'organizations', organizationId] });
     },
+  });
+}
+
+export function useUpdateInvitedAdmin(organizationId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ adminId, ...payload }: { adminId: number; name: string; email: string }) =>
+      api.patch<{ message: string }>(`/platform/organizations/${organizationId}/invited-admin/${adminId}`, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['platform', 'organizations'] }),
   });
 }
 

@@ -11,6 +11,12 @@ use App\Http\Resources\OrganizationResource;
 use App\Http\Resources\UserResource;
 use App\Models\Organization;
 use App\Models\PlatformModule;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Spatie\Permission\PermissionRegistrar;
 use App\Services\OrganizationProvisioningService;
 use App\Services\OrganizationVerificationService;
 use App\Services\PlatformAdminService;
@@ -50,6 +56,36 @@ class PlatformOrganizationController extends Controller
         abort_unless($request->user()->is_platform_admin, 403);
 
         return response()->json($platform->organization($organization));
+    }
+
+    public function updateInvitedAdmin(Request $request, Organization $organization, User $admin): JsonResponse
+    {
+        abort_unless($request->user()->is_platform_admin, 403);
+        abort_unless($admin->organization_id === $organization->id, 404);
+        app(PermissionRegistrar::class)->setPermissionsTeamId($organization->id);
+        abort_unless($admin->can('organizations.administer'), 404);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($admin->id)],
+        ]);
+        DB::transaction(function () use ($organization, $admin, $data) {
+            $previousPassword = $admin->password;
+            $previousEmail = $admin->email;
+            $organization = Organization::query()->lockForUpdate()->findOrFail($organization->id);
+            // Match invitation acceptance's lock order before locking the user.
+            DB::table('password_reset_tokens')->where('email', $admin->email)->lockForUpdate()->first();
+            $admin = User::query()->lockForUpdate()->findOrFail($admin->id);
+            if ($organization->status !== 'invited' || $admin->tokens()->exists() || $admin->password !== $previousPassword || $admin->email !== $previousEmail) {
+                throw ValidationException::withMessages(['email' => 'Only an administrator who has not accepted their invitation can be edited here.']);
+            }
+            if ($admin->email !== $data['email']) {
+                DB::table('password_reset_tokens')->whereIn('email', [$admin->email, $data['email']])->delete();
+                $admin->email_verified_at = null;
+                $admin->password = Str::random(64);
+            }
+            $admin->fill($data)->save();
+        });
+        return response()->json(['message' => 'Administrator updated. Use Resend invitation to send a new setup link.']);
     }
 
     public function updateStatus(
@@ -108,9 +144,9 @@ class PlatformOrganizationController extends Controller
         WorkspaceSettingsService $workspaceSettings,
         PlatformAdminService $platform
     ): JsonResponse {
-        if ($request->has('name')) {
-            $organization->update(['name' => $request->validated('name')]);
-        }
+        $organization->update($request->safe()->only([
+            'name', 'code', 'email', 'phone', 'website', 'sector', 'country', 'state', 'city', 'address',
+        ]));
 
         $settings = [];
 

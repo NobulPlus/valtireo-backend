@@ -92,6 +92,7 @@ Route::middleware(['auth:sanctum', SetPermissionsTeamId::class, EnsureOrganizati
         Route::get('/organizations/{organization}', [PlatformOrganizationController::class, 'show']);
         Route::patch('/organizations/{organization}/status', [PlatformOrganizationController::class, 'updateStatus']);
         Route::post('/organizations/{organization}/resend-admin-invitation', [PlatformOrganizationController::class, 'resendAdminInvitation']);
+        Route::patch('/organizations/{organization}/invited-admin/{admin}', [PlatformOrganizationController::class, 'updateInvitedAdmin']);
         Route::get('/organizations/{organization}/verification-documents', [OrganizationVerificationController::class, 'platformIndex']);
         Route::patch('/organizations/{organization}/verification-documents/{document}', [OrganizationVerificationController::class, 'platformReview']);
         Route::patch('/organizations/{organization}/modules/{platformModule}', [PlatformOrganizationController::class, 'updateModule']);
