@@ -377,10 +377,29 @@ function PlatformOrganizationDetailContent({ data, id }: { data: PlatformOrganiz
               <EmptyState title="No organization admin found" />
             ) : (
               data.admins.map((admin) => (
-                <div key={admin.id} className="rounded-md bg-surface-soft px-3 py-2">
-                  <p className="text-sm font-medium text-strong">{admin.name}</p>
-                  <p className="text-xs text-muted">{admin.email}</p>
-                  {org.status === 'invited' && <Button variant="ghost" onClick={() => { adminMutation.reset(); setEditingAdmin({ adminId: admin.id, name: admin.name, email: admin.email }); }}>Edit invited admin</Button>}
+                <div key={admin.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-soft p-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-surface text-sm font-semibold text-strong" aria-hidden="true">
+                    {admin.name.trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join('').toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-strong break-words">{admin.name}</p>
+                    <p className="mt-0.5 text-xs text-muted break-all">{admin.email}</p>
+                  </div>
+                  {org.status === 'invited' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 shrink-0 border border-border bg-surface hover:border-teal hover:text-teal focus-visible:outline-teal"
+                      title="Edit invited admin"
+                      aria-label="Edit invited admin"
+                      onClick={() => {
+                        adminMutation.reset();
+                        setEditingAdmin({ adminId: admin.id, name: admin.name, email: admin.email });
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  )}
                 </div>
               ))
             )}
